@@ -18,6 +18,7 @@ Follows the `dev-workflow` skill (ticket-driven: Notion → branch → PR → QA
 - Project slug: broadcast (session tags `project:broadcast`; see run-state.md → Session tags)
 - Preview URLs: batched QA mode: none (`vercel.json` → `"git": { "deploymentEnabled": { "**": false, "main": true } }`), since CI builds every PR and QA happens on production. Production: TBD (Epic 0)
 - QA mode: batched (2–3 waves per batch; batch ends at checkpoints). Always tested before building on them: Instagram connection (OAuth + token storage), the scheduler's publish step, the content API's auth.
+- Parallel builders: 2 (3 only when Files touched are clearly separate)
 - Merge policy: fast
   - `fast` (personal projects; nobody uses main during a run): merge now; main's full suite checks the combination and a red main is reverted. Main can be red for ~15 min.
 
@@ -35,17 +36,33 @@ numerals, no monospace labels or all-caps eyebrows.
 - Never post the same queue item twice; check the account's Instagram quota before publishing.
 
 ## Stack
-TBD in the technical design (`/plan-work`). Proposed: Next.js (React + TypeScript) on Vercel,
-Supabase (Postgres, auth, storage, `pg_cron`).
+Next.js 15 (App Router, TypeScript strict, React 19) on Vercel Hobby · Supabase (Postgres + RLS,
+Auth magic link, Storage, `pg_cron` + `pg_net`) · plain CSS with tokens + CSS Modules · Vitest ·
+Playwright · MSW. Details and reasons: `docs/TDD.md`, ADRs in `docs/decisions/`.
 
 ## Commands
-TBD after the technical design.
+(Set up by BC-1/BC-3; keep this list current.)
+- `pnpm install` · `pnpm dev` (app on :3000) · `pnpm build`
+- `pnpm lint` · `pnpm typecheck` · `pnpm format`
+- `pnpm test` (Vitest) · `pnpm e2e` (Playwright; needs `supabase start`)
+- `pnpm supabase start` / `stop` (local stack in Docker) · `pnpm db:reset` (migrations + seed) · `pnpm db:types`
 
 ## Structure
-TBD after the technical design.
+`src/app` routes · `src/features/{canvas,accounts,content,drawers}` · `src/components` shared UI ·
+`src/lib/{domain,providers,db,crypto,scenarios}` · `src/styles/tokens.css` · `supabase/migrations` ·
+`tests/e2e` · `scripts/`. Full tree in `docs/TDD.md`.
 
 ## Conventions
-TBD after the technical design.
+- pnpm, Node 22, ESLint + Prettier. Conventional commits with the ticket ID.
+- Pure logic in `src/lib/domain` (no I/O), unit tested. Handlers are thin.
+- All provider calls go through `SocialProvider` (`instagram` | `fake`). Never call the Graph API elsewhere.
+- Every query is scoped by `workspace_id` (helpers in `src/lib/db`). Service-role client only in `src/lib/db/admin.ts` (`server-only`).
+- Times stored in UTC; workspace timezone only for display and slot maths.
+- UI: tokens only (no literal colours), sentence case, IBM Plex Sans; follow `docs/DESIGN.md`.
 
 ## Testing
-TBD after the technical design.
+- Scenario rule: every testable state has a scenario (`/workflow?scenario=…`, listed on `/dev`). Scenarios only touch the **Sandbox** workspace (fake provider), so they work on production.
+- Unit for domain logic and adapters (MSW fixtures for Instagram); integration against local Supabase incl. RLS; one Playwright spec per feature, driven by scenarios.
+- CI: PR gate (lint/types/build, unit, e2e desktop sharded) each job ≤ 5 min; main runs the full suite (phone, visual, `@full`) then deploys.
+- Live checks with a real tester account only in checkpoint tickets (Instagram connect, publish, stats).
+- Definition of Done: `dev-workflow` skill.

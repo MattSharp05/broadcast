@@ -9,6 +9,7 @@ dist/
 build/
 coverage/
 *.tsbuildinfo
+next-env.d.ts
 
 # env and secrets
 .env

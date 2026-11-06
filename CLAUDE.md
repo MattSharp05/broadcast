@@ -41,11 +41,12 @@ Auth magic link, Storage, `pg_cron` + `pg_net`) · plain CSS with tokens + CSS M
 Playwright · MSW. Details and reasons: `docs/TDD.md`, ADRs in `docs/decisions/`.
 
 ## Commands
-(Set up by BC-1/BC-3; keep this list current.)
-- `pnpm install` · `pnpm dev` (app on :3000) · `pnpm build`
-- `pnpm lint` · `pnpm typecheck` · `pnpm format`
-- `pnpm test` (Vitest) · `pnpm e2e` (Playwright; needs `supabase start`)
-- `pnpm supabase start` / `stop` (local stack in Docker) · `pnpm db:reset` (migrations + seed) · `pnpm db:types`
+(Set up by BC-1; keep this list current.)
+- `pnpm install` · `pnpm dev` (app on :3000) · `pnpm build` · `pnpm start` (serve the build)
+- `pnpm lint` · `pnpm typecheck` (`next typegen` + `tsc`) · `pnpm format` / `pnpm format:check`
+- `pnpm test` (Vitest, `src/**/*.test.ts`) · `pnpm test:watch`
+- Not yet present: `pnpm e2e` (Playwright; needs `supabase start`), added with the Playwright setup in a later ticket;
+  `pnpm supabase start` / `stop`, `pnpm db:reset` (migrations + seed), `pnpm db:types`, added by BC-5.
 
 ## Structure
 `src/app` routes · `src/features/{canvas,accounts,content,drawers}` · `src/components` shared UI ·

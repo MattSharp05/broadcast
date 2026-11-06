@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { WorkflowView } from "@/features/canvas/content/WorkflowView";
 import { loadWorkflow } from "@/lib/db/canvas";
+import { addContent } from "./actions";
 
 export const metadata: Metadata = {
   title: "Workflow · Broadcast",
@@ -17,6 +18,8 @@ export default async function WorkflowPage() {
       frozen={data.frozen}
       timezone={data.timezone}
       details={data.details}
+      contentAccounts={data.contentAccounts}
+      addContent={addContent}
     />
   );
 }

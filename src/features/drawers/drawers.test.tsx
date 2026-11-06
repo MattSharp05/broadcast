@@ -108,4 +108,12 @@ describe("drawers", () => {
     expect(html).toContain("4 videos are waiting.");
     expect(html).toMatch(/<button[^>]*disabled[^>]*>.*Add a video for this slot/);
   });
+
+  it("open slot: Add a video is enabled once Add content is wired (BC-14)", () => {
+    const card = { kind: "open" as const, id: "o1", at: new Date("2026-11-06T09:00:00Z") };
+    const html = renderToStaticMarkup(
+      <PostDetails card={card} account={account} clock={clock} onAddContent={() => undefined} />,
+    );
+    expect(html).not.toMatch(/<button[^>]*disabled[^>]*>.*Add a video for this slot/);
+  });
 });

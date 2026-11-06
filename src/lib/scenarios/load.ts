@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { floorToMinute } from "@/lib/clock";
 import type { Database } from "@/lib/db/types";
+import { clearWorkspaceUploads } from "@/lib/db/videos";
 import { WORKSPACE_IDS } from "@/lib/db/workspaces";
 import { createRng, hash32 } from "@/lib/hash";
 import type { SandboxSeed, Scenario } from "./types";
@@ -44,6 +45,7 @@ export async function loadScenario(
   const seed = scenario.build({ now, rng: createRng(hash32(scenario.name)) });
 
   await run("reset", db.rpc("reset_sandbox"));
+  await clearWorkspaceUploads(db, WORKSPACE_IDS.sandbox);
   await run(
     "settings",
     db

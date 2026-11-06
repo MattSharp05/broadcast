@@ -35,8 +35,8 @@ export interface PostDetailsProps {
   account: AccountDetail;
   detail?: PostDetail;
   clock: DetailClock;
-  /** "Add a video for this slot": opens Add content for the account (BC-14). Disabled without. */
-  onAddContent?: (accountId: string) => void;
+  /** "Add a video for this slot": opens Add content for the account and slot (BC-14). */
+  onAddContent?: (accountId: string, slotAt: Date) => void;
 }
 
 /** The post drawer's body for each kind of card: open slot, posted, failed, waiting. */
@@ -58,7 +58,7 @@ export function PostDetails({ card, account, detail, clock, onAddContent }: Post
             <Button
               variant="primary"
               disabled={!onAddContent}
-              onClick={() => onAddContent?.(account.id)}
+              onClick={() => onAddContent?.(account.id, card.at)}
             >
               <Upload aria-hidden="true" />
               Add a video for this slot

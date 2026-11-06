@@ -3,11 +3,14 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { nowFor } from "@/lib/clock";
 import {
   POSTED_DAYS,
+  avatarIndex,
   buildCanvas,
+  UPCOMING_STATUSES,
   type CanvasModel,
   type CanvasPostInput,
   type PostMetricsInput,
 } from "@/lib/domain/canvas";
+import { nextOpenSlot, type ContentAccount } from "@/lib/domain/content";
 import {
   buildPostDetails,
   type AccountDetail,
@@ -31,6 +34,8 @@ export interface WorkflowData extends CanvasModel {
   timezone: string;
   /** What the hover previews and drawers show (BC-15). */
   details: WorkflowDetails;
+  /** The Add content dialog's "Post to" list (BC-14), in column order. */
+  contentAccounts: ContentAccount[];
 }
 
 export interface WorkflowDetails {
@@ -187,9 +192,31 @@ export async function loadWorkflow(): Promise<WorkflowData> {
     accounts: Object.fromEntries(accountDetails.map((a) => [a.id, a])),
   };
 
+  // Add content's account list: where a queued video would go now on each account.
+  const waitingBy = new Map<string, CanvasPostInput[]>();
+  for (const p of postInputs) {
+    if (!UPCOMING_STATUSES.has(p.status)) continue;
+    const list = waitingBy.get(p.accountId) ?? [];
+    list.push(p);
+    waitingBy.set(p.accountId, list);
+  }
+  const contentAccounts: ContentAccount[] = accounts.data.map((a) => {
+    const posts = waitingBy.get(a.id) ?? [];
+    const open = nextOpenSlot({ slots: a.slots, timezone, now, posts });
+    return {
+      id: a.id,
+      handle: a.handle,
+      platform: a.platform,
+      avatar: avatarIndex(a.id),
+      paused: a.status !== "ready",
+      nextOpenSlot: open?.toISOString() ?? null,
+    };
+  });
+
   return {
     ...model,
     details,
+    contentAccounts,
     workspace: { id: workspace.id, kind: workspace.kind },
     now: now.toISOString(),
     frozen: workspace.kind === "sandbox" && workspace.clockOverride !== null,

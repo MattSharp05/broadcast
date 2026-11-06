@@ -7,6 +7,7 @@ import {
   clearWorkspaceUploads,
   deletePublishedVideo,
   probeStoredVideo,
+  removeUnusedUpload,
   signUploadUrl,
   signVideoUrl,
   uploadPaths,
@@ -38,7 +39,7 @@ const SQUARE = new Uint8Array(
   readFileSync(join(process.cwd(), "tests/fixtures/video/portrait-4x5.mp4")),
 );
 
-async function put(url: string, body: Uint8Array, type = "video/mp4") {
+async function put(url: string, body: Uint8Array<ArrayBuffer>, type = "video/mp4") {
   return fetch(url, { method: "PUT", body, headers: { "content-type": type } });
 }
 
@@ -106,6 +107,24 @@ describe("videos bucket", () => {
     await expect(probeStoredVideo(owner, `${SANDBOX}/videos/missing.mp4`)).rejects.toThrow(
       /wasn't found/,
     );
+  });
+});
+
+describe("removeUnusedUpload", () => {
+  it("removes an upload no media row uses, and keeps one that is used", async () => {
+    const unused = uploadPaths(SANDBOX, crypto.randomUUID(), "video/mp4").video;
+    const used = uploadPaths(SANDBOX, crypto.randomUUID(), "video/mp4").video;
+    await put(await signUploadUrl(admin, unused), REEL);
+    await put(await signUploadUrl(admin, used), REEL);
+    const media = await admin
+      .from("media_assets")
+      .insert({ workspace_id: SANDBOX, storage_path: used })
+      .select("id")
+      .single();
+    await removeUnusedUpload(owner, SANDBOX, [unused, used]);
+    expect(await exists(unused)).toBe(false);
+    expect(await exists(used)).toBe(true);
+    await admin.from("media_assets").delete().eq("id", must(media.data).id);
   });
 });
 

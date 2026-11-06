@@ -189,11 +189,17 @@ export async function loadWorkflow(): Promise<WorkflowData> {
     accounts: Object.fromEntries(accountDetails.map((a) => [a.id, a])),
   };
 
+  // Add content's account list: where a queued video would go now on each account.
+  const waitingBy = new Map<string, CanvasPostInput[]>();
+  for (const p of postInputs) {
+    if (!UPCOMING_STATUSES.has(p.status)) continue;
+    const list = waitingBy.get(p.accountId) ?? [];
+    list.push(p);
+    waitingBy.set(p.accountId, list);
+  }
   const contentAccounts: ContentAccount[] = accounts.data.map((a) => {
-    const waiting = postInputs.filter(
-      (p) => p.accountId === a.id && UPCOMING_STATUSES.has(p.status),
-    );
-    const open = nextOpenSlot({ slots: a.slots, timezone, now, posts: waiting });
+    const posts = waitingBy.get(a.id) ?? [];
+    const open = nextOpenSlot({ slots: a.slots, timezone, now, posts });
     return {
       id: a.id,
       handle: a.handle,

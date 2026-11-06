@@ -20,7 +20,8 @@ type Db = SupabaseClient<Database>;
  * account's backlog (`queue_position` after every other post), a pinned post keeps its time. Then
  * the queue planner (BC-4) times the account again and the changed `scheduled_at`s are saved.
  * Not one transaction (supabase-js has none): if a step fails, the rows written so far are
- * removed again.
+ * removed again. Two adds racing on one account can get the same `queue_position`; the planner
+ * then orders them by insertion, which is harmless for a single-user dashboard.
  */
 
 export interface NewMedia {
@@ -109,13 +110,15 @@ function validate(input: NewContent): string[] {
   return accountIds;
 }
 
-/** Re-times one account's queue after a post joined it; returns the new post's time. */
+/**
+ * Re-times one account's queue (after a post joined or left it) and saves what changed. Returns
+ * every waiting post's time.
+ */
 async function replan(
   db: Db,
   input: NewContent,
   account: { id: string; slots: string[] },
-  newPostId: string,
-): Promise<Date | null> {
+): Promise<Map<string, Date | null>> {
   const res = await db
     .from("posts")
     .select("id, timing, queue_position, scheduled_at, status")
@@ -136,17 +139,19 @@ async function replan(
     now: input.now,
     posts,
   });
-  for (const change of changes) {
-    const up = await db
-      .from("posts")
-      .update({ scheduled_at: change.scheduledAt?.toISOString() ?? null })
-      .eq("workspace_id", input.workspaceId)
-      .eq("id", change.id);
-    if (up.error) fail("saving the queue times", up.error);
-  }
-  const mine = posts.find((p) => p.id === newPostId);
-  const changed = changes.find((c) => c.id === newPostId);
-  return changed ? changed.scheduledAt : (mine?.scheduledAt ?? null);
+  const saved = await Promise.all(
+    changes.map((change) =>
+      db
+        .from("posts")
+        .update({ scheduled_at: change.scheduledAt?.toISOString() ?? null })
+        .eq("workspace_id", input.workspaceId)
+        .eq("id", change.id),
+    ),
+  );
+  for (const up of saved) if (up.error) fail("saving the queue times", up.error);
+  const times = new Map(posts.map((p) => [p.id, p.scheduledAt]));
+  for (const change of changes) times.set(change.id, change.scheduledAt);
+  return times;
 }
 
 export async function queueContent(db: Db, input: NewContent): Promise<QueuedContent> {
@@ -181,6 +186,7 @@ export async function queueContent(db: Db, input: NewContent): Promise<QueuedCon
   const mediaId = media.data.id;
 
   const created: string[] = [];
+  const touched: { id: string; slots: string[] }[] = [];
   try {
     const out: QueuedPost[] = [];
     for (const accountId of accountIds) {
@@ -218,14 +224,21 @@ export async function queueContent(db: Db, input: NewContent): Promise<QueuedCon
         .single();
       if (post.error) fail("saving the post", post.error);
       created.push(post.data.id);
-      const scheduledAt = await replan(db, input, account, post.data.id);
+      touched.push(account);
+      const scheduledAt = (await replan(db, input, account)).get(post.data.id) ?? null;
       out.push({ id: post.data.id, accountId, handle: account.handle, scheduledAt, status });
     }
     return { mediaId, posts: out };
   } catch (err) {
-    // Undo: the posts (their neighbours' times are re-planned on the next change) and the media.
-    if (created.length) await db.from("posts").delete().eq("workspace_id", ws).in("id", created);
-    await db.from("media_assets").delete().eq("workspace_id", ws).eq("id", mediaId);
+    // Undo: the posts, the media, and the times a pin pushed back. Best effort: the first error
+    // is the one worth reporting.
+    try {
+      if (created.length) await db.from("posts").delete().eq("workspace_id", ws).in("id", created);
+      await db.from("media_assets").delete().eq("workspace_id", ws).eq("id", mediaId);
+      for (const account of touched) await replan(db, input, account);
+    } catch (undo) {
+      console.error("Undoing a failed queueContent failed:", undo);
+    }
     throw err;
   }
 }

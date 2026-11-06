@@ -78,6 +78,21 @@ export function uploadPaths(
   };
 }
 
+const UPLOAD_PATH =
+  /^([0-9a-f-]{36})\/(videos\/([0-9a-f-]{36})\.(mp4|mov)|thumbnails\/([0-9a-f-]{36})\.jpg)$/;
+
+/**
+ * True when `video` (and `thumbnail`, if given) are the paths `uploadPaths` made for one upload in
+ * this workspace. Guards what the browser sends back before the server reads or deletes it.
+ */
+export function isUploadOf(workspaceId: string, video: string, thumbnail: string | null): boolean {
+  const v = UPLOAD_PATH.exec(video);
+  if (v?.[1] !== workspaceId || !v[3]) return false;
+  if (thumbnail === null) return true;
+  const t = UPLOAD_PATH.exec(thumbnail);
+  return t?.[1] === workspaceId && t[5] === v[3];
+}
+
 /** A signed URL the browser can PUT one file to (valid for 2 hours, Storage's fixed lifetime). */
 export async function signUploadUrl(db: Db, storagePath: string): Promise<string> {
   const { data, error } = await db.storage.from(VIDEOS_BUCKET).createSignedUploadUrl(storagePath);
@@ -136,13 +151,30 @@ export async function probeStoredVideo(
   return { bytes, info };
 }
 
-/** Removes an upload's files that won't be used (a rejected video). Best effort. */
-export async function removeUpload(db: Db, paths: readonly string[]): Promise<void> {
+/**
+ * Removes the files of an upload that didn't become a post (a rejected video, a failed add), so
+ * they don't linger in the bucket. Files any media row still points at are kept. Best effort.
+ */
+export async function removeUnusedUpload(
+  db: Db,
+  workspaceId: string,
+  paths: readonly string[],
+): Promise<void> {
   try {
-    const { error } = await db.storage.from(VIDEOS_BUCKET).remove([...paths]);
-    if (error) console.error(`Removing the rejected upload failed: ${error.message}`);
+    const list = paths.map((p) => `"${p}"`).join(",");
+    const used = await db
+      .from("media_assets")
+      .select("storage_path, thumbnail_path")
+      .eq("workspace_id", workspaceId)
+      .or(`storage_path.in.(${list}),thumbnail_path.in.(${list})`);
+    if (used.error) throw new Error(used.error.message);
+    const keep = new Set(used.data.flatMap((m) => [m.storage_path, m.thumbnail_path]));
+    const unused = paths.filter((p) => !keep.has(p));
+    if (unused.length === 0) return;
+    const { error } = await db.storage.from(VIDEOS_BUCKET).remove(unused);
+    if (error) throw new Error(error.message);
   } catch (err) {
-    console.error("Removing the rejected upload failed:", err);
+    console.error("Removing an unused upload failed:", err);
   }
 }
 

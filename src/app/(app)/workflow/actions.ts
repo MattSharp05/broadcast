@@ -5,13 +5,20 @@ import { nowFor } from "@/lib/clock";
 import type { ActionResult, AddContentInput, AddedContent } from "@/features/content/types";
 import { ContentError, queueContent } from "@/lib/db/posts";
 import { createServerSupabase } from "@/lib/db/server";
-import { StoredVideoError, probeStoredVideo, removeUpload } from "@/lib/db/videos";
+import {
+  StoredVideoError,
+  isUploadOf,
+  probeStoredVideo,
+  removeUnusedUpload,
+} from "@/lib/db/videos";
 import { currentWorkspace } from "@/lib/db/workspace";
 import { addedMessage, firstTime, localInputToUtc, type ContentTiming } from "@/lib/domain/content";
 import { checkReel, videoContentType } from "@/lib/media/checks";
 import { Mp4Error } from "@/lib/media/mp4";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const FAILED = "Couldn't add the video. Check your connection and try again.";
 
 function invalid(error: string): ActionResult<never> {
   return { ok: false, error };
@@ -46,11 +53,33 @@ export async function addContent(input: AddContentInput): Promise<ActionResult<A
     const workspace = await currentWorkspace();
     const now = nowFor(workspace);
     const timezone = workspace.timezone ?? "UTC";
-    const uploaded = [input.videoPath, input.thumbnailPath].filter((p): p is string => !!p);
-    if (uploaded.some((p) => !p.startsWith(`${workspace.id}/`))) {
+    if (!isUploadOf(workspace.id, input.videoPath, input.thumbnailPath)) {
       return invalid("That upload belongs to the other workspace. Upload the video again.");
     }
+    const uploaded = [input.videoPath, input.thumbnailPath].filter((p): p is string => !!p);
 
+    const result = await queueUpload(db, input, { workspaceId: workspace.id, now, timezone });
+    // Anything but success: the upload won't be used, so it doesn't stay in the bucket.
+    if (!result.ok) await removeUnusedUpload(db, workspace.id, uploaded);
+    else {
+      revalidatePath("/workflow");
+      revalidatePath("/accounts");
+    }
+    return result;
+  } catch (err) {
+    console.error(err);
+    return invalid(FAILED);
+  }
+}
+
+/** Checks the stored video and queues it; any refusal comes back as `{ ok: false }`. */
+async function queueUpload(
+  db: Awaited<ReturnType<typeof createServerSupabase>>,
+  input: AddContentInput,
+  ctx: { workspaceId: string; now: Date; timezone: string },
+): Promise<ActionResult<AddedContent>> {
+  const { now, timezone } = ctx;
+  try {
     let timing: ContentTiming = { kind: "queue" };
     if (input.timing.kind === "pinned") {
       const at = localInputToUtc(input.timing.local, timezone);
@@ -64,7 +93,6 @@ export async function addContent(input: AddContentInput): Promise<ActionResult<A
     } catch (err) {
       if (err instanceof StoredVideoError) return invalid(err.message);
       if (err instanceof Mp4Error) {
-        await removeUpload(db, uploaded);
         return invalid(`${err.message} Reels must be an MP4 or MOV video.`);
       }
       throw err;
@@ -78,12 +106,11 @@ export async function addContent(input: AddContentInput): Promise<ActionResult<A
       stored.info,
     );
     if (issues.length > 0) {
-      await removeUpload(db, uploaded);
       return invalid(issues.map((i) => i.message).join(" "));
     }
 
     const queued = await queueContent(db, {
-      workspaceId: workspace.id,
+      workspaceId: ctx.workspaceId,
       timezone,
       now,
       media: {
@@ -98,8 +125,6 @@ export async function addContent(input: AddContentInput): Promise<ActionResult<A
       accountIds: input.accountIds,
       timing,
     });
-    revalidatePath("/workflow");
-    revalidatePath("/accounts");
     return {
       ok: true,
       value: {
@@ -115,6 +140,6 @@ export async function addContent(input: AddContentInput): Promise<ActionResult<A
   } catch (err) {
     if (err instanceof ContentError) return invalid(err.message);
     console.error(err);
-    return invalid("Couldn't add the video. Check your connection and try again.");
+    return invalid(FAILED);
   }
 }

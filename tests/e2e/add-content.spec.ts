@@ -49,6 +49,8 @@ test.describe("canvas-busy", () => {
     await openDialog(page);
     await chooseFile(page, "reel-9x16.mp4");
     await expect(dialog(page)).toContainText("1080 × 1920, 0:04");
+    // The thumbnail frame grabbed in the browser.
+    await expect(dialog(page).locator("label img")).toHaveAttribute("src", /^blob:/);
     await dialog(page).getByLabel("Caption").fill("Day 42: Add content works");
     await pick(page, "trip.app").check();
     await pick(page, "driftship").check();
@@ -69,6 +71,12 @@ test.describe("canvas-busy", () => {
       });
       await expect(card).toHaveCount(1);
       await expect(card).toHaveAttribute("data-fresh", "");
+      // The uploaded thumbnail replaces the placeholder (a signed Storage URL that loads).
+      const thumb = card.locator("img");
+      await expect(thumb).toHaveAttribute("src", /\/storage\/v1\/object\/sign\/videos\//);
+      await expect
+        .poll(() => thumb.evaluate((img: HTMLImageElement) => img.naturalWidth))
+        .toBe(360);
       await expect(
         column(page, handle).getByRole("button", { name: `Open slot, ${when}` }),
       ).toHaveCount(0);

@@ -108,7 +108,14 @@ function AddContentForm({
   const [video, setVideo] = useState<ReadVideo | null>(null);
   const [caption, setCaption] = useState("");
   const [selected, setSelected] = useState<Set<string>>(
-    () => new Set(preset?.accountIds ?? (accounts.length === 1 ? accounts.map((a) => a.id) : [])),
+    () =>
+      new Set(
+        preset?.accountIds.length
+          ? preset.accountIds
+          : accounts.length === 1
+            ? accounts.map((a) => a.id)
+            : [],
+      ),
   );
   const [mode, setMode] = useState<"queue" | "pinned">(preset?.pinAt ? "pinned" : "queue");
   const [pinLocal, setPinLocal] = useState(() =>
@@ -369,7 +376,7 @@ function AddContentForm({
                       toggle(a.id);
                     }}
                   />
-                  <Avatar handle={a.handle} platform={a.platform} colour={a.avatar} size={24} />
+                  <Avatar handle={a.handle} platform={a.platform} colour={a.avatar} size={30} />
                   <span className={styles.handle}>@{a.handle}</span>
                   <span className={styles.slot} data-paused={a.paused ? "" : undefined}>
                     {slotLabel(a, now, timezone)}

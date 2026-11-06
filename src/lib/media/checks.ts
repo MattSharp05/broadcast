@@ -15,7 +15,7 @@ export const REELS = {
   aspect: 9 / 16,
   aspectTolerance: 0.02,
   maxWidth: 1920,
-  mimeTypes: ["video/mp4", "video/quicktime"] as readonly string[],
+  mimeTypes: ["video/mp4", "video/quicktime", "video/x-m4v"] as readonly string[],
   extensions: ["mp4", "mov", "m4v"] as readonly string[],
   /** MP4 sample entry types Instagram accepts: H.264 and HEVC. */
   codecs: ["avc1", "avc3", "hvc1", "hev1"] as readonly string[],

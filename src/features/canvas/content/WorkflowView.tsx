@@ -218,7 +218,7 @@ export function WorkflowView({
   // Add content: the top bar button, or "Add a video for this slot" in an open slot's drawer
   // (that account; pinned to the slot unless it's where a queued video would go anyway).
   const [adding, setAdding] = useState<AddContentPreset | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ id: number; message: string } | null>(null);
   const clearToast = useCallback(() => {
     setToast(null);
   }, []);
@@ -236,7 +236,7 @@ export function WorkflowView({
     (result: AddedContent) => {
       setAdding(null);
       for (const id of result.postIds) fresh.current.add(id);
-      setToast(result.message);
+      setToast((t) => ({ id: (t?.id ?? 0) + 1, message: result.message }));
       router.refresh();
     },
     [router],
@@ -380,7 +380,7 @@ export function WorkflowView({
         addContent={addContent}
         onAdded={onAdded}
       />
-      <Toast message={toast} onDone={clearToast} />
+      <Toast message={toast?.message ?? null} id={toast?.id} onDone={clearToast} />
     </div>
   );
 }

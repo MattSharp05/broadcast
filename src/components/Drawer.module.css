@@ -83,15 +83,6 @@
   padding-right: max(20px, env(safe-area-inset-right, 0px));
 }
 
-.foot {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 20px;
-  border-top: 1px solid var(--line);
-  background: var(--surface-2);
-}
-
 @keyframes slide {
   from {
     transform: translateX(102%);

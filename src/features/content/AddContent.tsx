@@ -4,7 +4,7 @@ import { TriangleExclamationPoint, Upload } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState, type DragEvent } from "react";
 import { Avatar } from "@/components/Avatar";
 import { Button } from "@/components/Button";
-import { Drawer } from "@/components/Drawer";
+import { Modal } from "@/components/Modal";
 import {
   MAX_CAPTION_LENGTH,
   firstTime,
@@ -80,13 +80,7 @@ export function AddContent(props: AddContentProps) {
     setWasOpen(props.open);
     if (props.open) setOpened((n) => n + 1);
   }
-  if (!props.open) {
-    return (
-      <Drawer open={false} onClose={props.onClose} title="">
-        {null}
-      </Drawer>
-    );
-  }
+  if (!props.open) return null;
   return <AddContentForm key={opened} {...props} />;
 }
 
@@ -263,7 +257,7 @@ function AddContentForm({
   const info = video?.info;
 
   return (
-    <Drawer
+    <Modal
       open
       onClose={onClose}
       title="Add content"
@@ -274,7 +268,7 @@ function AddContentForm({
           <span className={styles.count}>
             {chosen.length} account{chosen.length === 1 ? "" : "s"} selected
           </span>
-          <div className={styles.grow} />
+          <div data-grow />
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
@@ -470,6 +464,6 @@ function AddContentForm({
           </div>
         ) : null}
       </div>
-    </Drawer>
+    </Modal>
   );
 }

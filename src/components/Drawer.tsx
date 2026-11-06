@@ -18,8 +18,6 @@ export interface DrawerProps {
   /** Shown before the heading (e.g. an avatar). */
   lead?: ReactNode;
   children: ReactNode;
-  /** Pinned under the scrolling body (e.g. a form's Cancel / submit buttons). */
-  footer?: ReactNode;
   /**
    * Where focus goes when the drawer closes. Default: the element that had focus when it opened.
    */
@@ -43,7 +41,6 @@ export function Drawer({
   subtitle,
   lead,
   children,
-  footer,
   returnFocus,
   className,
   "data-testid": testId,
@@ -136,7 +133,6 @@ export function Drawer({
           </Button>
         </header>
         <div className={styles.body}>{children}</div>
-        {footer ? <footer className={styles.foot}>{footer}</footer> : null}
       </div>
     </div>,
     document.body,

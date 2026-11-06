@@ -20,6 +20,8 @@ import {
   panBy,
   parseView,
   pinchView,
+  visibleWorldRect,
+  worldToMinimap,
   zoomAt,
   zoomLevel,
   type MinimapTransform,
@@ -68,8 +70,8 @@ const TONE_TOKEN: Record<MinimapTone, string> = {
 const DOT_SPACING = 24;
 const MINIMAP_PADDING = 7;
 const ANIMATION_MS = 220;
-const SAVE_DELAY_MS = 250;
-const IDLE_MS = 180;
+/** After this long without a frame: save the view and let the world layer re-raster. */
+const IDLE_MS = 200;
 const STORAGE_PREFIX = "broadcast.canvas.";
 
 /** Elements inside the stage that never start a pan (HUD, minimap, and opted-out children). */
@@ -138,8 +140,10 @@ export class CanvasController {
   private animation = 0;
   /** Where the running animation ends, so repeated button presses compose (1.2 × 1.2 …). */
   private animationTarget: View | null = null;
-  private saveTimer: ReturnType<typeof setTimeout> | undefined;
   private idleTimer: ReturnType<typeof setTimeout> | undefined;
+  private lastRenderAt = 0;
+  /** The stage's client rect, cached off the hot path (refreshed on resize, scroll, press). */
+  private stageRect: DOMRect | null = null;
 
   private miniStatic: HTMLCanvasElement | null = null;
   private miniTransform: MinimapTransform | null = null;
@@ -190,19 +194,19 @@ export class CanvasController {
 
   /** Centres the view on a world point at the current scale. */
   centerOn(world: Point, animate = true): void {
-    const target = centerOn(this.view, world, this.size);
-    if (animate) this.animateTo(target);
-    else this.set(target);
+    const target = centerOn(this.settled(), world, this.size);
+    if (animate) {
+      this.animateTo(target);
+    } else {
+      this.stopAnimation();
+      this.set(target);
+    }
   }
 
   destroy(): void {
     cancelAnimationFrame(this.frame);
     cancelAnimationFrame(this.animation);
-    clearTimeout(this.idleTimer);
-    if (this.saveTimer !== undefined) {
-      clearTimeout(this.saveTimer);
-      this.save();
-    }
+    this.flushIdle();
     for (const off of this.cleanups) off();
     this.cleanups.length = 0;
   }
@@ -265,10 +269,6 @@ export class CanvasController {
     // While moving, keep the layer on the compositor; when idle, let the browser re-raster it
     // so text is crisp at the new scale.
     world.style.willChange = "transform";
-    clearTimeout(this.idleTimer);
-    this.idleTimer = setTimeout(() => {
-      world.style.willChange = "auto";
-    }, IDLE_MS);
 
     const ox = ((x % DOT_SPACING) + DOT_SPACING) % DOT_SPACING;
     const oy = ((y % DOT_SPACING) + DOT_SPACING) % DOT_SPACING;
@@ -288,24 +288,38 @@ export class CanvasController {
     }
 
     this.drawMinimap();
-    this.queueSave();
+    this.lastRenderAt = performance.now();
+    this.idleTimer ??= setTimeout(this.onIdle, IDLE_MS);
   }
 
-  private queueSave(): void {
-    if (this.saveTimer !== undefined) clearTimeout(this.saveTimer);
-    this.saveTimer = setTimeout(() => {
-      this.save();
-    }, SAVE_DELAY_MS);
+  /** One trailing timer per burst of frames (not one per frame): save and drop will-change. */
+  private readonly onIdle = (): void => {
+    const quiet = performance.now() - this.lastRenderAt;
+    if (quiet < IDLE_MS) {
+      this.idleTimer = setTimeout(this.onIdle, IDLE_MS - quiet);
+      return;
+    }
+    this.idleTimer = undefined;
+    this.els.world.style.willChange = "auto";
+    this.save();
+  };
+
+  /** Runs a pending idle step now (page hide, unmount). */
+  private flushIdle(): void {
+    if (this.idleTimer === undefined) return;
+    clearTimeout(this.idleTimer);
+    this.idleTimer = undefined;
+    this.save();
   }
 
   private save(): void {
-    this.saveTimer = undefined;
     const { x, y, s } = this.view;
     writeStorage(this.opts.storageKey, JSON.stringify({ x, y, s }));
   }
 
   private measure(): void {
     const r = this.els.stage.getBoundingClientRect();
+    this.stageRect = r;
     this.size = { w: r.width, h: r.height };
     if (!this.ready && r.width > 0 && r.height > 0) {
       this.view =
@@ -325,7 +339,7 @@ export class CanvasController {
 
   /** Converts client coordinates to stage-relative ones. */
   private local(clientX: number, clientY: number): Point {
-    const r = this.els.stage.getBoundingClientRect();
+    const r = (this.stageRect ??= this.els.stage.getBoundingClientRect());
     return { x: clientX - r.left, y: clientY - r.top };
   }
 
@@ -390,6 +404,7 @@ export class CanvasController {
         e.preventDefault();
         this.stopAnimation();
         this.set(applyWheel(this.view, e, this.local(e.clientX, e.clientY), this.size));
+        this.rebaseGesture();
       },
       { passive: false },
     );
@@ -405,11 +420,15 @@ export class CanvasController {
         stage.removeEventListener(type, listener);
       });
     };
+    // iOS fires these for touch pinches too, alongside pointer events: there the pointer pinch
+    // wins and gestures are ignored while any pointer is down.
     gesture("gesturestart", () => {
+      if (this.pointers.size > 0) return;
       this.stopAnimation();
       this.gestureStartScale = this.view.s;
     });
     gesture("gesturechange", (e) => {
+      if (this.pointers.size > 0) return;
       this.set(
         zoomAt(this.view, this.local(e.clientX, e.clientY), this.gestureStartScale * e.scale),
       );
@@ -467,12 +486,16 @@ export class CanvasController {
       mo.disconnect();
     });
 
+    // The cached stage rect goes stale when the page scrolls or resizes.
+    const dropRect = () => {
+      this.stageRect = null;
+    };
+    this.on(window, "resize", dropRect);
+    this.on(window, "scroll", dropRect, { capture: true, passive: true });
+
     // Save immediately when the page goes away.
     this.on(window, "pagehide", () => {
-      if (this.saveTimer !== undefined) {
-        clearTimeout(this.saveTimer);
-        this.save();
-      }
+      this.flushIdle();
     });
   }
 
@@ -480,12 +503,22 @@ export class CanvasController {
     if (e.pointerType === "mouse" && e.button !== 0) return;
     if (e.target instanceof Element && e.target.closest(NO_PAN)) return;
     this.stopAnimation();
+    this.stageRect = this.els.stage.getBoundingClientRect();
     this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (this.pointers.size === 2) {
+    if (this.pointers.size >= 2) this.startPinch();
+    else this.startDrag(e.clientX, e.clientY);
+  }
+
+  /** A wheel zoom in the middle of a drag/pinch: continue from the new view, no snap back. */
+  private rebaseGesture(): void {
+    if (this.pinch) {
       this.startPinch();
       return;
     }
-    if (this.pointers.size === 1) this.startDrag(e.clientX, e.clientY);
+    const drag = this.drag;
+    if (!drag) return;
+    const [p] = [...this.pointers.values()];
+    if (p) this.startDrag(p.x, p.y, drag.moved);
   }
 
   private startDrag(x: number, y: number, moved = false): void {
@@ -493,10 +526,10 @@ export class CanvasController {
     this.drag = { pointerX: x, pointerY: y, start: this.view, moved };
   }
 
+  /** (Re)starts a pinch from the first two pointers; called whenever the pointer set changes. */
   private startPinch(): void {
     const [a, b] = [...this.pointers.values()];
     if (!a || !b) return;
-    const wasMoving = this.drag?.moved ?? false;
     this.drag = null;
     this.pinch = {
       start: this.view,
@@ -504,11 +537,15 @@ export class CanvasController {
       dist: Math.hypot(a.x - b.x, a.y - b.y),
     };
     this.setPanning(true);
-    this.suppressClick = this.suppressClick || wasMoving;
   }
 
   private onPointerMove(e: PointerEvent): void {
     if (!this.pointers.has(e.pointerId)) return;
+    // The release happened where the window couldn't see it (iframe, devtools, alt-tab).
+    if (e.pointerType === "mouse" && e.buttons === 0) {
+      this.onPointerUp(e);
+      return;
+    }
     this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
     if (this.pinch && this.pointers.size >= 2) {
@@ -534,6 +571,10 @@ export class CanvasController {
   private onPointerUp(e: PointerEvent): void {
     if (!this.pointers.delete(e.pointerId)) return;
     const wasMoving = this.pinch !== null || (this.drag?.moved ?? false);
+    if (this.pointers.size >= 2) {
+      this.startPinch();
+      return;
+    }
     if (this.pointers.size === 1) {
       // One finger left after a pinch: keep panning from where it is, without a jump.
       const [rest] = [...this.pointers.values()];
@@ -544,6 +585,7 @@ export class CanvasController {
       this.drag = null;
       this.pinch = null;
       this.setPanning(false);
+      // Only a real release that ended a pan is followed by a click to swallow.
       if (wasMoving && e.type === "pointerup") {
         this.suppressClick = true;
         // The click (if any) is dispatched right after pointerup; drop the flag afterwards.
@@ -599,12 +641,8 @@ export class CanvasController {
       }
       c.fillStyle = fill;
       const { x0, y0, x1, y1 } = item.rect;
-      c.fillRect(
-        m.ox + (x0 - m.bounds.x0) * m.s,
-        m.oy + (y0 - m.bounds.y0) * m.s,
-        Math.max(1, (x1 - x0) * m.s),
-        Math.max(1, (y1 - y0) * m.s),
-      );
+      const tl = worldToMinimap(m, { x: x0, y: y0 });
+      c.fillRect(tl.x, tl.y, Math.max(1, (x1 - x0) * m.s), Math.max(1, (y1 - y0) * m.s));
     }
     return off;
   }
@@ -630,11 +668,10 @@ export class CanvasController {
     c.clearRect(0, 0, bw, bh);
     if (this.miniStatic) c.drawImage(this.miniStatic, 0, 0);
     c.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const { x, y, s } = this.view;
-    const vx = m.ox + (-x / s - m.bounds.x0) * m.s;
-    const vy = m.oy + (-y / s - m.bounds.y0) * m.s;
+    const visible = visibleWorldRect(this.view, this.size);
+    const tl = worldToMinimap(m, { x: visible.x0, y: visible.y0 });
     c.strokeStyle = this.miniStroke;
     c.lineWidth = 1.5;
-    c.strokeRect(vx, vy, (this.size.w / s) * m.s, (this.size.h / s) * m.s);
+    c.strokeRect(tl.x, tl.y, (visible.x1 - visible.x0) * m.s, (visible.y1 - visible.y0) * m.s);
   }
 }

@@ -1,6 +1,8 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 // BC-6: the canvas engine on its static demo page (/dev/canvas, 48 boxes in six columns).
+// Desktop geometry (100% start, 56px "now" margin, minimap shown): phone projects skip it.
+test.skip(({ viewport }) => (viewport?.width ?? 0) < 760, "desktop-only spec");
 
 interface Box {
   x: number;
@@ -206,4 +208,29 @@ test("the view survives a reload in the same session", async ({ page }) => {
   const after = await box(firstHeader(page));
   expect(after.x).toBeCloseTo(before.x, 0);
   expect(after.y).toBeCloseTo(before.y, 0);
+});
+
+test("a two-finger pinch zooms (touch)", async ({ page, browserName }) => {
+  test.skip(browserName !== "chromium", "uses CDP touch events");
+  const s = await box(stage(page));
+  const cx = s.x + s.width / 2;
+  const cy = s.y + s.height / 2;
+  const cdp = await page.context().newCDPSession(page);
+  const touch = (type: string, d: number) =>
+    cdp.send("Input.dispatchTouchEvent", {
+      type,
+      touchPoints:
+        type === "touchEnd"
+          ? []
+          : [
+              { x: cx - d, y: cy, id: 1 },
+              { x: cx + d, y: cy, id: 2 },
+            ],
+    });
+  await touch("touchStart", 50);
+  for (const d of [60, 70, 80, 90, 100]) await touch("touchMove", d);
+  await touch("touchEnd", 100);
+  await settle(page);
+  // Fingers twice as far apart: about twice the zoom.
+  await expect(zoomText(page)).toHaveText("180%");
 });

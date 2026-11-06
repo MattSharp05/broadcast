@@ -1,0 +1,91 @@
+/* Detail drawer (DESIGN.md → Layout → Drawers; mockup .drawer). */
+.root {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+
+.scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--scrim);
+  animation: fade 0.18s ease-out;
+}
+
+.panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  width: min(440px, 100%);
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  background: var(--surface);
+  border-left: 1px solid var(--line);
+  box-shadow: var(--shadow-lg);
+  color: var(--ink);
+  animation: slide 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.panel:focus {
+  outline: none;
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 18px 20px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.titles {
+  flex: 1;
+  min-width: 0;
+}
+
+.title {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.title a {
+  color: inherit;
+}
+
+.subtitle {
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+.close {
+  padding: 0 8px;
+  margin: -4px -6px 0 0;
+}
+
+.body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 22px;
+  min-height: 0;
+  overflow: auto;
+  padding: 20px;
+  padding-right: max(20px, env(safe-area-inset-right, 0px));
+}
+
+@keyframes slide {
+  from {
+    transform: translateX(102%);
+  }
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}

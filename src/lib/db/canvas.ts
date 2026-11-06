@@ -8,6 +8,13 @@ import {
   type CanvasPostInput,
   type PostMetricsInput,
 } from "@/lib/domain/canvas";
+import {
+  buildPostDetails,
+  type AccountDetail,
+  type PostDetail,
+  type PostMetricRow,
+} from "@/lib/domain/details";
+import { loadAccountDetails } from "./details";
 import { createServerSupabase } from "./server";
 import type { Database } from "./types";
 import { currentWorkspace, type Workspace } from "./workspace";
@@ -23,6 +30,15 @@ export interface WorkflowData extends CanvasModel {
   now: string;
   frozen: boolean;
   timezone: string;
+  /** What the hover previews and drawers show (BC-15). */
+  details: WorkflowDetails;
+}
+
+export interface WorkflowDetails {
+  /** Every post on the canvas, by id. */
+  posts: Record<string, PostDetail>;
+  /** Every account, by id. */
+  accounts: Record<string, AccountDetail>;
 }
 
 function fail(what: string, error: { message: string }): never {
@@ -65,7 +81,7 @@ export async function loadWorkflow(): Promise<WorkflowData> {
   const timezone = workspace.timezone ?? "UTC";
   const since = new Date(now.getTime() - (POSTED_DAYS + 1) * DAY_MS).toISOString();
 
-  const [accounts, posts] = await Promise.all([
+  const [accounts, posts, accountDetails] = await Promise.all([
     db
       .from("social_accounts")
       .select("id, handle, platform, tags, slots, status, status_reason, followers, brands(name)")
@@ -75,21 +91,23 @@ export async function loadWorkflow(): Promise<WorkflowData> {
     db
       .from("posts")
       .select(
-        "id, account_id, caption, timing, queue_position, status, scheduled_at, published_at, last_error, media_assets(duration_s, thumbnail_path)",
+        "id, account_id, caption, timing, queue_position, status, scheduled_at, published_at, last_error, attempts, permalink, media_assets(duration_s, thumbnail_path)",
       )
       .eq("workspace_id", workspace.id)
       .or(`status.in.(queued,paused,publishing,failed),published_at.gte.${since}`)
       .order("scheduled_at", { ascending: true, nullsFirst: false }),
+    loadAccountDetails(db, workspace.id, now, timezone),
   ]);
   if (accounts.error) fail("accounts", accounts.error);
   if (posts.error) fail("posts", posts.error);
 
   const publishedIds = posts.data.filter((p) => p.status === "published").map((p) => p.id);
   const metrics = new Map<string, PostMetricsInput>();
+  const metricRows: PostMetricRow[] = [];
   if (publishedIds.length > 0) {
     const res = await db
       .from("post_metrics")
-      .select("post_id, views, likes, comments, taken_at")
+      .select("post_id, stat_offset, views, reach, likes, comments, shares, saves, taken_at")
       .eq("workspace_id", workspace.id)
       .in("post_id", publishedIds)
       .not("taken_at", "is", null)
@@ -97,6 +115,17 @@ export async function loadWorkflow(): Promise<WorkflowData> {
     if (res.error) fail("stats", res.error);
     for (const m of res.data) {
       if (!metrics.has(m.post_id)) metrics.set(m.post_id, m);
+      metricRows.push({
+        postId: m.post_id,
+        offset: m.stat_offset,
+        takenAt: date(m.taken_at),
+        views: m.views,
+        reach: m.reach,
+        likes: m.likes,
+        comments: m.comments,
+        shares: m.shares,
+        saves: m.saves,
+      });
     }
   }
 
@@ -139,8 +168,26 @@ export async function loadWorkflow(): Promise<WorkflowData> {
     timezone,
   });
 
+  const details: WorkflowDetails = {
+    posts: buildPostDetails(
+      posts.data.map((p) => ({
+        id: p.id,
+        accountId: p.account_id,
+        caption: p.caption,
+        timing: p.timing,
+        status: p.status,
+        lastError: p.last_error,
+        attempts: p.attempts,
+        permalink: p.permalink,
+      })),
+      metricRows,
+    ),
+    accounts: Object.fromEntries(accountDetails.map((a) => [a.id, a])),
+  };
+
   return {
     ...model,
+    details,
     workspace: { id: workspace.id, kind: workspace.kind },
     now: now.toISOString(),
     frozen: workspace.kind === "sandbox" && workspace.clockOverride !== null,

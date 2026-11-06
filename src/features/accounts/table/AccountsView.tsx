@@ -32,6 +32,8 @@ import {
   type StatusFilter,
 } from "@/lib/domain/accounts";
 import { ALL_TAGS, tagCounts, tagsOf } from "@/lib/domain/tags";
+import { DetailDrawer } from "@/features/drawers/DetailDrawer";
+import type { AccountDetail } from "@/lib/domain/details";
 import { AccountRowView } from "./AccountRowView";
 import styles from "./accounts.module.css";
 import type { AccountsActions } from "./actions";
@@ -43,6 +45,15 @@ export interface AccountsViewProps {
   accounts: AccountRow[];
   brands: BrandRef[];
   actions: AccountsActions;
+  /** The account drawer's data (BC-15). Without it, Details is disabled. */
+  details?: AccountsDetails;
+}
+
+export interface AccountsDetails {
+  accounts: AccountDetail[];
+  /** The workspace clock (ISO). */
+  now: string;
+  timezone: string;
 }
 
 const COLUMNS = 8;
@@ -106,7 +117,16 @@ interface TagEdit {
 }
 
 /** The Accounts tab: top bar, toolbar (search, Tag, Status, New brand) and the grouped table. */
-export function AccountsView({ accounts, brands, actions }: AccountsViewProps) {
+export function AccountsView({ accounts, brands, actions, details }: AccountsViewProps) {
+  const [opened, setOpened] = useState<{ id: string; opener: HTMLElement } | null>(null);
+  const openedAccount = opened ? details?.accounts.find((a) => a.id === opened.id) : undefined;
+  const detailClock = useMemo(
+    () => ({ now: new Date(details?.now ?? 0), timezone: details?.timezone ?? "UTC" }),
+    [details?.now, details?.timezone],
+  );
+  const onDetails = useCallback((id: string, opener: HTMLElement) => {
+    setOpened({ id, opener });
+  }, []);
   const [optimistic, setOptimisticTags] = useOptimistic(accounts, (rows, edit: TagEdit) =>
     rows.map((a) => (a.id === edit.accountId ? { ...a, tags: edit.tags } : a)),
   );
@@ -191,6 +211,7 @@ export function AccountsView({ accounts, brands, actions }: AccountsViewProps) {
             onTags={saveTags}
             onDescription={actions.updateAccountDescription}
             onError={showError}
+            onDetails={details ? onDetails : undefined}
           />
         ))}
       </BrandGroupRow>
@@ -204,6 +225,7 @@ export function AccountsView({ accounts, brands, actions }: AccountsViewProps) {
         onTags={saveTags}
         onDescription={actions.updateAccountDescription}
         onError={showError}
+        onDetails={details ? onDetails : undefined}
       />
     ));
   }
@@ -300,6 +322,14 @@ export function AccountsView({ accounts, brands, actions }: AccountsViewProps) {
           <p className={styles.hint}>No accounts yet. Add your first account to start posting.</p>
         ) : null}
       </div>
+      <DetailDrawer
+        target={openedAccount ? { kind: "account", account: openedAccount } : null}
+        clock={detailClock}
+        onClose={() => {
+          setOpened(null);
+        }}
+        returnFocus={opened?.opener}
+      />
       {error ? (
         <div className={styles.toast} role="alert">
           {error}

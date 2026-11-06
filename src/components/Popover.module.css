@@ -1,0 +1,25 @@
+/* Hover preview (DESIGN.md → Components; mockup .pop). */
+.popover {
+  position: fixed;
+  z-index: 30;
+  padding: 12px 14px;
+  border-radius: var(--r);
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  box-shadow: var(--shadow-lg);
+  color: var(--ink);
+  font-size: 13px;
+  pointer-events: none;
+  visibility: hidden;
+  opacity: 0;
+  transform: translateY(3px);
+  transition:
+    opacity 0.12s,
+    transform 0.12s;
+}
+
+.popover[data-open] {
+  visibility: visible;
+  opacity: 1;
+  transform: none;
+}

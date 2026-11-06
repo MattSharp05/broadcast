@@ -90,6 +90,23 @@ export function inFrom(instant: Date, now: Date): string {
   return days === 1 ? "in 1 day" : `in ${days} days`;
 }
 
+/** "just now", "12 min ago", "3 h ago", "2 days ago". */
+export function ago(instant: Date, now: Date): string {
+  const m = Math.max(0, Math.round((now.getTime() - instant.getTime()) / MINUTE_MS));
+  if (m < 1) return "just now";
+  if (m < 60) return `${m} min ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} h ago`;
+  const days = Math.round(h / 24);
+  return days === 1 ? "1 day ago" : `${days} days ago`;
+}
+
+/** "2 Nov" (the local calendar day, no weekday). */
+export function shortDate(instant: Date, timezone: string): string {
+  const d = toLocalDate(instant, timezone);
+  return `${d.day} ${MON[d.month - 1] ?? ""}`;
+}
+
 /** 312, 1.2K, 54K, 1.3M. */
 export function compactCount(n: number): string {
   const trim = (s: string) => s.replace(/\.0$/, "");

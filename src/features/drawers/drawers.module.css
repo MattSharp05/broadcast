@@ -1,0 +1,338 @@
+/* Previews and detail drawers (DESIGN.md → Drawers, Charts; mockup .pop, .drawer). */
+
+/* ── Preview (inside a Popover) ── */
+.popTitle {
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  margin-bottom: 2px;
+}
+
+.small {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.kv {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px 8px;
+  margin: 10px 0 0;
+}
+
+.kv > div,
+.mgrid > div {
+  display: flex;
+  flex-direction: column-reverse;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.kv dd {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.kv dt,
+.mgrid dt {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.used {
+  margin-top: 10px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.bar {
+  display: block;
+  height: 6px;
+  margin-top: 6px;
+  border-radius: 99px;
+  background: var(--hover);
+  overflow: hidden;
+}
+
+.bar i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.hint {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+/* ── Drawer body ── */
+.lead {
+  flex: none;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.note {
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--r);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: 13px;
+}
+
+.note svg {
+  margin-top: 2px;
+  color: var(--ink-3);
+}
+
+.note[data-tone="bad"] {
+  background: var(--bad-soft);
+  border-color: var(--bad-line);
+  color: var(--ink);
+}
+
+.note[data-tone="bad"] svg {
+  color: var(--bad);
+}
+
+.note[data-tone="warn"] {
+  background: var(--warn-soft);
+  border-color: var(--warn-line);
+  color: var(--ink);
+}
+
+.note[data-tone="warn"] svg {
+  color: var(--warn);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.section > h3 {
+  margin-bottom: 10px;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.big {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.big b {
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.big span {
+  font-size: 12.5px;
+}
+
+.big [data-tone="good"] {
+  color: var(--good);
+}
+
+.big [data-tone="bad"] {
+  color: var(--bad);
+}
+
+.mgrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+
+.mgrid > div {
+  gap: 1px;
+  padding: 10px 12px;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.mgrid > div:nth-child(3n) {
+  border-right: 0;
+}
+
+.mgrid > div:nth-last-child(-n + 3) {
+  border-bottom: 0;
+}
+
+.mgrid dd {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.dl {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  margin: 0;
+}
+
+.dl > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+
+.dl > div:last-child {
+  border-bottom: 0;
+}
+
+.dl dt {
+  color: var(--ink-2);
+  flex: none;
+}
+
+.dl dd {
+  margin: 0;
+  min-width: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.usedRow {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.usedRow .bar {
+  width: 96px;
+  margin-top: 4px;
+}
+
+.split {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.split > .section {
+  flex: 1;
+}
+
+.thumb {
+  width: 90px;
+  height: 160px;
+}
+
+.slots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.slots li {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--r-s);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  font-size: 13px;
+}
+
+.caption {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+}
+
+.prose {
+  color: var(--ink-2);
+}
+
+.help {
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+.muted {
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+.inlineIcon {
+  vertical-align: -3px;
+  margin-right: 6px;
+}
+
+/* ── Charts ── */
+.chart {
+  display: block;
+  overflow: visible;
+}
+
+.chart text {
+  fill: var(--ink-3);
+  font-size: 11px;
+}
+
+.chart text.value {
+  fill: var(--ink-2);
+  font-weight: 500;
+}
+
+.area {
+  fill: var(--accent-soft);
+}
+
+.line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.dot {
+  fill: var(--accent);
+}
+
+.axis {
+  stroke: var(--line-2);
+}
+
+.statBar {
+  fill: var(--accent-soft);
+  stroke: var(--accent);
+  stroke-width: 1;
+}
+
+.statBarLatest {
+  fill: var(--accent);
+}
+
+rect.missing {
+  fill: none;
+  stroke: var(--line-2);
+  stroke-dasharray: 3 4;
+}

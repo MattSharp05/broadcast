@@ -1,6 +1,7 @@
 import { canvasBusy } from "./canvas-busy";
 import { connectMissingPermission } from "./connect-missing-permission";
 import { empty } from "./empty";
+import { noAccounts } from "./no-accounts";
 import { publishDueNow } from "./publish-due-now";
 import { publishContainerError, publishQuotaExhausted } from "./publish-failures";
 import type { Scenario } from "./types";
@@ -13,6 +14,7 @@ export const SCENARIOS: readonly Scenario[] = [
   empty,
   connectMissingPermission,
   publishDueNow,
+  noAccounts,
   publishQuotaExhausted,
   publishContainerError,
 ];

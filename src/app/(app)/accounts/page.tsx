@@ -1,27 +1,25 @@
-import { Plus } from "lucide-react";
 import type { Metadata } from "next";
-import { Button } from "@/components/Button";
-import { PageHeader } from "@/components/PageHeader";
+import { AccountsView } from "@/features/accounts/table/AccountsView";
+import { loadAccounts } from "@/lib/db/accounts";
+import { createServerSupabase } from "@/lib/db/server";
+import { currentWorkspaceKind } from "@/lib/db/workspace";
+import { WORKSPACE_IDS } from "@/lib/db/workspaces";
+import { addBrand, updateAccountDescription, updateAccountTags, updateBrandName } from "./actions";
 
 export const metadata: Metadata = {
   title: "Accounts · Broadcast",
 };
 
-export default function AccountsPage() {
+/** The Accounts tab: every account of the workspace, grouped by brand, with inline edits. */
+export default async function AccountsPage() {
+  const db = await createServerSupabase();
+  const workspaceId = WORKSPACE_IDS[await currentWorkspaceKind()];
+  const data = await loadAccounts(db, workspaceId);
   return (
-    <PageHeader
-      title="Accounts"
-      stats={[
-        { value: 0, label: "accounts" },
-        { value: 0, label: "ready to publish" },
-        { value: 0, label: "need attention" },
-      ]}
-      actions={
-        <Button variant="primary">
-          <Plus aria-hidden="true" />
-          Add account
-        </Button>
-      }
+    <AccountsView
+      accounts={data.accounts}
+      brands={data.brands}
+      actions={{ updateAccountTags, updateAccountDescription, addBrand, updateBrandName }}
     />
   );
 }

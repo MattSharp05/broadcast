@@ -1,9 +1,9 @@
-import type { ButtonHTMLAttributes } from "react";
+import type { ComponentProps } from "react";
 import styles from "./Button.module.css";
 
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 
-interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+interface ButtonProps extends ComponentProps<"button"> {
   /** Defaults to "secondary". Use one primary button per view. */
   variant?: ButtonVariant;
 }

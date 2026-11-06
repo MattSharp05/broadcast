@@ -60,6 +60,7 @@ test("/dev lists every scenario and each link loads it", async ({ page }) => {
     "empty",
     "connect-missing-permission",
     "publish-due-now",
+    "no-accounts",
     "publish-quota-exhausted",
     "publish-container-error",
   ]);
@@ -73,6 +74,7 @@ test("/dev lists every scenario and each link loads it", async ({ page }) => {
     empty: 1,
     "connect-missing-permission": 1,
     "publish-due-now": 1,
+    "no-accounts": 0,
     "publish-quota-exhausted": 1,
     "publish-container-error": 1,
   };

@@ -59,7 +59,8 @@ All tables carry `workspace_id`. Two workspaces exist from the first migration: 
 
 | Table | Key columns |
 |---|---|
-| `workspaces` | id, name, kind (`live`/`sandbox`) |
+| `app_settings` | one row: allowed_email (written by the server from `ALLOWED_EMAIL`; RLS reads it). Service role only |
+| `workspaces` | id, name, kind (`live`/`sandbox`); fixed ids `…0001` Live, `…0002` Sandbox (`src/lib/db/workspaces.ts`) |
 | `settings` | workspace_id, timezone (IANA; default set from the browser at first login) |
 | `brands` | id, workspace_id, name |
 | `social_accounts` | id, brand_id, platform (`instagram`/`fake`; `tiktok` in v1), platform_user_id, handle, profile_url, description, tags text[], slots text[] (`HH:MM`), status (`ready`/`needs_attention`/`not_connected`), status_reason, vault_url, followers |
@@ -67,9 +68,9 @@ All tables carry `workspace_id`. Two workspaces exist from the first migration: 
 | `oauth_states` | state, platform, brand_id, created_at (10-min expiry) |
 | `media_assets` | id, workspace_id, storage_path, thumbnail_path, duration_s, width, height, bytes, deleted_at |
 | `posts` | id, account_id, media_id, caption, timing (`queue`/`pinned`), queue_position, scheduled_at, status (`queued`/`publishing`/`published`/`failed`/`paused`/`removed`), container_id, media_ig_id, permalink, attempts, next_attempt_at, last_error, published_at |
-| `post_metrics` | post_id, offset (`1h`/`6h`/`24h`/`48h`/`7d`), taken_at, views, reach, likes, comments, shares, saves |
+| `post_metrics` | post_id, stat_offset (`1h`/`6h`/`24h`/`48h`/`7d`; `offset` is reserved in SQL and PostgREST), due_at, taken_at, views, reach, likes, comments, shares, saves |
 | `account_metrics` | account_id, day, followers |
-| `api_keys` | id, workspace_id, name, key_hash, last_used_at |
+| `api_keys` | id, workspace_id, name, key_hash (not readable by browser roles), last_used_at, revoked_at |
 | `job_log` | id, kind, post_id/account_id, ok, message, at |
 
 - **Queue planning:** after any change to an account's slots or posts, `planQueue(slots, timezone, now, posts)` recomputes `scheduled_at` for that account's `queue` posts (pinned posts keep their time and take their slot). Open slots are derived, not stored.
@@ -98,7 +99,7 @@ All tables carry `workspace_id`. Two workspaces exist from the first migration: 
 - **Local / cloud sessions:** `pnpm dev` + `supabase start` (Docker). `.env.local` from `.env.example`; Instagram calls use the fake provider unless `IG_APP_ID` is set.
 - **PRs:** CI only (no Vercel previews in batched QA mode).
 - **Production:** Vercel project `broadcast`, deploys from `main`; Supabase project `broadcast` (free tier). Migrations applied by the main pipeline.
-- **Secrets** (Vercel env + GitHub Actions secrets): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ACCESS_TOKEN` + `SUPABASE_PROJECT_REF` (CI migrations), `ALLOWED_EMAIL`, `TOKEN_ENC_KEY` (32 random bytes, base64), `CRON_SECRET`, `IG_APP_ID`, `IG_APP_SECRET`, `APP_URL`.
+- **Secrets** (Vercel env + GitHub Actions secrets): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ACCESS_TOKEN` + `SUPABASE_PROJECT_REF` + `SUPABASE_DB_PASSWORD` (CI migrations), `ALLOWED_EMAIL`, `TOKEN_ENC_KEY` (32 random bytes, base64), `CRON_SECRET`, `IG_APP_ID`, `IG_APP_SECRET`, `APP_URL`.
 
 ## Conventions
 - Package manager pnpm; Node 22. ESLint (next + typescript-eslint strict) and Prettier.

@@ -8,7 +8,16 @@ const compat = new FlatCompat({ baseDirectory: dirname(fileURLToPath(import.meta
 
 export default tseslint.config(
   {
-    ignores: [".next/**", "out/**", "coverage/**", "node_modules/**", "next-env.d.ts"],
+    // tests/e2e: Playwright specs are written ahead of the harness (BC-8), which installs
+    // @playwright/test and removes this ignore and the matching tsconfig "exclude".
+    ignores: [
+      ".next/**",
+      "out/**",
+      "coverage/**",
+      "node_modules/**",
+      "next-env.d.ts",
+      "tests/e2e/**",
+    ],
   },
   ...compat.extends("next/core-web-vitals"),
   {

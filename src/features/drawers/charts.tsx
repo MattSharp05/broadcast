@@ -79,6 +79,11 @@ export function RefreshChart({ snapshots }: { snapshots: readonly StatSnapshot[]
           return (
             <g key={s.offset} data-bar={s.missed ? "missed" : s.taken ? "unreported" : "missing"}>
               <rect className={styles.missing} x={x} y={base - 20} width={w} height={20} rx={3} />
+              {s.missed || s.taken ? (
+                <text className={styles.value} x={x + w / 2} y={base - 26} textAnchor="middle">
+                  {s.missed ? "Missed" : "—"}
+                </text>
+              ) : null}
               <text x={x + w / 2} y={BH - 8} textAnchor="middle">
                 {name}
               </text>

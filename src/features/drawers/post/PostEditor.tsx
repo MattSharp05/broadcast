@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRightLeft, Info, Send, TriangleExclamationPoint } from "lucide-react";
+import { Info, Send, TriangleExclamationPoint } from "lucide-react";
 import { useId, useState, useTransition, type ReactNode } from "react";
 import { Button } from "@/components/Button";
 import { Thumb } from "@/features/canvas/content/cards";
@@ -17,7 +17,6 @@ import edit from "../edit.module.css";
 import type { OnQueueChanged, QueueActions } from "../edit-types";
 import type { DetailClock } from "../types";
 import { EDIT_MESSAGES } from "@/lib/domain/queue-edit";
-import { MoveForm, useMoveChoices } from "./move";
 
 const HOUR_MS = 3_600_000;
 const QUARTER_MS = 15 * 60_000;
@@ -66,8 +65,6 @@ export function PostEditor({ card, account, detail, clock, actions, onChanged }:
   const [timing, setTiming] = useState<"queue" | "pinned">(savedTiming);
   const [pinLocal, setPinLocal] = useState(() => defaultPin(card.at, clock));
   const [confirming, setConfirming] = useState(false);
-  const [moving, setMoving] = useState(false);
-  const canMove = useMoveChoices() !== null;
   const [error, setError] = useState<string | null>(null);
   const [busy, startTransition] = useTransition();
 
@@ -183,18 +180,7 @@ export function PostEditor({ card, account, detail, clock, actions, onChanged }:
         </p>
       ) : null}
 
-      {moving ? (
-        <MoveForm
-          card={card}
-          account={account}
-          clock={clock}
-          actions={actions}
-          onChanged={onChanged}
-          onCancel={() => {
-            setMoving(false);
-          }}
-        />
-      ) : confirming ? (
+      {confirming ? (
         <div className={edit.confirm} role="group" aria-label="Remove from queue">
           <span>Remove this video from @{account.handle}&apos;s queue? Later posts move up.</span>
           <Button
@@ -253,17 +239,6 @@ export function PostEditor({ card, account, detail, clock, actions, onChanged }:
               Post now
             </Button>
           </span>
-          {canMove ? (
-            <Button
-              disabled={busy}
-              onClick={() => {
-                setMoving(true);
-              }}
-            >
-              <ArrowRightLeft aria-hidden="true" />
-              Move to…
-            </Button>
-          ) : null}
           <Button
             variant="danger"
             disabled={busy}

@@ -3,12 +3,7 @@
 import { LocateFixed, Minus, Plus, Scan } from "lucide-react";
 import { useImperativeHandle, useLayoutEffect, useRef, type ReactNode, type Ref } from "react";
 import styles from "./Canvas.module.css";
-import {
-  CanvasController,
-  type ControllerOptions,
-  type ItemDragHandler,
-  type MinimapItem,
-} from "./controller";
+import { CanvasController, type ControllerOptions, type MinimapItem } from "./controller";
 import type { Point, Rect, View, ZoomLevel } from "./math";
 
 export interface CanvasHandle {
@@ -19,8 +14,6 @@ export interface CanvasHandle {
   /** Centres the view on a world point at the current scale. */
   centerOn: (world: Point) => void;
   getView: () => View | null;
-  /** Cancels a card drag in progress. */
-  cancelItemDrag: () => void;
 }
 
 export interface CanvasProps {
@@ -36,8 +29,6 @@ export interface CanvasProps {
   onScaleChange?: (scale: number) => void;
   /** Called when the scale crosses the semantic-zoom threshold (far below 60%). */
   onZoomLevelChange?: (level: ZoomLevel) => void;
-  /** Items that can be dragged instead of panning the canvas (see ItemDragHandler). */
-  itemDrag?: ItemDragHandler;
   "aria-label"?: string;
   className?: string;
   ref?: Ref<CanvasHandle>;
@@ -60,7 +51,6 @@ export function Canvas({
   storageKey = "default",
   onScaleChange,
   onZoomLevelChange,
-  itemDrag,
   "aria-label": ariaLabel = "Canvas",
   className,
   ref,
@@ -80,7 +70,6 @@ export function Canvas({
     storageKey,
     onScaleChange,
     onZoomLevelChange,
-    itemDrag,
   };
   const optionsRef = useRef(options);
   useLayoutEffect(() => {
@@ -116,7 +105,6 @@ export function Canvas({
       zoomOut: () => controllerRef.current?.zoomOut(),
       centerOn: (world: Point) => controllerRef.current?.centerOn(world),
       getView: () => controllerRef.current?.getView() ?? null,
-      cancelItemDrag: () => controllerRef.current?.cancelItemDrag(),
     }),
     [],
   );

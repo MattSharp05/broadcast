@@ -20,7 +20,6 @@ import {
   panBy,
   parseView,
   pinchView,
-  screenToWorld,
   visibleWorldRect,
   worldToMinimap,
   zoomAt,
@@ -41,30 +40,6 @@ export interface MinimapItem {
   tone?: MinimapTone;
 }
 
-/**
- * Dragging items on the canvas (BC-22) instead of panning. A press on an element `pick` returns
- * becomes an item drag after a hold of ITEM_HOLD_MS, or (mouse and pen) a move past
- * ITEM_DRAG_THRESHOLD; a touch that moves before the hold pans as usual. A second finger cancels
- * the item drag and pinches. The handler gets world and client points; Escape cancels.
- */
-export interface ItemDragHandler {
-  /** The draggable element under a press, or null to pan. */
-  pick: (target: Element) => HTMLElement | null;
-  start: (el: HTMLElement, world: Point, client: Point) => void;
-  move: (world: Point, client: Point) => void;
-  /** `drop`: false when cancelled (Escape, a second finger, released before it moved). */
-  end: (drop: boolean) => void;
-}
-
-/** Hold this long on a draggable item to pick it up. */
-export const ITEM_HOLD_MS = 150;
-/** Or move a mouse or pen this far (px) with the button down. */
-export const ITEM_DRAG_THRESHOLD = 6;
-/** Near the stage edge (px) a dragged item scrolls the canvas. */
-const EDGE_ZONE = 48;
-/** Fastest edge scroll, px per frame. */
-const EDGE_SPEED = 14;
-
 export interface ControllerOptions {
   bounds: Rect;
   nowAnchor: Point;
@@ -73,7 +48,6 @@ export interface ControllerOptions {
   storageKey: string;
   onScaleChange?: ((scale: number) => void) | undefined;
   onZoomLevelChange?: ((level: ZoomLevel) => void) | undefined;
-  itemDrag?: ItemDragHandler | undefined;
 }
 
 export interface ControllerElements {
@@ -115,28 +89,6 @@ interface Drag {
   pointerY: number;
   start: View;
   moved: boolean;
-}
-
-/** A press on a draggable item that hasn't been decided yet (item drag, pan or click). */
-interface ItemPress {
-  pointerId: number;
-  el: HTMLElement;
-  x: number;
-  y: number;
-  touch: boolean;
-  timer: ReturnType<typeof setTimeout>;
-}
-
-/** An item being dragged. */
-interface ItemDrag {
-  pointerId: number;
-  x: number;
-  y: number;
-  startX: number;
-  startY: number;
-  /** Moved past the threshold since it was picked up (a held press released in place clicks). */
-  moved: boolean;
-  edgeFrame: number;
 }
 
 interface Pinch {
@@ -183,10 +135,6 @@ export class CanvasController {
   private drag: Drag | null = null;
   private pinch: Pinch | null = null;
   private gestureStartScale = 1;
-  private press: ItemPress | null = null;
-  private item: ItemDrag | null = null;
-  /** An item drag was cancelled mid-move; its release is swallowed like a pan's. */
-  private swallowRelease = false;
   private suppressClick = false;
 
   private animation = 0;
@@ -255,15 +203,7 @@ export class CanvasController {
     }
   }
 
-  /** Cancels an item drag in progress (Escape does this too). */
-  cancelItemDrag(): void {
-    this.clearPress();
-    // The button is still down: the release that follows mustn't click what's under it.
-    if (this.endItem(false)) this.swallowRelease = true;
-  }
-
   destroy(): void {
-    this.cancelItemDrag();
     cancelAnimationFrame(this.frame);
     cancelAnimationFrame(this.animation);
     this.flushIdle();
@@ -445,13 +385,6 @@ export class CanvasController {
     this.on(window, "pointercancel", (e) => {
       this.onPointerUp(e);
     });
-    this.on(window, "keydown", (e) => {
-      if (e.key === "Escape" && (this.item || this.press)) {
-        e.preventDefault();
-        e.stopPropagation();
-        this.cancelItemDrag();
-      }
-    });
     // A press that turned into a pan must not also click the card under it.
     this.on(
       window,
@@ -472,8 +405,6 @@ export class CanvasController {
         this.stopAnimation();
         this.set(applyWheel(this.view, e, this.local(e.clientX, e.clientY), this.size));
         this.rebaseGesture();
-        const item = this.item;
-        if (item) this.opts.itemDrag?.move(this.worldAt(item.x, item.y), { x: item.x, y: item.y });
       },
       { passive: false },
     );
@@ -574,97 +505,8 @@ export class CanvasController {
     this.stopAnimation();
     this.stageRect = this.els.stage.getBoundingClientRect();
     this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (this.pointers.size >= 2) {
-      // A second finger: whatever the first was doing with an item, this is a pinch.
-      this.clearPress();
-      this.endItem(false);
-      this.startPinch();
-      return;
-    }
-    const picked =
-      e.target instanceof Element ? (this.opts.itemDrag?.pick(e.target) ?? null) : null;
-    if (picked) {
-      this.drag = null;
-      const pointerId = e.pointerId;
-      this.press = {
-        pointerId,
-        el: picked,
-        x: e.clientX,
-        y: e.clientY,
-        touch: e.pointerType === "touch",
-        timer: setTimeout(() => {
-          const p = this.press;
-          if (p?.pointerId === pointerId) this.startItem(p, p.x, p.y);
-        }, ITEM_HOLD_MS),
-      };
-      return;
-    }
-    this.startDrag(e.clientX, e.clientY);
-  }
-
-  private clearPress(): void {
-    if (this.press) clearTimeout(this.press.timer);
-    this.press = null;
-  }
-
-  private startItem(p: ItemPress, x: number, y: number): void {
-    this.clearPress();
-    const handler = this.opts.itemDrag;
-    if (!handler || !p.el.isConnected) return;
-    this.item = {
-      pointerId: p.pointerId,
-      x,
-      y,
-      startX: p.x,
-      startY: p.y,
-      moved: Math.hypot(x - p.x, y - p.y) > ITEM_DRAG_THRESHOLD,
-      edgeFrame: 0,
-    };
-    this.els.stage.dataset.dragging = "true";
-    handler.start(p.el, this.worldAt(x, y), { x, y });
-    if (this.item.moved) handler.move(this.worldAt(x, y), { x, y });
-  }
-
-  private moveItem(x: number, y: number): void {
-    const item = this.item;
-    if (!item) return;
-    item.x = x;
-    item.y = y;
-    if (!item.moved && Math.hypot(x - item.startX, y - item.startY) > ITEM_DRAG_THRESHOLD) {
-      item.moved = true;
-    }
-    this.opts.itemDrag?.move(this.worldAt(x, y), { x, y });
-    if (!item.edgeFrame) item.edgeFrame = requestAnimationFrame(this.edgeScroll);
-  }
-
-  /** While a dragged item is near the stage's edge, scroll the canvas that way. */
-  private readonly edgeScroll = (): void => {
-    const item = this.item;
-    if (!item) return;
-    item.edgeFrame = 0;
-    const p = this.local(item.x, item.y);
-    const push = (d: number) => (d < EDGE_ZONE ? (EDGE_ZONE - Math.max(0, d)) / EDGE_ZONE : 0);
-    const dx = (push(p.x) - push(this.size.w - p.x)) * EDGE_SPEED;
-    const dy = (push(p.y) - push(this.size.h - p.y)) * EDGE_SPEED;
-    if (dx === 0 && dy === 0) return;
-    this.set(panBy(this.view, dx, dy));
-    this.opts.itemDrag?.move(this.worldAt(item.x, item.y), { x: item.x, y: item.y });
-    item.edgeFrame = requestAnimationFrame(this.edgeScroll);
-  };
-
-  /** Ends an item drag; true when it moved (so the click that follows is swallowed). */
-  private endItem(drop: boolean): boolean {
-    const item = this.item;
-    if (!item) return false;
-    this.item = null;
-    if (item.edgeFrame) cancelAnimationFrame(item.edgeFrame);
-    delete this.els.stage.dataset.dragging;
-    this.opts.itemDrag?.end(drop && item.moved);
-    return item.moved;
-  }
-
-  private worldAt(clientX: number, clientY: number): Point {
-    return screenToWorld(this.view, this.local(clientX, clientY));
+    if (this.pointers.size >= 2) this.startPinch();
+    else this.startDrag(e.clientX, e.clientY);
   }
 
   /** A wheel zoom in the middle of a drag/pinch: continue from the new view, no snap back. */
@@ -706,23 +548,6 @@ export class CanvasController {
     }
     this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
-    if (this.item?.pointerId === e.pointerId) {
-      this.moveItem(e.clientX, e.clientY);
-      return;
-    }
-    const press = this.press;
-    if (press?.pointerId === e.pointerId) {
-      if (Math.hypot(e.clientX - press.x, e.clientY - press.y) <= ITEM_DRAG_THRESHOLD) return;
-      if (press.touch) {
-        // A finger that moves before the hold pans (from where it went down: no jump).
-        this.clearPress();
-        this.startDrag(press.x, press.y);
-      } else {
-        this.startItem(press, e.clientX, e.clientY);
-        return;
-      }
-    }
-
     if (this.pinch && this.pointers.size >= 2) {
       const [a, b] = [...this.pointers.values()];
       if (!a || !b) return;
@@ -745,11 +570,7 @@ export class CanvasController {
 
   private onPointerUp(e: PointerEvent): void {
     if (!this.pointers.delete(e.pointerId)) return;
-    if (this.press?.pointerId === e.pointerId) this.clearPress(); // a click
-    let wasMoving = this.pinch !== null || (this.drag?.moved ?? false) || this.swallowRelease;
-    if (this.item?.pointerId === e.pointerId) {
-      wasMoving = this.endItem(e.type === "pointerup") || wasMoving;
-    }
+    const wasMoving = this.pinch !== null || (this.drag?.moved ?? false);
     if (this.pointers.size >= 2) {
       this.startPinch();
       return;
@@ -761,7 +582,6 @@ export class CanvasController {
       return;
     }
     if (this.pointers.size === 0) {
-      this.swallowRelease = false;
       this.drag = null;
       this.pinch = null;
       this.setPanning(false);

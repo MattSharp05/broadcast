@@ -5,14 +5,7 @@ import { nowFor } from "@/lib/clock";
 import type { ActionResult, AddContentInput, AddedContent } from "@/features/content/types";
 import { NotFoundError, saveAccountSlots } from "@/lib/db/accounts";
 import { ContentError, queueContent } from "@/lib/db/posts";
-import {
-  MoveError,
-  QueueEditError,
-  editPost,
-  movePost,
-  postNow,
-  removePost,
-} from "@/lib/db/queue-edit";
+import { QueueEditError, editPost, postNow, removePost } from "@/lib/db/queue-edit";
 import { createServerSupabase } from "@/lib/db/server";
 import {
   StoredVideoError,
@@ -30,19 +23,7 @@ import {
   savedMessage,
   slotsMessage,
 } from "@/lib/domain/queue-edit";
-import type {
-  MovePostInput,
-  MovedChange,
-  QueueChange,
-  SavePostInput,
-  SaveSlotsInput,
-} from "@/features/drawers/edit-types";
-import {
-  MOVE_UNDONE_MESSAGE,
-  movedMessage,
-  type MovePlacement,
-  type MoveTarget,
-} from "@/lib/domain/move";
+import type { QueueChange, SavePostInput, SaveSlotsInput } from "@/features/drawers/edit-types";
 import { checkReel, videoContentType } from "@/lib/media/checks";
 import { Mp4Error } from "@/lib/media/mp4";
 
@@ -199,7 +180,7 @@ function refreshed<T>(value: T): ActionResult<T> {
 }
 
 function editFailed(err: unknown): ActionResult<never> {
-  if (err instanceof QueueEditError || err instanceof MoveError) return invalid(err.message);
+  if (err instanceof QueueEditError) return invalid(err.message);
   if (err instanceof NotFoundError) return invalid(err.message);
   console.error(err);
   return invalid(EDIT_FAILED);
@@ -278,67 +259,6 @@ export async function saveSlots(input: SaveSlotsInput): Promise<ActionResult<Que
     const { db, ctx } = await queueContext();
     const saved = await saveAccountSlots(db, ctx, input.accountId, input.slots);
     return refreshed({ message: slotsMessage(saved.handle, saved.before, saved.slots) });
-  } catch (err) {
-    return editFailed(err);
-  }
-}
-
-// ── Moving a post (BC-22) ──────────────────────────────────────────────────────────────────────
-
-/** The browser's placement, checked; null when it isn't one. */
-function parsePlacement(raw: unknown): MovePlacement | null {
-  if (!raw || typeof raw !== "object") return null;
-  const p = raw as Record<string, unknown>;
-  if (p.kind === "back") return { kind: "back" };
-  if (p.kind === "queue") {
-    if (p.after === null) return { kind: "queue", after: null };
-    return typeof p.after === "string" && UUID.test(p.after)
-      ? { kind: "queue", after: p.after }
-      : null;
-  }
-  if ((p.kind === "slot" || p.kind === "pinned") && typeof p.at === "string") {
-    const at = new Date(p.at);
-    return Number.isNaN(at.getTime()) ? null : { kind: p.kind, at };
-  }
-  return null;
-}
-
-function placementInput(p: MovePlacement): MovePostInput["placement"] {
-  if (p.kind === "slot" || p.kind === "pinned") return { kind: p.kind, at: p.at.toISOString() };
-  return p;
-}
-
-/** A card dropped on the canvas, "Move to…" in the drawer, or the toast's Undo. */
-export async function movePostAction(
-  input: MovePostInput,
-  undoing = false,
-): Promise<ActionResult<MovedChange>> {
-  const raw = input as unknown as Record<string, unknown> | null;
-  const placement = parsePlacement(raw?.placement);
-  if (
-    !raw ||
-    typeof raw.postId !== "string" ||
-    !UUID.test(raw.postId) ||
-    typeof raw.accountId !== "string" ||
-    !UUID.test(raw.accountId) ||
-    !placement
-  ) {
-    return invalid("That move can't be made. Reload the page and try again.");
-  }
-  try {
-    const { db, ctx } = await queueContext();
-    const target: MoveTarget = { accountId: input.accountId, placement };
-    const moved = await movePost(db, ctx, input.postId, target);
-    return refreshed({
-      message: undoing
-        ? MOVE_UNDONE_MESSAGE
-        : movedMessage(moved.handle, moved.scheduledAt, ctx.now, ctx.timezone),
-      undo: {
-        postId: input.postId,
-        accountId: moved.undo.accountId,
-        placement: placementInput(moved.undo.placement),
-      },
-    });
   } catch (err) {
     return editFailed(err);
   }

@@ -1,0 +1,26 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# builds
+.next/
+out/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# env and secrets
+.env
+.env.*
+!.env.example
+
+# test output
+playwright-report/
+test-results/
+
+# local tools
+.vercel/
+.supabase/
+.DS_Store
+*.log

@@ -17,9 +17,11 @@ import {
 } from "@/lib/domain/details";
 import { compactCount, shortDate } from "@/lib/domain/format";
 import { Reconnect } from "./account/Reconnect";
+import { SlotsEditor } from "./account/slots";
 import { FollowersChart } from "./charts";
 import styles from "./drawers.module.css";
 import { Numbers, Row, UsedBar } from "./previews";
+import type { OnQueueChanged, QueueActions } from "./edit-types";
 import type { DetailClock } from "./types";
 
 const TONES: Record<AccountState, StatusTone> = {
@@ -95,9 +97,14 @@ export function CopyLinkButton({ url, label = "Copy link" }: { url: string; labe
 export function AccountDetails({
   account: a,
   clock,
+  actions,
+  onChanged,
 }: {
   account: AccountDetail;
   clock: DetailClock;
+  /** Editing the slots (BC-18); read-only without. */
+  actions?: QueueActions;
+  onChanged?: OnQueueChanged;
 }) {
   const platform = platformName(a.platform);
   const change = followerChange(a.followerSeries);
@@ -144,19 +151,22 @@ export function AccountDetails({
         ]}
       />
 
-      {/* Editing slots (add / remove) arrives with the account editor (BC-18). */}
-      <section className={styles.section} data-section="slots">
-        <h3>Daily posting slots</h3>
-        {a.slots.length > 0 ? (
-          <ul className={styles.slots}>
-            {a.slots.map((s) => (
-              <li key={s}>{s}</li>
-            ))}
-          </ul>
-        ) : (
-          <p className={styles.muted}>No slots yet, so queued videos wait without a time.</p>
-        )}
-      </section>
+      {actions && onChanged ? (
+        <SlotsEditor key={a.id} account={a} actions={actions} onChanged={onChanged} />
+      ) : (
+        <section className={styles.section} data-section="slots">
+          <h3>Daily posting slots</h3>
+          {a.slots.length > 0 ? (
+            <ul className={styles.slots}>
+              {a.slots.map((s) => (
+                <li key={s}>{s}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className={styles.muted}>No slots yet, so queued videos wait without a time.</p>
+          )}
+        </section>
+      )}
 
       <section className={styles.section} data-section="connection">
         <h3>Connection</h3>

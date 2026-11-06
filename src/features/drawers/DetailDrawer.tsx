@@ -6,6 +6,7 @@ import { platformName } from "@/components/PlatformGlyph";
 import { whenLabel, inFrom } from "@/lib/domain/format";
 import { AccountDetails } from "./AccountDetails";
 import styles from "./drawers.module.css";
+import type { OnQueueChanged, QueueActions } from "./edit-types";
 import { PostDetails } from "./PostDetails";
 import type { DetailClock, DetailTarget } from "./types";
 
@@ -18,6 +19,9 @@ export interface DetailDrawerProps {
   returnFocus?: HTMLElement | null;
   /** "Add a video for this slot": the account and the slot's time. */
   onAddContent?: (accountId: string, slotAt: Date) => void;
+  /** Editing the queue and slots (BC-18); the drawers are read-only without. */
+  actions?: QueueActions;
+  onChanged?: OnQueueChanged;
 }
 
 function heading(target: DetailTarget, clock: DetailClock) {
@@ -67,13 +71,15 @@ function heading(target: DetailTarget, clock: DetailClock) {
   };
 }
 
-/** The right-hand drawer for an account or a post (read-only; editing arrives in BC-18). */
+/** The right-hand drawer for an account or a post (editable with `actions`, BC-18). */
 export function DetailDrawer({
   target,
   clock,
   onClose,
   returnFocus,
   onAddContent,
+  actions,
+  onChanged,
 }: DetailDrawerProps) {
   // Stays mounted while closed, so the Drawer sees open → false and gives focus back.
   if (!target)
@@ -95,7 +101,12 @@ export function DetailDrawer({
       data-testid={`drawer-${kind}`}
     >
       {target.kind === "account" ? (
-        <AccountDetails account={target.account} clock={clock} />
+        <AccountDetails
+          account={target.account}
+          clock={clock}
+          actions={actions}
+          onChanged={onChanged}
+        />
       ) : (
         <PostDetails
           card={target.card}
@@ -103,6 +114,8 @@ export function DetailDrawer({
           detail={target.detail}
           clock={clock}
           onAddContent={onAddContent}
+          actions={actions}
+          onChanged={onChanged}
         />
       )}
     </Drawer>

@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AccountRow, BrandRef } from "@/lib/domain/accounts";
 import { UPCOMING_STATUSES, avatarIndex, profileUrl } from "@/lib/domain/canvas";
+import { cleanSlots } from "@/lib/domain/add-account";
+import { replanAccount, type QueueContext } from "./posts";
 import type { Database } from "./types";
 
 /**
@@ -105,6 +107,30 @@ export function saveAccountDescription(
   description: string,
 ): Promise<void> {
   return updateAccount(db, workspaceId, accountId, { description });
+}
+
+/**
+ * Replaces the account's daily posting slots (cleaned: valid, unique, earliest first) and re-times
+ * its queue (BC-18). Returns the handle and the slots before and after, for the toast.
+ */
+export async function saveAccountSlots(
+  db: Db,
+  ctx: QueueContext,
+  accountId: string,
+  slots: readonly string[],
+): Promise<{ handle: string; before: string[]; slots: string[] }> {
+  const current = await db
+    .from("social_accounts")
+    .select("handle, slots")
+    .eq("workspace_id", ctx.workspaceId)
+    .eq("id", accountId)
+    .maybeSingle();
+  if (current.error) throw new Error(`Reading the account failed: ${current.error.message}`);
+  if (!current.data) throw new NotFoundError("That account no longer exists.");
+  const clean = cleanSlots(slots);
+  await updateAccount(db, ctx.workspaceId, accountId, { slots: clean });
+  await replanAccount(db, ctx, accountId);
+  return { handle: current.data.handle, before: current.data.slots, slots: clean };
 }
 
 export async function createBrand(db: Db, workspaceId: string, name: string): Promise<BrandRef> {

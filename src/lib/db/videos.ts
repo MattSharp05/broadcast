@@ -24,8 +24,8 @@ export async function signVideoUrl(db: Db, storagePath: string): Promise<string>
 const NEEDS_VIDEO = ["queued", "publishing", "paused", "failed"] as const;
 
 /**
- * After publishing: deletes the video file from Storage and marks the media `deleted_at`; the
- * thumbnail stays. Skipped while another post of the same media still waits to go out. Best
+ * After publishing (or removing a post from the queue, BC-18): deletes the video file from Storage
+ * and marks the media `deleted_at`; the thumbnail stays. Skipped while another post of the same media still waits to go out. Best
  * effort: a Storage error leaves the file and the
  * row as they are, and says why.
  */

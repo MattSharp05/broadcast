@@ -1,5 +1,5 @@
-import { hasTokenKey, tokenKeyFromEnv } from "@/lib/crypto/tokens";
-import { TokenDecryptError, loadAccessToken } from "@/lib/db/credentials";
+import { TokenDecryptError } from "@/lib/db/credentials";
+import { flagAccount } from "@/lib/db/health";
 import type { StatOffset } from "@/lib/domain/details";
 import { dueSnapshots, followerDay, statDueAt } from "@/lib/domain/stats-schedule";
 import { createDbFakeStore } from "@/lib/providers/fake-store";
@@ -12,7 +12,9 @@ import {
   type ProviderPlatform,
   type SocialProvider,
 } from "@/lib/providers";
+import { errorText, isAuthError } from "@/lib/providers/errors";
 import { claim, release, type Claim } from "./claim";
+import { createTokenReader, resolveTokenKey, type TokenAccount } from "./provider-account";
 import { loadSettings, publishPlatforms, type WorkspaceSettings } from "./publish-due";
 import type { Db, Step, StepSummary, TickContext } from "./types";
 
@@ -62,6 +64,30 @@ interface LoadedPost {
   post_metrics: { stat_offset: StatOffset; due_at: string; taken_at: string | null }[];
 }
 
+function tokenAccount(a: AccountRow): TokenAccount {
+  return {
+    id: a.id,
+    workspaceId: a.workspace_id,
+    platform: a.platform,
+    platformUserId: a.platform_user_id,
+  };
+}
+
+/**
+ * Access to the account is gone (expired, revoked): flag it once this tick, which pauses its
+ * queued posts (BC-19).
+ */
+async function flagOnAuthError(
+  run: Run,
+  err: unknown,
+  workspaceId: string,
+  accountId: string,
+): Promise<void> {
+  if (!isAuthError(err) || run.flagged.has(accountId)) return;
+  run.flagged.add(accountId);
+  await flagAccount(run.db, { workspaceId, accountId, reason: err.userMessage, kind: "stats" });
+}
+
 interface AccountRow {
   id: string;
   workspace_id: string;
@@ -90,42 +116,12 @@ const NO_NUMBERS: MediaInsights = {
   saves: null,
 };
 
-/** Tokens per account, read once per tick. */
-function tokenReader(db: Db, tokenKey: Buffer | null) {
-  const tokens = new Map<string, Promise<string | null>>();
-  return async (account: AccountRow): Promise<ProviderAccount> => {
-    const base = { accountId: account.id, platformUserId: account.platform_user_id };
-    if (account.platform === "fake") return { ...base, accessToken: "" };
-    let token = tokens.get(account.id);
-    if (!token) {
-      token = tokenKey
-        ? loadAccessToken(db, account.workspace_id, account.id, tokenKey)
-        : Promise.resolve(null);
-      tokens.set(account.id, token);
-    }
-    const accessToken = await token;
-    if (!accessToken) {
-      throw new ProviderError({
-        code: "token_expired",
-        retryable: false,
-        userMessage: "Broadcast has no working Instagram access for this account.",
-      });
-    }
-    return { ...base, accessToken };
-  };
-}
-
 /** How long to leave a post alone after a failed stats call. */
 export function backoffFor(err: unknown): number {
   if (err instanceof ProviderError && err.retryable && err.code !== "quota_exhausted") {
     return RETRY_BACKOFF_S;
   }
   return LONG_BACKOFF_S;
-}
-
-function errorText(err: unknown): string {
-  if (err instanceof ProviderError) return err.userMessage;
-  return err instanceof Error ? err.message : String(err);
 }
 
 /** Keeps the post leased for `seconds` (the back-off) and drops this tick's claim. */
@@ -216,6 +212,8 @@ interface Run {
   fakeStore: ReturnType<typeof createDbFakeStore>;
   /** Accounts Instagram rate-limited this tick: left alone for the rest of it. */
   limited: Set<string>;
+  /** Accounts flagged Needs attention this tick (their access is gone): no more calls. */
+  flagged: Set<string>;
 }
 
 /** ms left in the tick's budget. */
@@ -254,7 +252,12 @@ async function collectSnapshots(run: Run, summary: StatsSummary): Promise<void> 
   }
   for (const c of claims) {
     const post = posts.get(c.postId);
-    if (!post || run.limited.has(post.account_id) || remaining(ctx) < MIN_CALL_MS) {
+    if (
+      !post ||
+      run.limited.has(post.account_id) ||
+      run.flagged.has(post.account_id) ||
+      remaining(ctx) < MIN_CALL_MS
+    ) {
       await release(db, c);
       summary.released += 1;
       continue;
@@ -314,6 +317,7 @@ async function collectSnapshots(run: Run, summary: StatsSummary): Promise<void> 
         if (err instanceof ProviderError && err.code === "quota_exhausted") {
           run.limited.add(post.account_id);
         }
+        await flagOnAuthError(run, err, post.workspace_id, post.account_id);
         await logFailure(db, "stats", post.workspace_id, post.account_id, post.id, errorText(err));
         await backOff(db, c, backoffFor(err), ctx.realNow());
         summary.retrying += 1;
@@ -378,7 +382,10 @@ async function collectFollowers(run: Run, summary: StatsSummary): Promise<void> 
   );
   const waiting = new Set(failed.data.map((f) => f.account_id));
   const due = accounts.data
-    .filter((a) => !done.has(a.id) && !waiting.has(a.id) && !run.limited.has(a.id))
+    .filter(
+      (a) =>
+        !done.has(a.id) && !waiting.has(a.id) && !run.limited.has(a.id) && !run.flagged.has(a.id),
+    )
     .slice(0, FOLLOWERS_BATCH);
 
   for (const a of due) {
@@ -391,6 +398,7 @@ async function collectFollowers(run: Run, summary: StatsSummary): Promise<void> 
       followers = await provider.getFollowerCount(await run.providerAccount(a));
     } catch (err) {
       if (!(err instanceof ProviderError)) console.error(`collectStats: account ${a.id}:`, err);
+      await flagOnAuthError(run, err, a.workspace_id, a.id);
       await logFailure(db, "followers", a.workspace_id, a.id, null, errorText(err));
       summary.followerErrors += 1;
       continue;
@@ -418,17 +426,18 @@ export function createCollectStats(deps: CollectStatsDeps = {}): Step {
     name: "collectStats",
     async run(ctx: TickContext): Promise<StepSummary> {
       const instagram = deps.instagram === undefined ? instagramConfigFromEnv() : deps.instagram;
-      const tokenKey =
-        deps.tokenKey === undefined ? (hasTokenKey() ? tokenKeyFromEnv() : null) : deps.tokenKey;
+      const tokenKey = resolveTokenKey(deps.tokenKey);
+      const reader = createTokenReader(ctx.db, tokenKey);
       const run: Run = {
         db: ctx.db,
         ctx,
         instagram,
         platforms: publishPlatforms({ instagram, tokenKey }),
         settings: new Map(),
-        providerAccount: tokenReader(ctx.db, tokenKey),
+        providerAccount: (a) => reader(tokenAccount(a)),
         fakeStore: createDbFakeStore(ctx.db),
         limited: new Set(),
+        flagged: new Set(),
       };
       const summary: StatsSummary = {
         claimed: 0,

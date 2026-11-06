@@ -1,4 +1,5 @@
-import type { PostStatus } from "./queue";
+import { whenLabel } from "./format";
+import { planQueue, type PostStatus } from "./queue";
 
 /**
  * The publish state machine (docs/TDD.md → Publishing; ADR 0002). Pure: the scheduler's
@@ -8,14 +9,19 @@ import type { PostStatus } from "./queue";
  *
  *   queued ──(due, account ready, quota free)── create container ──▶ publishing (container_id)
  *   publishing ── check container ──▶ still processing: check again next tick
- *                                  └▶ finished: publish ──▶ published (media id + permalink)
+ *                                  ├▶ finished: check the quota, publish ──▶ published
+ *                                  └▶ already published (a lost answer): find it ──▶ published
+ *   quota used up (before uploading or before publishing): wait for the account's next slot,
+ *   without using a retry.
  *   any error: retry after 1, 2, then 4 min (3 retries); the next error, or one that can't be
  *   fixed by retrying, ends in failed with last_error.
  *   account not ready (or its token expired) ──▶ paused.
  *
- * A container is created at most once per try and its id is saved with the post before anything
- * else happens, so a post is never published twice; a container that ends in an error is dropped
- * and the retry makes a new one.
+ * Never twice (CLAUDE.md → Rules): a post has at most one container at a time and its id is saved
+ * before anything else happens; only that container is ever published, and Instagram publishes a
+ * container at most once. A container is checked before every publish, so one that was published
+ * already (the tick crashed, or the answer timed out) is recognised, not published again. A
+ * container that ends in an error or expires is dropped and the retry uploads a new one.
  */
 
 /** Minutes to wait before retry 1, 2 and 3. */
@@ -62,12 +68,19 @@ export type PublishErrorCode =
   | "unsupported"
   | "unknown";
 
+/** When a post blocked by the publishing quota tries again, and how the log says it. */
+export interface QuotaWait {
+  at: Date;
+  label: string;
+}
+
 export type PublishOutcome =
   | { kind: "paused"; reason: string }
-  | { kind: "quota_full"; message: string }
+  | { kind: "quota_full"; message: string; wait?: QuotaWait }
   | { kind: "container_created"; containerId: string }
   | { kind: "processing" }
-  | { kind: "published"; mediaId: string; permalink: string }
+  /** Ids are null only when an already-published container's post couldn't be found. */
+  | { kind: "published"; mediaId: string | null; permalink: string | null }
   | {
       kind: "error";
       code: PublishErrorCode;
@@ -82,12 +95,13 @@ export type PublishOutcome =
 export interface PublishPatch {
   status: PostStatus;
   container_id?: string | null;
+  container_created_at?: string | null;
   attempts?: number;
   next_attempt_at?: string | null;
   last_error?: string | null;
   published_at?: string;
-  media_ig_id?: string;
-  permalink?: string;
+  media_ig_id?: string | null;
+  permalink?: string | null;
 }
 
 export interface PublishResult {
@@ -117,6 +131,35 @@ export function nextPublishAction(post: PublishPost, account: PublishAccount): P
   return { kind: "create_container" };
 }
 
+/**
+ * When a post blocked by the quota tries again: the account's next slot (Instagram's window is a
+ * rolling 24 hours, so a slot later it may have room), or QUOTA_WAIT_MINUTES when the account has
+ * no slots.
+ */
+export function quotaWait(input: {
+  slots: readonly string[];
+  timezone: string;
+  now: Date;
+}): QuotaWait {
+  let next: Date | null = null;
+  try {
+    const [planned] = planQueue({
+      ...input,
+      posts: [{ id: "next", timing: "queue", queuePosition: 0, status: "queued" }],
+    });
+    next = planned?.scheduledAt ?? null;
+  } catch {
+    // Invalid slots: fall back to the fixed wait.
+  }
+  if (next) {
+    return { at: next, label: `the next slot (${whenLabel(next, input.now, input.timezone)})` };
+  }
+  return {
+    at: new Date(input.now.getTime() + QUOTA_WAIT_MINUTES * MINUTE_MS),
+    label: `${QUOTA_WAIT_MINUTES} min`,
+  };
+}
+
 /** Minutes before retry `retry` (1-based), or null when there are no retries left. */
 export function backoffMinutes(retry: number): number | null {
   return PUBLISH_BACKOFF_MINUTES[retry - 1] ?? null;
@@ -137,16 +180,22 @@ export function applyPublishOutcome(
         log: { ok: false, message: `Paused: ${outcome.reason}` },
       };
 
-    case "quota_full":
-      // Not an error: the post waits for the rolling 24-hour window to free up.
+    case "quota_full": {
+      // Not an error: the post (and its container, if it has one) waits for the rolling 24-hour
+      // window to free up.
+      const wait = outcome.wait ?? {
+        at: new Date(now.getTime() + QUOTA_WAIT_MINUTES * MINUTE_MS),
+        label: `${QUOTA_WAIT_MINUTES} min`,
+      };
       return {
         patch: {
           status: post.status,
-          next_attempt_at: at(QUOTA_WAIT_MINUTES),
+          next_attempt_at: wait.at.toISOString(),
           last_error: outcome.message,
         },
-        log: { ok: false, message: `Waiting ${QUOTA_WAIT_MINUTES} min: ${outcome.message}` },
+        log: { ok: false, message: `Waiting until ${wait.label}: ${outcome.message}` },
       };
+    }
 
     case "container_created":
       // Checked on the next tick.
@@ -154,6 +203,7 @@ export function applyPublishOutcome(
         patch: {
           status: "publishing",
           container_id: outcome.containerId,
+          container_created_at: now.toISOString(),
           next_attempt_at: now.toISOString(),
           last_error: null,
         },
@@ -176,7 +226,12 @@ export function applyPublishOutcome(
           next_attempt_at: null,
           last_error: null,
         },
-        log: { ok: true, message: `Published: ${outcome.permalink}` },
+        log: {
+          ok: true,
+          message: outcome.permalink
+            ? `Published: ${outcome.permalink}`
+            : "Published. Instagram already had it (an earlier answer was lost); its link couldn't be found.",
+        },
       };
 
     case "error": {
@@ -188,6 +243,7 @@ export function applyPublishOutcome(
         };
       }
       const containerId = outcome.dropContainer ? null : post.containerId;
+      const dropped = post.containerId !== null && containerId === null;
       const status: PostStatus = containerId ? "publishing" : "queued";
       const attempts = post.attempts + 1;
       const wait = outcome.retryable ? backoffMinutes(attempts) : null;
@@ -196,6 +252,7 @@ export function applyPublishOutcome(
           patch: {
             status: "failed",
             container_id: containerId,
+            ...(dropped ? { container_created_at: null } : {}),
             attempts,
             next_attempt_at: null,
             last_error: outcome.message,
@@ -212,6 +269,7 @@ export function applyPublishOutcome(
         patch: {
           status,
           container_id: containerId,
+          ...(dropped ? { container_created_at: null } : {}),
           attempts,
           next_attempt_at: at(wait),
           last_error: outcome.message,

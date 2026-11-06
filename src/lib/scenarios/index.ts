@@ -2,6 +2,7 @@ import { canvasBusy } from "./canvas-busy";
 import { connectMissingPermission } from "./connect-missing-permission";
 import { empty } from "./empty";
 import { publishDueNow } from "./publish-due-now";
+import { publishContainerError, publishQuotaExhausted } from "./publish-failures";
 import type { Scenario } from "./types";
 
 export type { Scenario, SandboxSeed } from "./types";
@@ -12,6 +13,8 @@ export const SCENARIOS: readonly Scenario[] = [
   empty,
   connectMissingPermission,
   publishDueNow,
+  publishQuotaExhausted,
+  publishContainerError,
 ];
 
 export function getScenario(name: string): Scenario | undefined {

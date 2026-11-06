@@ -5,6 +5,7 @@ import {
   applyPublishOutcome,
   backoffMinutes,
   nextPublishAction,
+  quotaWait,
   type PublishAccount,
   type PublishOutcome,
   type PublishPost,
@@ -78,6 +79,7 @@ describe("applyPublishOutcome: the happy path", () => {
     expect(r.patch).toEqual({
       status: "publishing",
       container_id: "c1",
+      container_created_at: NOW.toISOString(),
       next_attempt_at: NOW.toISOString(),
       last_error: null,
     });
@@ -171,6 +173,7 @@ describe("applyPublishOutcome: backoff", () => {
     expect(r.patch).toEqual({
       status: "failed",
       container_id: null,
+      container_created_at: null,
       attempts: 1,
       next_attempt_at: null,
       last_error: "Reels must be 9:16.",
@@ -188,6 +191,33 @@ describe("applyPublishOutcome: waiting and pausing", () => {
       last_error: "Limit reached.",
     });
     expect(r.patch.attempts).toBeUndefined();
+  });
+
+  it("waits until the given time (the account's next slot), keeping the container", () => {
+    const at = new Date("2026-11-06T09:00:00Z");
+    const r = applyPublishOutcome(
+      publishing,
+      { kind: "quota_full", message: "Limit reached.", wait: { at, label: "the next slot" } },
+      NOW,
+    );
+    expect(r.patch).toEqual({
+      status: "publishing",
+      next_attempt_at: at.toISOString(),
+      last_error: "Limit reached.",
+    });
+    expect(r.patch.container_id).toBeUndefined();
+    expect(r.log).toEqual({ ok: false, message: "Waiting until the next slot: Limit reached." });
+  });
+
+  it("a recovered publish without a known link is still published", () => {
+    const r = applyPublishOutcome(
+      publishing,
+      { kind: "published", mediaId: null, permalink: null },
+      NOW,
+    );
+    expect(r.patch).toMatchObject({ status: "published", media_ig_id: null, permalink: null });
+    expect(r.log.ok).toBe(true);
+    expect(r.log.message).toMatch(/already had it/);
   });
 
   it("pauses the post", () => {
@@ -208,5 +238,20 @@ describe("applyPublishOutcome: waiting and pausing", () => {
     );
     expect(r.patch.status).toBe("paused");
     expect(r.accountProblem).toBe("Access expired.");
+  });
+});
+
+describe("quotaWait", () => {
+  it("waits for the account's next slot", () => {
+    // 22:14 in London: the next slot is tomorrow 09:00.
+    const w = quotaWait({ slots: ["09:00", "18:00"], timezone: "Europe/London", now: NOW });
+    expect(w.at.toISOString()).toBe("2026-11-06T09:00:00.000Z");
+    expect(w.label).toBe("the next slot (Tomorrow, 09:00)");
+  });
+
+  it("falls back to a fixed wait without slots", () => {
+    const w = quotaWait({ slots: [], timezone: "Europe/London", now: NOW });
+    expect(w.at.toISOString()).toBe(plus(QUOTA_WAIT_MINUTES));
+    expect(w.label).toBe(`${QUOTA_WAIT_MINUTES} min`);
   });
 });

@@ -171,7 +171,11 @@ export function AccountDetails({
             <StatusDot tone={TONES[a.status]}>{STATUS_LABELS[a.status]}</StatusDot>
           </Row>
           <Row label="Permissions">
-            {a.connection ? permissionsLabel(a.connection.permissions) : "Not granted yet"}
+            {a.connection
+              ? permissionsLabel(a.connection.permissions)
+              : a.platform === "fake"
+                ? "Sandbox example account"
+                : "Not granted yet"}
           </Row>
           <Row label="Access token">{tokenLabel(a, clock)}</Row>
           <Row label="Posts used today">

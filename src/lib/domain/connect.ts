@@ -81,6 +81,9 @@ export const CONNECT_ERRORS = {
   no_key:
     "Broadcast can't store Instagram access yet: TOKEN_ENC_KEY is missing on the server. Add it in the Vercel project settings (openssl rand -base64 32).",
   provider: "Instagram didn't accept the sign-in. Try connecting again.",
+  rate_limited: "Instagram is limiting requests right now. Try connecting again in an hour.",
+  cross_site:
+    "Connecting has to start from Broadcast itself, not from a link on another site. Start connecting again from Accounts.",
   network: "Couldn't reach Instagram. Try again in a few minutes.",
   failed:
     "Connecting failed on Broadcast's side. Try again; if it keeps failing, check the server logs.",

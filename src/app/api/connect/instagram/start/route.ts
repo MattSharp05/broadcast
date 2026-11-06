@@ -10,7 +10,14 @@ import { currentWorkspaceKind, loadWorkspace } from "@/lib/db/workspace";
 import { providerFor } from "@/lib/providers";
 import { createDbFakeStore } from "@/lib/providers/fake-store";
 import { instagramConfigFromEnv } from "@/lib/providers/instagram";
-import { redirectUriFor, setStateCookie, toDonePage, toSignIn } from "../shared";
+import {
+  connectOrigin,
+  isCrossSite,
+  redirectUriFor,
+  setStateCookie,
+  toDonePage,
+  toSignIn,
+} from "../shared";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +28,9 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(request: NextRequest) {
   if (!(await isSignedInOwner())) return toSignIn(request);
+  if (isCrossSite(request)) {
+    return toDonePage(request, { error: "cross_site" }, { keepCookie: true });
+  }
 
   const kind = await currentWorkspaceKind();
   const platform = kind === "sandbox" ? "fake" : "instagram";
@@ -28,6 +38,13 @@ export async function GET(request: NextRequest) {
   if (platform === "instagram" && !instagram)
     return toDonePage(request, { error: "not_configured" });
   if (!hasTokenKey()) return toDonePage(request, { error: "no_key" });
+
+  // Start on the site Instagram will come back to, so the state cookie is there.
+  const origin = connectOrigin(request, platform);
+  if (origin !== request.nextUrl.origin) {
+    const here = new URL(request.nextUrl.pathname + request.nextUrl.search, origin);
+    return NextResponse.redirect(here, 303);
+  }
 
   try {
     const db = await createServerSupabase();

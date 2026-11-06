@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
+import { configuredAppOrigin } from "@/lib/app-url";
 import type { ConnectErrorCode } from "@/lib/domain/connect";
 import type { ProviderPlatform } from "@/lib/providers/types";
 
@@ -12,16 +13,30 @@ import type { ProviderPlatform } from "@/lib/providers/types";
 
 export const STATE_COOKIE = "bc-oauth-state";
 const COOKIE_PATH = "/api/connect";
-const CALLBACK_PATH = "/api/connect/instagram/callback";
+export const CALLBACK_PATH = "/api/connect/instagram/callback";
 
 /**
- * The redirect URI Instagram sends the browser back to. It must match the Meta app's setting
- * exactly, so Instagram uses APP_URL; the Sandbox's fake consent screen stays on the current site.
+ * The site a connect attempt runs on. Instagram's redirect URI must match the Meta app's setting
+ * exactly, so Instagram uses the configured origin (APP_URL); the Sandbox's fake consent screen
+ * stays on the current site. The start route moves to this origin first, so the state cookie is
+ * set on the same host the callback comes back to.
  */
+export function connectOrigin(request: NextRequest, platform: ProviderPlatform): string {
+  const configured = platform === "instagram" ? configuredAppOrigin() : null;
+  return configured ?? request.nextUrl.origin;
+}
+
 export function redirectUriFor(request: NextRequest, platform: ProviderPlatform): string {
-  const appUrl = process.env.APP_URL?.trim();
-  const base = platform === "instagram" && appUrl ? appUrl : request.nextUrl.origin;
-  return new URL(CALLBACK_PATH, base).toString();
+  return new URL(CALLBACK_PATH, connectOrigin(request, platform)).toString();
+}
+
+/**
+ * True for a request another website started (Sec-Fetch-Site: cross-site). Starting a connect
+ * replaces the state cookie, so other sites mustn't be able to trigger it and break an attempt in
+ * progress. Browsers without the header (old ones, or tools) are let through.
+ */
+export function isCrossSite(request: NextRequest): boolean {
+  return request.headers.get("sec-fetch-site") === "cross-site";
 }
 
 /**

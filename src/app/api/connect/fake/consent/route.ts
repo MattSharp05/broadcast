@@ -1,10 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { isSignedInOwner } from "@/lib/db/auth";
 import { FAKE_SCOPES, fakeAuthCode, normalizeFakeHandle } from "@/lib/providers/fake";
+import { CALLBACK_PATH, toSignIn } from "../../instagram/shared";
 
 export const dynamic = "force-dynamic";
-
-const CALLBACK = "/api/connect/instagram/callback";
 
 function text(form: FormData, name: string): string {
   const value = form.get(name);
@@ -18,12 +17,10 @@ function text(form: FormData, name: string): string {
  * site; the state passes through untouched and the callback checks it against its cookie.
  */
 export async function POST(request: NextRequest) {
-  if (!(await isSignedInOwner())) {
-    return NextResponse.redirect(new URL("/login?next=/accounts", request.url), 303);
-  }
+  if (!(await isSignedInOwner())) return toSignIn(request);
   const form = await request.formData();
   const state = text(form, "state");
-  const target = new URL(CALLBACK, request.url);
+  const target = new URL(CALLBACK_PATH, request.url);
   target.searchParams.set("state", state);
 
   if (text(form, "decision") !== "allow") {

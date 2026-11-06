@@ -127,3 +127,13 @@ test("Live without an Instagram app: a clear message, nothing connected", async 
   await expect(done(page).getByRole("heading")).toHaveText("Couldn’t connect the account");
   await expect(done(page)).toContainText("IG_APP_ID and IG_APP_SECRET are missing");
 });
+
+test("another website can't start a connect", async ({ page, loadScenario }) => {
+  await loadScenario("empty");
+  const res = await page.request.get(`/api/connect/instagram/start?brand=${EMPTY_BRAND}`, {
+    headers: { "sec-fetch-site": "cross-site" },
+    maxRedirects: 0,
+  });
+  expect(res.status()).toBe(303);
+  expect(res.headers().location).toContain("/connect/done?error=cross_site");
+});

@@ -257,7 +257,16 @@ export function createFakeProvider({ store, now }: FakeProviderDeps): SocialProv
 
     exchangeCode({ code }) {
       const consent = parseFakeAuthCode(code);
-      if (!consent) return Promise.resolve(tokens(fakeId("fake_user", code), code));
+      if (!consent) {
+        // Like Instagram: only a code from the (fake) consent screen works.
+        return Promise.reject(
+          new ProviderError({
+            code: "unknown",
+            retryable: false,
+            userMessage: "The Sandbox didn't accept the sign-in. Try connecting again.",
+          }),
+        );
+      }
       return Promise.resolve({
         ...tokens(fakeUserId(consent.handle), code),
         scopes: consent.scopes,

@@ -233,6 +233,12 @@ describe("fake provider: OAuth", () => {
     expect(t.scopes).toEqual(["fake_basic", "fake_insights"]);
   });
 
+  it("exchangeCode refuses a code the consent screen didn't make", async () => {
+    const { provider } = setup();
+    const err = await rejection(provider.exchangeCode({ code: "c", redirectUri: "http://x/cb" }));
+    expect(err.code).toBe("unknown");
+  });
+
   it("parseFakeAuthCode rejects junk and drops unknown scopes", () => {
     expect(parseFakeAuthCode("nope")).toBeNull();
     expect(parseFakeAuthCode("fake_code.!!!")).toBeNull();
@@ -265,7 +271,8 @@ describe("fake provider: OAuth", () => {
 
   it("exchangeCode returns a 60-day token", async () => {
     const { provider } = setup();
-    const t = await provider.exchangeCode({ code: "c", redirectUri: "http://x/cb" });
+    const code = fakeAuthCode({ handle: "someone", scopes: ["fake_basic"] });
+    const t = await provider.exchangeCode({ code, redirectUri: "http://x/cb" });
     expect(t.expiresAt.getTime() - new Date("2026-11-05T22:14:00Z").getTime()).toBe(
       60 * 24 * 3_600_000,
     );

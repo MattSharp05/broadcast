@@ -235,7 +235,12 @@ export function createInstagramProvider(deps: InstagramProviderDeps): SocialProv
       const shortToken = asString(entry.access_token);
       const userId = asString(entry.user_id);
       if (!shortToken || !userId) throw errors.rejected("Token response without token or user.");
-      const scopes = parseScopes(entry.permissions);
+      // Instagram lists what was granted; if a response ever leaves the field out, assume what was
+      // asked for rather than flag a fully authorised account (a later call would fail clearly).
+      const scopes =
+        entry.permissions === undefined
+          ? requiredScopes("instagram")
+          : parseScopes(entry.permissions);
 
       const long = await call(
         graphUrl("/access_token", {

@@ -74,19 +74,21 @@ export interface ConsumedState {
 }
 
 /**
- * Deletes the state and returns what it was for: each state works once. Null when the workspace
- * has no such state (unknown, already used, or another workspace's).
+ * Deletes the state and returns what it was for, including its workspace: each state works once.
+ * Null when there is no such state (unknown or already used). Looked up by the state alone (its
+ * primary key; random, and bound to the browser by a cookie), because the attempt, not the
+ * dashboard's current workspace, says which workspace it is for. RLS still applies.
  */
 export async function consumeOAuthState(
   db: Db,
-  workspaceId: string,
   state: string,
   now: Date,
 ): Promise<ConsumedState | null> {
+  if (!state) return null;
   const { data, error } = await db
     .from("oauth_states")
     .delete()
-    .eq("workspace_id", workspaceId)
+    .in("workspace_id", Object.values(WORKSPACE_IDS))
     .eq("state", state)
     .select("workspace_id, brand_id, platform, expires_at");
   if (error) fail("Reading the connect attempt", error);

@@ -144,6 +144,19 @@ describe("instagram: exchangeCode", () => {
     expect(err.code).toBe("network");
     expect(err.retryable).toBe(true);
   });
+
+  it("assumes the requested scopes when the response has no permissions field", async () => {
+    server.use(
+      http.post("https://api.instagram.com/oauth/access_token", () =>
+        HttpResponse.json({ data: [{ access_token: FIXTURE_TOKENS.short, user_id: "1" }] }),
+      ),
+    );
+    const tokens = await provider.exchangeCode({
+      code: FIXTURE_CODE,
+      redirectUri: FIXTURE_REDIRECT_URI,
+    });
+    expect(tokens.scopes).toEqual(requiredScopes("instagram"));
+  });
 });
 
 describe("instagram: refreshToken", () => {

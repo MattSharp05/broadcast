@@ -5,7 +5,8 @@ import { createAdminSupabase } from "@/lib/db/admin";
 import { isSignedInOwner } from "@/lib/db/auth";
 import { consumeOAuthState, saveConnection } from "@/lib/db/connections";
 import { createServerSupabase } from "@/lib/db/server";
-import { currentWorkspaceKind, loadWorkspace } from "@/lib/db/workspace";
+import { loadWorkspace } from "@/lib/db/workspace";
+import { workspaceKindOf } from "@/lib/db/workspaces";
 import { connectionStatus } from "@/lib/domain/connect";
 import { ProviderError, providerFor } from "@/lib/providers";
 import { createDbFakeStore } from "@/lib/providers/fake-store";
@@ -32,13 +33,21 @@ export async function GET(request: NextRequest) {
 
   try {
     const db = await createServerSupabase();
-    const workspace = await loadWorkspace(db, await currentWorkspaceKind());
-    const attempt = await consumeOAuthState(db, workspace.id, state, new Date());
+    // The attempt's own workspace (switching workspace mid-flow doesn't lose it).
+    const attempt = await consumeOAuthState(db, state, new Date());
     if (!attempt) return toDonePage(request, { error: "invalid_state" });
     if (attempt.expired) return toDonePage(request, { error: "expired" });
+    const workspace = await loadWorkspace(db, workspaceKindOf(attempt.workspaceId));
 
     const code = params.get("code");
-    if (params.has("error") || !code) return toDonePage(request, { error: "denied" });
+    const providerError = params.get("error");
+    if (providerError || !code) {
+      if (providerError === "access_denied") return toDonePage(request, { error: "denied" });
+      console.error(
+        `Connect: ${attempt.platform} returned an error: ${providerError ?? "no code"} (${params.get("error_reason") ?? ""}: ${params.get("error_description") ?? ""})`,
+      );
+      return toDonePage(request, { error: providerError ? "provider" : "denied" });
+    }
 
     let key: Buffer;
     try {
@@ -73,7 +82,13 @@ export async function GET(request: NextRequest) {
     } catch (e) {
       if (!(e instanceof ProviderError)) throw e;
       console.error(`Connect: ${attempt.platform} refused (${e.code}): ${e.message}`);
-      return toDonePage(request, { error: e.code === "network" ? "network" : "provider" });
+      const error =
+        e.code === "network"
+          ? "network"
+          : e.code === "quota_exhausted"
+            ? "rate_limited"
+            : "provider";
+      return toDonePage(request, { error });
     }
 
     const status = connectionStatus({

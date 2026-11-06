@@ -185,12 +185,14 @@ describe("oauth states", () => {
       state,
       now: new Date(),
     });
-    const first = await consumeOAuthState(admin, SANDBOX, state, new Date());
+    const first = await consumeOAuthState(admin, state, new Date());
+    // The attempt's workspace comes from the row, whatever the dashboard shows now.
     expect(first).toEqual({ workspaceId: SANDBOX, brandId, platform: "fake", expired: false });
-    expect(await consumeOAuthState(admin, SANDBOX, state, new Date())).toBeNull();
+    expect(await consumeOAuthState(admin, state, new Date())).toBeNull();
+    expect(await consumeOAuthState(admin, "", new Date())).toBeNull();
   });
 
-  it("is reported expired after 10 minutes, and is unknown in another workspace", async () => {
+  it("is reported expired after 10 minutes", async () => {
     const state = randomBytes(16).toString("base64url");
     const start = new Date();
     await createOAuthState(admin, {
@@ -200,8 +202,7 @@ describe("oauth states", () => {
       state,
       now: start,
     });
-    expect(await consumeOAuthState(admin, WORKSPACE_IDS.live, state, start)).toBeNull();
     const later = new Date(start.getTime() + OAUTH_STATE_TTL_MS + 1000);
-    expect((await consumeOAuthState(admin, SANDBOX, state, later))?.expired).toBe(true);
+    expect((await consumeOAuthState(admin, state, later))?.expired).toBe(true);
   });
 });

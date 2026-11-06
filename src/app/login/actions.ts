@@ -1,6 +1,7 @@
 "use server";
 
 import { headers } from "next/headers";
+import { configuredAppOrigin } from "@/lib/app-url";
 import { isAllowedEmail, normalizeEmail, safeNextPath } from "@/lib/db/access";
 import { allowedEmail, ensureAllowedUser } from "@/lib/db/auth";
 import { readPublicSupabaseEnv } from "@/lib/db/env";
@@ -55,10 +56,8 @@ export async function requestMagicLink(_prev: LoginState, formData: FormData): P
  * (neither set) fall back to the request's own origin.
  */
 async function appOrigin(): Promise<string> {
-  const configured = process.env.APP_URL?.replace(/\/+$/, "");
+  const configured = configuredAppOrigin();
   if (configured) return configured;
-  const vercel = process.env.VERCEL_PROJECT_PRODUCTION_URL;
-  if (vercel) return `https://${vercel}`;
   const h = await headers();
   const origin = h.get("origin");
   if (origin) return origin;

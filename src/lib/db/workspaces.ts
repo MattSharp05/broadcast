@@ -23,3 +23,10 @@ export const WORKSPACE_COOKIE_OPTIONS = {
   httpOnly: true,
   maxAge: 60 * 60 * 24 * 365,
 } as const;
+
+/** The kind of a workspace id (the two fixed ids); anything else throws. */
+export function workspaceKindOf(id: string): WorkspaceKind {
+  if (id === WORKSPACE_IDS.live) return "live";
+  if (id === WORKSPACE_IDS.sandbox) return "sandbox";
+  throw new Error(`Unknown workspace id ${id}.`);
+}

@@ -25,6 +25,10 @@ export interface Profile {
   handle: string;
   profileUrl: string;
   followers: number;
+  /** Instagram's account_type (BUSINESS, MEDIA_CREATOR, PERSONAL…), when the platform says. */
+  accountType?: string | null;
+  /** Profile picture URL, when the platform gives one. */
+  pictureUrl?: string | null;
 }
 
 export interface PublishingQuota {

@@ -42,6 +42,7 @@
     "eslint": "9.39.5",
     "eslint-config-next": "15.5.29",
     "eslint-config-prettier": "10.1.8",
+    "msw": "2.15.0",
     "prettier": "3.9.10",
     "supabase": "2.122.1",
     "typescript": "5.9.3",

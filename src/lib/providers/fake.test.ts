@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  FAKE_CONSENT_PATH,
   createFakeProvider,
+  fakeAuthCode,
+  fakeUserId,
+  parseFakeAuthCode,
   createMemoryFakeStore,
   fakeInsights,
   type FakeAccountState,
@@ -211,19 +215,64 @@ describe("fake provider: failure modes", () => {
 });
 
 describe("fake provider: OAuth", () => {
-  it("authorizeUrl goes straight back to the callback with a code and the state", () => {
+  it("authorizeUrl opens the fake consent screen on the callback's site, with the state", () => {
     const { provider } = setup();
     const url = new URL(
       provider.authorizeUrl({ state: "s1", redirectUri: "http://localhost:3000/cb" }),
     );
-    expect(url.pathname).toBe("/cb");
+    expect(url.origin).toBe("http://localhost:3000");
+    expect(url.pathname).toBe(FAKE_CONSENT_PATH);
     expect(url.searchParams.get("state")).toBe("s1");
-    expect(url.searchParams.get("code")).toMatch(/^fake_code_/);
+  });
+
+  it("a consent code carries the user and the allowed scopes", async () => {
+    const { provider } = setup();
+    const code = fakeAuthCode({ handle: "new.creator", scopes: ["fake_basic", "fake_insights"] });
+    const t = await provider.exchangeCode({ code, redirectUri: "http://x/cb" });
+    expect(t.platformUserId).toBe(fakeUserId("new.creator"));
+    expect(t.scopes).toEqual(["fake_basic", "fake_insights"]);
+  });
+
+  it("exchangeCode refuses a code the consent screen didn't make", async () => {
+    const { provider } = setup();
+    const err = await rejection(provider.exchangeCode({ code: "c", redirectUri: "http://x/cb" }));
+    expect(err.code).toBe("unknown");
+  });
+
+  it("parseFakeAuthCode rejects junk and drops unknown scopes", () => {
+    expect(parseFakeAuthCode("nope")).toBeNull();
+    expect(parseFakeAuthCode("fake_code.!!!")).toBeNull();
+    expect(parseFakeAuthCode(fakeAuthCode({ handle: "Bad Handle!", scopes: [] }))).toBeNull();
+    const code = fakeAuthCode({ handle: "ok", scopes: ["fake_basic", "admin"] });
+    expect(parseFakeAuthCode(code)).toEqual({ handle: "ok", scopes: ["fake_basic"] });
+  });
+
+  it("getProfile for a user who is connecting (no fake account yet) comes from the handle", async () => {
+    const { provider } = setup();
+    const p = await provider.getProfile({
+      accountId: "",
+      platformUserId: fakeUserId("new.creator"),
+      accessToken: "t",
+    });
+    expect(p.handle).toBe("new.creator");
+    expect(p.platformUserId).toBe(fakeUserId("new.creator"));
+    expect(p.followers).toBeGreaterThan(0);
+    // Deterministic.
+    expect(
+      (
+        await provider.getProfile({
+          accountId: "",
+          platformUserId: fakeUserId("new.creator"),
+          accessToken: "x",
+        })
+      ).followers,
+    ).toBe(p.followers);
   });
 
   it("exchangeCode returns a 60-day token", async () => {
     const { provider } = setup();
-    const t = await provider.exchangeCode({ code: "c", redirectUri: "http://x/cb" });
+    const code = fakeAuthCode({ handle: "someone", scopes: ["fake_basic"] });
+    const t = await provider.exchangeCode({ code, redirectUri: "http://x/cb" });
     expect(t.expiresAt.getTime() - new Date("2026-11-05T22:14:00Z").getTime()).toBe(
       60 * 24 * 3_600_000,
     );

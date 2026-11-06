@@ -16,6 +16,7 @@ export default async function WorkflowPage() {
       now={data.now}
       frozen={data.frozen}
       timezone={data.timezone}
+      details={data.details}
     />
   );
 }

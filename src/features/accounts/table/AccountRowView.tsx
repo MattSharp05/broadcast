@@ -35,6 +35,8 @@ interface RowProps {
   onTags: (accountId: string, tags: string[]) => void;
   onDescription: AccountsActions["updateAccountDescription"];
   onError: (message: string) => void;
+  /** Opens the account drawer (BC-15); the button is disabled without it. */
+  onDetails?: (accountId: string, opener: HTMLElement) => void;
 }
 
 function TagsCell({ account, allTags, onTags }: Pick<RowProps, "account" | "allTags" | "onTags">) {
@@ -209,7 +211,14 @@ function DescriptionCell({
 }
 
 /** One account row: who, status, inline tags and description, numbers, Details. */
-export function AccountRowView({ account, allTags, onTags, onDescription, onError }: RowProps) {
+export function AccountRowView({
+  account,
+  allTags,
+  onTags,
+  onDescription,
+  onError,
+  onDetails,
+}: RowProps) {
   const reason = shortReason(account.statusReason);
   return (
     <tr className={styles.row} data-account={account.handle}>
@@ -252,11 +261,25 @@ export function AccountRowView({ account, allTags, onTags, onDescription, onErro
       <td className={styles.num}>{account.slotsPerDay}</td>
       <td className={styles.num}>{account.backlog}</td>
       <td>
-        <span title="Account details arrive soon.">
-          <Button variant="ghost" className={styles.details} disabled>
+        {onDetails ? (
+          <Button
+            variant="ghost"
+            className={styles.details}
+            aria-haspopup="dialog"
+            aria-label={`Details for @${account.handle}`}
+            onClick={(e) => {
+              onDetails(account.id, e.currentTarget);
+            }}
+          >
             Details
           </Button>
-        </span>
+        ) : (
+          <span title="Account details arrive soon.">
+            <Button variant="ghost" className={styles.details} disabled>
+              Details
+            </Button>
+          </span>
+        )}
       </td>
     </tr>
   );

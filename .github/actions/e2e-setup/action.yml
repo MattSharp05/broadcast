@@ -37,6 +37,12 @@ runs:
         for attempt in 1 2 3; do
           if timeout 90 pnpm exec playwright install --with-deps --only-shell chromium; then exit 0; fi
           echo "Playwright install attempt $attempt failed or stalled; retrying" >&2
+          # `timeout` only kills pnpm; a stalled apt-get keeps the dpkg lock. Stop it and repair.
+          sudo pkill -9 -x apt-get || true
+          sudo pkill -9 -x dpkg || true
+          sleep 2
+          sudo rm -f /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/cache/apt/archives/lock /var/lib/apt/lists/lock
+          sudo dpkg --configure -a || true
         done
         exit 1
     - name: Wait for Supabase

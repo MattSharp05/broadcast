@@ -24,3 +24,19 @@ export function Button({
     />
   );
 }
+
+interface ButtonLinkProps extends ComponentProps<"a"> {
+  /** Defaults to "secondary". */
+  variant?: ButtonVariant;
+}
+
+/** A link that looks like a Button (e.g. "Open @handle on Instagram", opening in a new tab). */
+export function ButtonLink({ variant = "secondary", className, ...rest }: ButtonLinkProps) {
+  return (
+    <a
+      className={[styles.btn, className].filter(Boolean).join(" ")}
+      data-variant={variant}
+      {...rest}
+    />
+  );
+}

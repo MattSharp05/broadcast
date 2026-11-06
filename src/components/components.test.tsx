@@ -45,6 +45,14 @@ describe("AppRail", () => {
     expect(html).toContain("Scheduler not running yet");
     expect(html).toContain('aria-label="Main"');
   });
+
+  it.each(["live", "sandbox"] as const)("marks the %s workspace in the switcher", (kind) => {
+    pathname.current = "/workflow";
+    const html = renderToStaticMarkup(<AppRail workspace={kind} />);
+    const pressed = [...html.matchAll(/<button [^>]*aria-pressed="true"[^>]*>/g)];
+    expect(pressed).toHaveLength(1);
+    expect(pressed[0]?.[0]).toContain(`value="${kind}"`);
+  });
 });
 
 describe("Button", () => {

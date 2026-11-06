@@ -13,7 +13,7 @@ Status: Approved (2026-11-06, with the PRD) · PRD: https://app.notion.com/p/40f
 | Scheduler | Supabase `pg_cron` + `pg_net` calling `POST /api/cron/tick` every minute | Vercel Hobby cron is daily only; logic stays in the Next.js codebase (ADR 0002) |
 | Hosting | Vercel Hobby (production deploys from `main` only) | Free; previews off in batched QA mode |
 | Unit tests | Vitest | Fast, TS-native |
-| E2E | Playwright (Chromium desktop + one phone layout), Playwright Docker image in CI | Matches the workflow's CI rules |
+| E2E | Playwright (Chromium desktop + one phone layout), runner + `playwright install --with-deps` in CI (needs Docker for Supabase) | Matches the workflow's CI rules |
 | HTTP mocking | MSW for Instagram Graph API in tests | Recorded responses; live checks happen in checkpoint tickets |
 
 ## Architecture
@@ -93,7 +93,7 @@ All tables carry `workspace_id`. Two workspaces exist from the first migration: 
   - PR gate in parallel: lint + typecheck + build; unit; e2e desktop (sharded) with local Supabase.
   - "What changed" job adds phone e2e + visual when UI/CSS changes; everything when CI/config/deps change; nothing extra for docs-only.
   - Push to main: full suite (all projects, visual, `@full` tests), then Vercel production deploy (Vercel's Git integration) and `supabase db push` to the production project.
-  - e2e jobs run in the Playwright Docker image.
+  - e2e jobs run on the GitHub runner (Supabase needs Docker, which a Playwright-image container job lacks), with Chromium from `playwright install --with-deps` at the lockfile's Playwright version (BC-8).
 
 ## Environments & deploy
 - **Local / cloud sessions:** `pnpm dev` + `supabase start` (Docker). `.env.local` from `.env.example`; Instagram calls use the fake provider unless `IG_APP_ID` is set.

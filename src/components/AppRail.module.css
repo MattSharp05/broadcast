@@ -35,6 +35,37 @@
   stroke-width: 2;
 }
 
+.workspaces {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  margin: 0 0 14px;
+  padding: 2px;
+  border: 1px solid var(--rail-line);
+  border-radius: var(--r-s);
+}
+
+.workspace {
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: none;
+  color: var(--rail-ink);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.workspace:hover {
+  color: var(--rail-ink-hi);
+}
+
+.workspace[aria-pressed="true"] {
+  background: var(--rail-2);
+  color: var(--rail-ink-hi);
+}
+
 .item {
   display: flex;
   align-items: center;
@@ -127,6 +158,7 @@
   }
 
   .brand,
+  .workspaces,
   .foot,
   .marker {
     display: none;

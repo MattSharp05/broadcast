@@ -50,7 +50,11 @@ Playwright · MSW. Details and reasons: `docs/TDD.md`, ADRs in `docs/decisions/`
   `src/lib/db/types.ts`; CI fails if it's stale) · `pnpm -s db:env >> .env.local` (local URL + keys)
 - `pnpm test:integration` (Vitest, `tests/integration/`; needs `supabase start`; the sign-in gate
   test also needs a running app: `E2E=1 pnpm start` and `APP_TEST_URL=http://localhost:3000`)
-- Not yet present: `pnpm e2e` (Playwright; needs `supabase start`), added with the Playwright setup in BC-8.
+- `pnpm e2e` (Playwright: builds and serves the app on :3100 with `E2E=1`, signs in through
+  `/auth/test-sign-in`; needs `supabase start`). `pnpm e2e --project=desktop` for desktop only.
+  Specs use `test`/`loadScenario` from `tests/e2e/fixtures.ts`; tests run one at a time (one shared Sandbox).
+- Scenarios: `/workflow?scenario=<name>[&now=ISO]` (signed in) resets the Sandbox and loads one;
+  `/dev` lists them. Register new ones in `src/lib/scenarios/index.ts`.
 
 ## Structure
 `src/app` routes · `src/features/{canvas,accounts,content,drawers}` · `src/components` shared UI ·

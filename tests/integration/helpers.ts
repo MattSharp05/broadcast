@@ -14,6 +14,8 @@ export const ALL_TABLES = [
   "api_keys",
   "app_settings",
   "brands",
+  "fake_accounts",
+  "fake_containers",
   "job_log",
   "media_assets",
   "oauth_credentials",

@@ -3,12 +3,25 @@
 import { LogOut, Send } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import type { WorkspaceKind } from "@/lib/db/workspaces";
 import styles from "./AppRail.module.css";
 import { NAV_ITEMS, isActivePath } from "./nav";
 import { StatusDot } from "./StatusDot";
 
+interface AppRailProps {
+  /** The workspace being shown; the switcher marks it. */
+  workspace?: WorkspaceKind;
+  /** Server action that switches the workspace (form field `workspace`). */
+  onSwitchWorkspace?: (formData: FormData) => void | Promise<void>;
+}
+
+const WORKSPACES: readonly { kind: WorkspaceKind; label: string }[] = [
+  { kind: "live", label: "Live" },
+  { kind: "sandbox", label: "Sandbox" },
+];
+
 /** The navy navigation rail. Below 760px it becomes a bottom tab bar. */
-export function AppRail() {
+export function AppRail({ workspace = "live", onSwitchWorkspace }: AppRailProps) {
   const pathname = usePathname();
 
   return (
@@ -19,6 +32,21 @@ export function AppRail() {
         </span>
         Broadcast
       </div>
+
+      <form action={onSwitchWorkspace} className={styles.workspaces} aria-label="Workspace">
+        {WORKSPACES.map(({ kind, label }) => (
+          <button
+            key={kind}
+            type="submit"
+            name="workspace"
+            value={kind}
+            className={styles.workspace}
+            aria-pressed={workspace === kind}
+          >
+            {label}
+          </button>
+        ))}
+      </form>
 
       {NAV_ITEMS.map(({ href, label, icon: Icon, marker }) => (
         <Link

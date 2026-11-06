@@ -216,7 +216,7 @@ test("a two-finger pinch zooms (touch)", async ({ page, browserName }) => {
   const cx = s.x + s.width / 2;
   const cy = s.y + s.height / 2;
   const cdp = await page.context().newCDPSession(page);
-  const touch = (type: string, d: number) =>
+  const touch = (type: "touchStart" | "touchMove" | "touchEnd", d: number) =>
     cdp.send("Input.dispatchTouchEvent", {
       type,
       touchPoints:

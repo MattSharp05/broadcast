@@ -1,6 +1,7 @@
 import "server-only";
-import { normalizeEmail } from "./access";
+import { isAllowedEmail, normalizeEmail } from "./access";
 import { createAdminSupabase } from "./admin";
+import { createServerSupabase } from "./server";
 
 /** ALLOWED_EMAIL, normalised; "" when unset (then nobody can sign in). */
 export function allowedEmail(): string {
@@ -25,4 +26,16 @@ export async function ensureAllowedUser(email: string): Promise<void> {
   if (created.error && created.error.code !== "email_exists") {
     throw new Error(`Creating the user failed: ${created.error.message}`);
   }
+}
+
+/**
+ * True when the request comes from the signed-in allowed user. Route handlers under /api are
+ * public in the middleware (they bring their own auth), so dashboard-only handlers check this.
+ */
+export async function isSignedInOwner(): Promise<boolean> {
+  const supabase = await createServerSupabase();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return isAllowedEmail(user?.email, allowedEmail());
 }

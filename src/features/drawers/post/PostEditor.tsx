@@ -104,7 +104,7 @@ export function PostEditor({ card, account, detail, clock, actions, onChanged }:
           colour={account.avatar}
           className={styles.thumb}
         />
-        <div className={edit.field} data-section="caption">
+        <div className={`${edit.field} ${edit.grow}`} data-section="caption">
           <label htmlFor={ids.caption}>Caption</label>
           <textarea
             id={ids.caption}

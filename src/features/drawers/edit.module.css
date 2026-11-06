@@ -2,7 +2,6 @@
 
 .field {
   display: flex;
-  flex: 1;
   flex-direction: column;
   gap: 6px;
   min-width: 0;
@@ -18,6 +17,11 @@
   color: var(--ink);
   font-size: 13px;
   font-weight: 500;
+}
+
+/* The caption beside the thumbnail takes the rest of the row. */
+.grow {
+  flex: 1;
 }
 
 /* legend doesn't take part in flex gap. */

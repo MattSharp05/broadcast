@@ -1,0 +1,41 @@
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  white-space: nowrap;
+  flex: none;
+}
+
+.status::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+
+.bare {
+  gap: 0;
+}
+
+.status[data-tone="good"] {
+  color: var(--good);
+}
+
+.status[data-tone="warn"] {
+  color: var(--warn);
+}
+
+.status[data-tone="bad"] {
+  color: var(--bad);
+}
+
+.status[data-tone="accent"] {
+  color: var(--accent-ink);
+}
+
+.status[data-tone="neutral"] {
+  color: var(--ink-3);
+}

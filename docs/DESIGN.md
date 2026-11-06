@@ -53,6 +53,14 @@ Defined once in `src/styles/tokens.css` on `:root`. The dark values apply under
 Avatar colours (white initials, the same in both themes): `#2f6f8f`, `#3a5bb8`, `#6a5a9a`,
 `#a3562d`, `#2c7a55`, `#5b6577`. Each account gets one, picked from its id.
 
+Also in `tokens.css` (not colours of their own, or taken from the mockup): `--scrim` (modal and
+drawer backdrop, `rgba(20,25,34,.32)` light / `rgba(0,0,0,.5)` dark), the avatar colours as
+`--avatar-1` … `--avatar-6` with `--on-avatar`, radii `--r-xs` 4px / `--r-s` 6px / `--r` 8px /
+`--r-lg` 12px, `--font-sans` (IBM Plex Sans from `next/font`, then system fonts), `--rail-w`
+220px and `--gutter` 24px. A unit test (`src/styles/tokens.test.ts`) checks that `tokens.css`
+matches the table above, that body text keeps ≥ 4.5:1 contrast in both themes, and that no file
+in `src/` other than `tokens.css` holds a literal colour.
+
 ## Type
 - **IBM Plex Sans** (Google Fonts, `next/font`), weights 400 / 500 / 600 only.
   `font-variant-numeric: tabular-nums` on `body`.

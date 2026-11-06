@@ -1,0 +1,39 @@
+.label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+
+.select {
+  height: 34px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-s);
+  padding: 0 30px 0 10px;
+  color: var(--ink);
+  font-size: 13px;
+  box-shadow: var(--shadow);
+  appearance: none;
+  background-color: var(--surface);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--ink-3) 50%),
+    linear-gradient(135deg, var(--ink-3) 50%, transparent 50%);
+  background-position:
+    calc(100% - 15px) 15px,
+    calc(100% - 10px) 15px;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+  cursor: pointer;
+}
+
+.select:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

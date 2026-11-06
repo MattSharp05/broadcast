@@ -212,9 +212,12 @@ export function WorkflowView({
       const el =
         e.target instanceof Element ? e.target.closest<HTMLElement>(DETAIL_SELECTOR) : null;
       if (!el) return;
+      // Only keyboard focus pans (a click focuses a card that's already under the pointer).
+      const keyboard = el.matches(":focus-visible");
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
         unscroll();
+        if (!keyboard) return;
         const s = stage.getBoundingClientRect();
         const r = el.getBoundingClientRect();
         if (r.left >= s.left && r.right <= s.right && r.top >= s.top && r.bottom <= s.bottom)

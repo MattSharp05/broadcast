@@ -113,23 +113,8 @@
 }
 
 :global([data-panning]) .header,
-:global([data-panning]) .card,
-:global([data-dragging]) .header,
-:global([data-dragging]) .card {
+:global([data-panning]) .card {
   cursor: grabbing;
-}
-
-/* A queued card being dragged (BC-22): lifted above the others, following the pointer. */
-.card[data-dragging] {
-  z-index: 3;
-  border-color: var(--accent);
-  box-shadow: var(--shadow-lg);
-  transition: none;
-}
-
-/* Dropped: waiting for the server to move it. */
-.card[data-moving] {
-  opacity: 0.55;
 }
 
 .header:focus-visible,

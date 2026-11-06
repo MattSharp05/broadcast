@@ -12,8 +12,7 @@
   overscroll-behavior: contain;
 }
 
-.stage[data-panning],
-.stage[data-dragging] {
+.stage[data-panning] {
   cursor: grabbing;
 }
 

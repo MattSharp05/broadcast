@@ -36,14 +36,35 @@ describe("AppRail", () => {
     },
   );
 
-  it("shows the brand, the v1 marker and the scheduler placeholder", () => {
+  it("shows the brand, the v1 marker and the scheduler status", () => {
     pathname.current = "/workflow";
-    const html = renderToStaticMarkup(<AppRail />);
+    const html = renderToStaticMarkup(
+      <AppRail
+        scheduler={{ tone: "good", title: "Scheduler running", detail: "Checked at 22:14" }}
+      />,
+    );
     expect(html).toContain("Broadcast");
     expect(html).toContain("Content Factory");
     expect(html).toContain(">v1<");
-    expect(html).toContain("Scheduler not running yet");
+    expect(html).toContain("Scheduler running");
+    expect(html).toContain("<small>Checked at 22:14</small>");
+    expect(html).toMatch(/data-testid="scheduler-status" data-tone="good"/);
     expect(html).toContain('aria-label="Main"');
+  });
+
+  it("shows an amber scheduler line when ticks stopped", () => {
+    pathname.current = "/workflow";
+    const html = renderToStaticMarkup(
+      <AppRail
+        scheduler={{
+          tone: "warn",
+          title: "Scheduler: last tick 12 min ago",
+          detail: "Posts wait until it runs again.",
+        }}
+      />,
+    );
+    expect(html).toContain("Scheduler: last tick 12 min ago");
+    expect(html).toMatch(/data-tone="warn"/);
   });
 
   it.each(["live", "sandbox"] as const)("marks the %s workspace in the switcher", (kind) => {

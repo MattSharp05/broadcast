@@ -515,6 +515,8 @@ export type Database = {
           account_id: string;
           attempts: number;
           caption: string;
+          claim_token: string | null;
+          claimed_until: string | null;
           container_id: string | null;
           created_at: string;
           id: string;
@@ -536,6 +538,8 @@ export type Database = {
           account_id: string;
           attempts?: number;
           caption?: string;
+          claim_token?: string | null;
+          claimed_until?: string | null;
           container_id?: string | null;
           created_at?: string;
           id?: string;
@@ -556,6 +560,8 @@ export type Database = {
           account_id?: string;
           attempts?: number;
           caption?: string;
+          claim_token?: string | null;
+          claimed_until?: string | null;
           container_id?: string | null;
           created_at?: string;
           id?: string;
@@ -595,6 +601,31 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      scheduler_status: {
+        Row: {
+          id: boolean;
+          last_summary: Json | null;
+          last_tick_at: string | null;
+          last_tick_ms: number | null;
+          updated_at: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          id?: boolean;
+          last_summary?: Json | null;
+          last_tick_at?: string | null;
+          last_tick_ms?: number | null;
+          updated_at?: string;
+        };
+        Update: {
+          id?: boolean;
+          last_summary?: Json | null;
+          last_tick_at?: string | null;
+          last_tick_ms?: number | null;
+          updated_at?: string;
+        };
+        Relationships: [];
       };
       settings: {
         Row: {
@@ -732,8 +763,24 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      claim_work: {
+        Args: {
+          p_kind: string;
+          p_lease_seconds?: number;
+          p_limit: number;
+          p_platforms: Database["public"]["Enums"]["platform"][];
+          p_workspace_ids?: string[];
+        };
+        Returns: {
+          claim_token: string;
+          post_id: string;
+          workspace_id: string;
+        }[];
+      };
       is_allowed_user: { Args: Record<PropertyKey, never>; Returns: boolean };
       reset_sandbox: { Args: Record<PropertyKey, never>; Returns: undefined };
+      schedule_tick: { Args: Record<PropertyKey, never>; Returns: string };
+      unschedule_tick: { Args: Record<PropertyKey, never>; Returns: string };
       valid_slots: { Args: { slots: string[] }; Returns: boolean };
     };
     Enums: {

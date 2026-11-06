@@ -16,7 +16,7 @@ Follows the `dev-workflow` skill (ticket-driven: Notion → branch → PR → QA
 - Epics data source: collection://f3f4b478-9212-46ac-9dd4-7c9ba75bbb33
 - GitHub: MattSharp05/broadcast
 - Project slug: broadcast (session tags `project:broadcast`; see run-state.md → Session tags)
-- Preview URLs: batched QA mode: none (`vercel.json` → `"git": { "deploymentEnabled": { "**": false, "main": true } }`), since CI builds every PR and QA happens on production. Production: TBD (Vercel project `broadcast`, to be created in BC-2)
+- Preview URLs: batched QA mode: none (`vercel.json` → `"git": { "deploymentEnabled": { "**": false, "main": true } }`), since CI builds every PR and QA happens on production. Production: https://broadcast-iota-murex.vercel.app (Vercel project `broadcast`, team mattsharp05's projects; production deploys from `main`)
 - QA mode: batched (2–3 waves per batch; batch ends at checkpoints). Always tested before building on them: Instagram connection (OAuth + token storage), the scheduler's publish step, the content API's auth.
 - Parallel builders: 2 (3 only when Files touched are clearly separate)
 - Merge policy: fast

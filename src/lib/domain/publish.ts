@@ -165,6 +165,18 @@ export function backoffMinutes(retry: number): number | null {
   return PUBLISH_BACKOFF_MINUTES[retry - 1] ?? null;
 }
 
+/** What a post that stopped retrying says it did (BC-20). */
+export const STOPPED_NOTE = `Broadcast stopped after ${PUBLISH_MAX_RETRIES} retries. Use Retry now once it's fixed.`;
+
+/**
+ * The reason a post that ran out of retries shows: the error without "Broadcast will try again",
+ * which is no longer true, and what to do instead.
+ */
+export function stoppedReason(message: string): string {
+  const kept = message.replace(/\s*Broadcast will (try|upload it) again[^.]*\./g, "").trim();
+  return kept ? `${kept} ${STOPPED_NOTE}` : STOPPED_NOTE;
+}
+
 /** The post's new state and the log line after one step. `now` is the workspace clock. */
 export function applyPublishOutcome(
   post: PublishPost,
@@ -255,7 +267,7 @@ export function applyPublishOutcome(
             ...(dropped ? { container_created_at: null } : {}),
             attempts,
             next_attempt_at: null,
-            last_error: outcome.message,
+            last_error: outcome.retryable ? stoppedReason(outcome.message) : outcome.message,
           },
           log: {
             ok: false,

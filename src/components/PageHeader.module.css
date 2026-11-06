@@ -47,6 +47,28 @@
   color: var(--bad);
 }
 
+.statButton {
+  margin: -4px -6px;
+  padding: 4px 6px;
+  border-radius: var(--r-xs);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.statButton:hover {
+  background: var(--hover);
+}
+
+.statButton:hover b {
+  text-decoration: underline;
+}
+
+.statButton:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 .grow {
   flex: 1;
 }

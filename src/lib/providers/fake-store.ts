@@ -119,6 +119,21 @@ export function createDbFakeStore(db: SupabaseClient<Database>): FakeStore {
       );
     },
 
+    async videoSize(videoUrl) {
+      // Sandbox posts hand the fake their media's storage path as the video URL.
+      const row = check(
+        await db
+          .from("media_assets")
+          .select("width, height")
+          .eq("workspace_id", ws)
+          .eq("storage_path", videoUrl)
+          .limit(1)
+          .maybeSingle(),
+        "reading the video size",
+      );
+      return row?.width && row.height ? { width: row.width, height: row.height } : null;
+    },
+
     async countPublishedSince(accountId, since) {
       const res = await db
         .from("fake_containers")

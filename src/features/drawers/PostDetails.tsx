@@ -16,6 +16,7 @@ import {
 import { ago, statCount } from "@/lib/domain/format";
 import { RefreshChart } from "./charts";
 import type { OnQueueChanged, QueueActions } from "./edit-types";
+import { FailedPost } from "./post/failed";
 import { PostEditor } from "./post/PostEditor";
 import styles from "./drawers.module.css";
 import { Numbers, Row } from "./previews";
@@ -169,7 +170,7 @@ export function PostDetails({
             <Row label="Was due">{ago(card.at, now)}</Row>
           </dl>
         </div>
-        {/* Replace video, Retry now and Remove arrive with failed-post actions (BC-20). */}
+        <FailedPost {...{ card, account, detail, clock, actions, onChanged }} />
       </>
     );
   }

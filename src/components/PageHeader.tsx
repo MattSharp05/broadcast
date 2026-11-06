@@ -11,6 +11,22 @@ export interface PageStat {
   labelFirst?: boolean;
   /** "bad" colours the value red, e.g. a non-zero failed count. */
   tone?: "bad";
+  /** Makes the item a button (e.g. "1 failed" pans to the failed post). */
+  onClick?: () => void;
+  /** The button's tooltip and accessible description. */
+  title?: string;
+}
+
+function StatText({ s }: { s: PageStat }) {
+  return s.labelFirst ? (
+    <>
+      {s.label} <b>{s.value}</b>
+    </>
+  ) : (
+    <>
+      <b>{s.value}</b> {s.label}
+    </>
+  );
 }
 
 interface PageHeaderProps {
@@ -28,14 +44,18 @@ export function PageHeader({ title, stats, actions }: PageHeaderProps) {
         <ul className={styles.stats}>
           {stats.map((s) => (
             <li key={s.label} data-tone={s.tone}>
-              {s.labelFirst ? (
-                <>
-                  {s.label} <b>{s.value}</b>
-                </>
+              {s.onClick ? (
+                <button
+                  type="button"
+                  className={styles.statButton}
+                  onClick={s.onClick}
+                  title={s.title}
+                  data-stat={s.label}
+                >
+                  <StatText s={s} />
+                </button>
               ) : (
-                <>
-                  <b>{s.value}</b> {s.label}
-                </>
+                <StatText s={s} />
               )}
             </li>
           ))}

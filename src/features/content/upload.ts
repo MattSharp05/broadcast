@@ -1,5 +1,7 @@
 "use client";
 
+import type { UploadTicket } from "./types";
+
 /**
  * PUTs a file straight to a Storage signed upload URL (ADR 0005), reporting progress (0–1).
  * XMLHttpRequest because fetch has no upload progress.
@@ -38,4 +40,16 @@ export function putFile(
     });
     xhr.send(body);
   });
+}
+
+/** Asks POST /api/uploads for signed upload URLs for one video and its thumbnail (ADR 0005). */
+export async function requestUploadTicket(file: File): Promise<UploadTicket> {
+  const res = await fetch("/api/uploads", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ fileName: file.name, contentType: file.type, bytes: file.size }),
+  });
+  const body = (await res.json().catch(() => ({}))) as Partial<UploadTicket> & { error?: string };
+  if (!res.ok) throw new Error(body.error ?? "Couldn't start the upload. Try again.");
+  return body as UploadTicket;
 }

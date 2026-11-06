@@ -4,7 +4,13 @@ import { revalidatePath } from "next/cache";
 import { nowFor } from "@/lib/clock";
 import type { ActionResult, AddContentInput, AddedContent } from "@/features/content/types";
 import { NotFoundError, saveAccountSlots } from "@/lib/db/accounts";
-import { ContentError, queueContent } from "@/lib/db/posts";
+import {
+  FailedPostError,
+  removeFailedPost,
+  replaceFailedVideo,
+  retryFailedPost,
+} from "@/lib/db/failed-posts";
+import { ContentError, queueContent, type NewMedia } from "@/lib/db/posts";
 import {
   MoveError,
   QueueEditError,
@@ -23,6 +29,7 @@ import {
 import { currentWorkspace } from "@/lib/db/workspace";
 import { addedMessage, firstTime, localInputToUtc, type ContentTiming } from "@/lib/domain/content";
 import { SLOTS_MAX } from "@/lib/domain/add-account";
+import { REPLACED_MESSAGE, RETRY_MESSAGE, removedFailedMessage } from "@/lib/domain/failed-posts";
 import {
   EDIT_MESSAGES,
   POST_NOW_MESSAGE,
@@ -34,6 +41,7 @@ import type {
   MovePostInput,
   MovedChange,
   QueueChange,
+  ReplaceVideoInput,
   SavePostInput,
   SaveSlotsInput,
 } from "@/features/drawers/edit-types";
@@ -102,6 +110,46 @@ export async function addContent(input: AddContentInput): Promise<ActionResult<A
   }
 }
 
+/**
+ * The server's own check of an uploaded video (ADR 0005): read from Storage, not the browser's
+ * word, against the Reel rules. The media columns when it passes.
+ */
+async function checkStoredUpload(
+  db: Awaited<ReturnType<typeof createServerSupabase>>,
+  videoPath: string,
+  fileName: string,
+): Promise<ActionResult<Omit<NewMedia, "thumbnailPath">>> {
+  let stored;
+  try {
+    stored = await probeStoredVideo(db, videoPath);
+  } catch (err) {
+    if (err instanceof StoredVideoError) return invalid(err.message);
+    if (err instanceof Mp4Error) {
+      return invalid(`${err.message} Reels must be an MP4 or MOV video.`);
+    }
+    throw err;
+  }
+  const issues = checkReel(
+    {
+      bytes: stored.bytes,
+      fileName,
+      mimeType: videoContentType({ bytes: stored.bytes, fileName: videoPath }),
+    },
+    stored.info,
+  );
+  if (issues.length > 0) return invalid(issues.map((i) => i.message).join(" "));
+  return {
+    ok: true,
+    value: {
+      storagePath: videoPath,
+      durationS: Math.round(stored.info.durationS * 1000) / 1000,
+      width: stored.info.width,
+      height: stored.info.height,
+      bytes: stored.bytes,
+    },
+  };
+}
+
 /** Checks the stored video and queues it; any refusal comes back as `{ ok: false }`. */
 async function queueUpload(
   db: Awaited<ReturnType<typeof createServerSupabase>>,
@@ -117,40 +165,15 @@ async function queueUpload(
       timing = { kind: "pinned", at };
     }
 
-    let stored;
-    try {
-      stored = await probeStoredVideo(db, input.videoPath);
-    } catch (err) {
-      if (err instanceof StoredVideoError) return invalid(err.message);
-      if (err instanceof Mp4Error) {
-        return invalid(`${err.message} Reels must be an MP4 or MOV video.`);
-      }
-      throw err;
-    }
-    const issues = checkReel(
-      {
-        bytes: stored.bytes,
-        fileName: input.fileName,
-        mimeType: videoContentType({ bytes: stored.bytes, fileName: input.videoPath }),
-      },
-      stored.info,
-    );
-    if (issues.length > 0) {
-      return invalid(issues.map((i) => i.message).join(" "));
-    }
+    const checked = await checkStoredUpload(db, input.videoPath, input.fileName);
+    if (!checked.ok) return checked;
+    const media = { ...checked.value, thumbnailPath: input.thumbnailPath };
 
     const queued = await queueContent(db, {
       workspaceId: ctx.workspaceId,
       timezone,
       now,
-      media: {
-        storagePath: input.videoPath,
-        thumbnailPath: input.thumbnailPath,
-        durationS: Math.round(stored.info.durationS * 1000) / 1000,
-        width: stored.info.width,
-        height: stored.info.height,
-        bytes: stored.bytes,
-      },
+      media,
       caption: input.caption.trim(),
       accountIds: input.accountIds,
       timing,
@@ -200,7 +223,7 @@ function refreshed<T>(value: T): ActionResult<T> {
 
 function editFailed(err: unknown): ActionResult<never> {
   if (err instanceof QueueEditError || err instanceof MoveError) return invalid(err.message);
-  if (err instanceof NotFoundError) return invalid(err.message);
+  if (err instanceof NotFoundError || err instanceof FailedPostError) return invalid(err.message);
   console.error(err);
   return invalid(EDIT_FAILED);
 }
@@ -339,6 +362,80 @@ export async function movePostAction(
         placement: placementInput(moved.undo.placement),
       },
     });
+  } catch (err) {
+    return editFailed(err);
+  }
+}
+
+// ── Failed posts (BC-20) ───────────────────────────────────────────────────────────────────────
+
+/** "Retry now" on a failed post: retries reset, due now; the scheduler's next tick takes it. */
+export async function retryPostAction(postId: string): Promise<ActionResult<QueueChange>> {
+  if (typeof postId !== "string" || !UUID.test(postId)) return invalid(EDIT_FAILED);
+  try {
+    const { db, ctx } = await queueContext();
+    await retryFailedPost(db, ctx, postId);
+    return refreshed({ message: RETRY_MESSAGE });
+  } catch (err) {
+    return editFailed(err);
+  }
+}
+
+/**
+ * "Replace video" on a failed post, last step: the new video is in Storage (BC-14's upload);
+ * check it again on the server, swap it in (caption and post kept) and retry.
+ */
+export async function replaceVideoAction(
+  input: ReplaceVideoInput,
+): Promise<ActionResult<QueueChange>> {
+  const raw = input as unknown as Record<string, unknown> | null;
+  if (
+    !raw ||
+    typeof raw.postId !== "string" ||
+    !UUID.test(raw.postId) ||
+    typeof raw.videoPath !== "string" ||
+    typeof raw.fileName !== "string" ||
+    (raw.thumbnailPath !== null && typeof raw.thumbnailPath !== "string")
+  ) {
+    return invalid("That video can't be used. Reload the page and try again.");
+  }
+  try {
+    const { db, ctx } = await queueContext();
+    if (!isUploadOf(ctx.workspaceId, input.videoPath, input.thumbnailPath)) {
+      return invalid("That upload belongs to the other workspace. Upload the video again.");
+    }
+    const uploaded = [input.videoPath, input.thumbnailPath].filter((p): p is string => !!p);
+    let result: ActionResult<QueueChange>;
+    try {
+      const checked = await checkStoredUpload(db, input.videoPath, input.fileName);
+      if (checked.ok) {
+        await replaceFailedVideo(db, ctx, input.postId, {
+          ...checked.value,
+          thumbnailPath: input.thumbnailPath,
+        });
+        result = { ok: true, value: { message: REPLACED_MESSAGE } };
+      } else result = checked;
+    } catch (err) {
+      result = editFailed(err);
+    }
+    // Anything but success: the upload won't be used, so it doesn't stay in the bucket.
+    if (!result.ok) {
+      await removeUnusedUpload(db, ctx.workspaceId, uploaded);
+      return result;
+    }
+    return refreshed(result.value);
+  } catch (err) {
+    return editFailed(err);
+  }
+}
+
+/** "Remove" on a failed post (after the inline confirm). */
+export async function removeFailedAction(postId: string): Promise<ActionResult<QueueChange>> {
+  if (typeof postId !== "string" || !UUID.test(postId)) return invalid(EDIT_FAILED);
+  try {
+    const { db, ctx } = await queueContext();
+    const removed = await removeFailedPost(db, ctx, postId);
+    return refreshed({ message: removedFailedMessage(removed.handle) });
   } catch (err) {
     return editFailed(err);
   }

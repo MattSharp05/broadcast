@@ -110,14 +110,37 @@ function validate(input: NewContent): string[] {
   if (problem === "pinned_invalid") {
     throw new ContentError("pinned_invalid", "Choose a date and time to pin the post to.");
   }
-  const prefix = `${input.workspaceId}/`;
-  const paths = [input.media.storagePath, input.media.thumbnailPath].filter(
-    (p): p is string => p !== null,
-  );
+  checkMediaPaths(input.workspaceId, input.media);
+  return accountIds;
+}
+
+/** The upload's files must be under the workspace's folder (ADR 0005). */
+function checkMediaPaths(workspaceId: string, media: NewMedia): void {
+  const prefix = `${workspaceId}/`;
+  const paths = [media.storagePath, media.thumbnailPath].filter((p): p is string => p !== null);
   if (paths.some((p) => !p.startsWith(prefix) || p.includes(".."))) {
     throw new ContentError("bad_path", "The upload doesn't belong to this workspace.");
   }
-  return accountIds;
+}
+
+/** Saves an uploaded video's `media_assets` row (paths checked first); returns its id. */
+export async function insertMedia(db: Db, workspaceId: string, media: NewMedia): Promise<string> {
+  checkMediaPaths(workspaceId, media);
+  const res = await db
+    .from("media_assets")
+    .insert({
+      workspace_id: workspaceId,
+      storage_path: media.storagePath,
+      thumbnail_path: media.thumbnailPath,
+      duration_s: media.durationS,
+      width: media.width,
+      height: media.height,
+      bytes: media.bytes,
+    })
+    .select("id")
+    .single();
+  if (res.error) fail("saving the video", res.error);
+  return res.data.id;
 }
 
 /**
@@ -208,21 +231,7 @@ export async function queueContent(db: Db, input: NewContent): Promise<QueuedCon
     throw new ContentError("unknown_account", "One of the chosen accounts no longer exists.");
   }
 
-  const media = await db
-    .from("media_assets")
-    .insert({
-      workspace_id: ws,
-      storage_path: input.media.storagePath,
-      thumbnail_path: input.media.thumbnailPath,
-      duration_s: input.media.durationS,
-      width: input.media.width,
-      height: input.media.height,
-      bytes: input.media.bytes,
-    })
-    .select("id")
-    .single();
-  if (media.error) fail("saving the video", media.error);
-  const mediaId = media.data.id;
+  const mediaId = await insertMedia(db, ws, input.media);
 
   const created: string[] = [];
   const touched: { id: string; slots: string[] }[] = [];

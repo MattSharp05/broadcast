@@ -37,7 +37,7 @@ import type { DropTarget } from "./drag/targets";
 import { useCardDrag } from "./drag/useCardDrag";
 import { DETAIL_SELECTOR, useDetailInteractions } from "./interactions";
 import { LEFT, layoutCanvas, nowAnchor, type CanvasLayout } from "./layout";
-import { workflowStats } from "./stats";
+import { firstFailedCard, workflowStats } from "./stats";
 import { useMinuteClock } from "./useMinuteClock";
 
 export interface WorkflowViewProps {
@@ -401,6 +401,35 @@ export function WorkflowView({
     canvasRef.current?.fitAll();
   }, [activeTag]);
 
+  // "N failed" in the top bar (BC-20): pan to the newest failed card and flash it. A tag filter
+  // that hides every failed card is cleared first.
+  const failedPan = useRef(false);
+  const panToFailed = useCallback(() => {
+    const target = firstFailedCard(layout);
+    if (!target) {
+      if (activeTag !== ALL_TAGS) {
+        failedPan.current = true;
+        setTag(ALL_TAGS);
+      }
+      return;
+    }
+    canvasRef.current?.centerOn({ x: target.x, y: target.y });
+    const el = pageRef.current?.querySelector<HTMLElement>(
+      `[data-post="${CSS.escape(target.id)}"]`,
+    );
+    if (el) {
+      // Replay the highlight: remove it, force a style flush, add it again.
+      el.removeAttribute("data-fresh");
+      el.getBoundingClientRect();
+      el.setAttribute("data-fresh", "");
+    }
+  }, [layout, activeTag]);
+  useEffect(() => {
+    if (!failedPan.current) return;
+    failedPan.current = false;
+    panToFailed();
+  }, [panToFailed]);
+
   // When a countdown runs out, fetch the canvas again (once per due time).
   const refreshed = useRef(new Set<number>());
   useEffect(() => {
@@ -420,7 +449,7 @@ export function WorkflowView({
     <div className={styles.page} ref={pageRef}>
       <PageHeader
         title="Workflow"
-        stats={workflowStats(stats, now)}
+        stats={workflowStats(stats, now, panToFailed)}
         actions={
           <>
             <TagFilter

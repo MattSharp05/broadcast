@@ -192,3 +192,8 @@
 .linkBtn:disabled {
   opacity: 0.5;
 }
+
+/* One message per line in a note (e.g. a replaced video's check results). */
+.line {
+  display: block;
+}

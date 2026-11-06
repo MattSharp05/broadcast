@@ -34,6 +34,8 @@ export function dueSeed(input: {
   now: Date;
   description?: string;
   failure?: FakeFailureMode;
+  /** The due post's video size (default 1080 × 1920). */
+  dueSize?: { width: number; height: number };
 }): SandboxSeed {
   const { name, handle, now } = input;
   const seed = emptySeed(TIMEZONE);
@@ -68,8 +70,7 @@ export function dueSeed(input: {
       id: stableUuid(name, "media", postId),
       storage_path: `sandbox/${name}/${postId}.mp4`,
       duration_s: 31,
-      width: 1080,
-      height: 1920,
+      ...(postId === due && input.dueSize ? input.dueSize : { width: 1080, height: 1920 }),
       bytes: 12_000_000,
     });
   }

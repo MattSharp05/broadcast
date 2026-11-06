@@ -3,6 +3,7 @@ import { canvasBusy } from "./canvas-busy";
 import { connectMissingPermission } from "./connect-missing-permission";
 import { empty } from "./empty";
 import { noAccounts } from "./no-accounts";
+import { postFailed } from "./post-failed";
 import { publishDueNow } from "./publish-due-now";
 import { publishContainerError, publishQuotaExhausted } from "./publish-failures";
 import { statsDue } from "./stats-due";
@@ -23,6 +24,7 @@ export const SCENARIOS: readonly Scenario[] = [
   addContent,
   statsDue,
   tokenExpiring,
+  postFailed,
 ];
 
 export function getScenario(name: string): Scenario | undefined {

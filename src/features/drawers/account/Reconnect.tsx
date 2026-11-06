@@ -141,32 +141,31 @@ export function Reconnect({ account: a }: { account: AccountDetail }) {
               <span role="alert">{state.message}</span>
             </div>
           ) : null}
-          <div className={styles.actions}>
-            <Button variant="primary" onClick={start} disabled={busy}>
-              {busy ? (
-                <LoaderCircle aria-hidden="true" className={own.spin} />
-              ) : (
-                <RefreshCw aria-hidden="true" />
-              )}
-              {busy
-                ? `Waiting for ${platform}`
-                : a.status === "not_connected"
-                  ? `Connect ${platform}`
-                  : `Reconnect ${platform}`}
-            </Button>
-            {state.kind === "waiting" ? (
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  popup.current?.close();
-                  popup.current = null;
-                  setState({ kind: "idle" });
-                }}
-              >
-                Cancel
+          {/* A never-connected account is connected from Accounts → Add account instead. */}
+          {a.status === "needs_attention" ? (
+            <div className={styles.actions}>
+              <Button variant="primary" onClick={start} disabled={busy}>
+                {busy ? (
+                  <LoaderCircle aria-hidden="true" className={own.spin} />
+                ) : (
+                  <RefreshCw aria-hidden="true" />
+                )}
+                {busy ? `Waiting for ${platform}` : `Reconnect ${platform}`}
               </Button>
-            ) : null}
-          </div>
+              {state.kind === "waiting" ? (
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    popup.current?.close();
+                    popup.current = null;
+                    setState({ kind: "idle" });
+                  }}
+                >
+                  Cancel
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
           {state.kind === "waiting" && state.closed ? (
             <span className={styles.help} role="status">
               The pop-up closed before reconnecting finished. Reconnect again to retry.

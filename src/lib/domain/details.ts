@@ -1,5 +1,6 @@
 import { UPCOMING_STATUSES, avatarIndex, profileUrl, type AccountState } from "@/lib/domain/canvas";
 import { REQUIRED_PERMISSIONS, type ConnectPlatform, type Permission } from "@/lib/domain/connect";
+import type { JobLogLine } from "@/lib/domain/failed-posts";
 import type { PostStatus } from "@/lib/domain/queue";
 import { addDays, toLocalDate } from "@/lib/domain/time";
 
@@ -82,6 +83,10 @@ export interface PostDetail {
   snapshots: StatSnapshot[];
   /** The next refresh still to come, or null when all five are done. */
   nextRefresh: StatOffset | null;
+  /** A failed post's publish log, oldest first (BC-20: the drawer's attempts list). */
+  history?: JobLogLine[];
+  /** A failed post still has its upload (it may be live already): Retry checks it first. */
+  containerKept?: boolean;
 }
 
 export interface PostDetailInput {
@@ -93,6 +98,8 @@ export interface PostDetailInput {
   lastError: string | null;
   attempts: number;
   permalink: string | null;
+  containerId?: string | null;
+  history?: JobLogLine[];
 }
 
 function statsOf(row: PostMetricRow): PostStats {
@@ -138,6 +145,9 @@ export function postDetail(post: PostDetailInput, rows: readonly PostMetricRow[]
     nextRefresh: published
       ? (STAT_OFFSETS.find((o) => !taken.has(o) && !missed.has(o)) ?? null)
       : null,
+    ...(post.status === "failed"
+      ? { history: post.history ?? [], containerKept: !!post.containerId }
+      : {}),
   };
 }
 

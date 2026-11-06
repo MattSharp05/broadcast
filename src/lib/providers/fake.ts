@@ -20,7 +20,8 @@ import {
  * - Insights grow along a seeded curve with the hours since publishing.
  * - Per-account failure modes, for `failuresLeft` calls (null: every call):
  *   `token_expired` and `network` fail every call; `quota_exhausted` fills the quota and fails
- *   publishing; `aspect_ratio` makes containers end in an error.
+ *   publishing; `aspect_ratio` makes containers of videos that aren't 9:16 (or whose size the
+ *   store doesn't know) end in an error.
  */
 
 export const FAKE_FAILURE_MODES = [
@@ -61,6 +62,12 @@ export interface FakeStore {
   /** Insert or replace. */
   saveContainer(container: FakeContainer): Promise<void>;
   countPublishedSince(accountId: string, since: Date): Promise<number>;
+  /**
+   * The size of the video at `videoUrl` (for Sandbox posts, the media's storage path), or null
+   * when unknown. Lets `aspect_ratio` reject only videos that aren't 9:16, so replacing the video
+   * fixes it (BC-20). Without it every container fails in that mode.
+   */
+  videoSize?(videoUrl: string): Promise<{ width: number; height: number } | null>;
 }
 
 export interface FakeProviderDeps {
@@ -218,6 +225,12 @@ export function createFakeProvider({ store, now }: FakeProviderDeps): SocialProv
     return true;
   }
 
+  /** True when the store knows the video is 9:16 (Instagram's Reel shape). */
+  async function isVertical(videoUrl: string): Promise<boolean> {
+    const size = await store.videoSize?.(videoUrl);
+    return !!size && size.height > 0 && Math.abs(size.width / size.height - 9 / 16) < 0.01;
+  }
+
   /** token_expired and network break every call. */
   async function guard(ctx: ProviderAccount): Promise<FakeAccountState> {
     const state = await account(ctx);
@@ -339,7 +352,7 @@ export function createFakeProvider({ store, now }: FakeProviderDeps): SocialProv
       const state = await guard(ctx);
       const c = await container(containerId, ctx.accountId);
       if (c.mediaId) return { state: "published" };
-      if (await fails(state, ["aspect_ratio"])) {
+      if (!(await isVertical(c.videoUrl)) && (await fails(state, ["aspect_ratio"]))) {
         return { state: "error", error: errorFor("aspect_ratio") };
       }
       c.statusChecks += 1;

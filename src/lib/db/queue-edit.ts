@@ -161,24 +161,29 @@ export async function editPost(
   };
 }
 
+/** Posts an account published in the last 24 hours, plus any being published now (the quota). */
+export async function postsUsed24h(db: Db, ctx: QueueContext, accountId: string): Promise<number> {
+  const since = new Date(ctx.now.getTime() - DAY_MS).toISOString();
+  const used = await db
+    .from("posts")
+    .select("id", { count: "exact", head: true })
+    .eq("workspace_id", ctx.workspaceId)
+    .eq("account_id", accountId)
+    .or(`status.eq.publishing,and(status.eq.published,published_at.gt.${since})`);
+  if (used.error) fail("reading the quota", used.error);
+  return used.count ?? 0;
+}
+
 /**
  * "Post now": pins the post to now so the scheduler's next tick claims and publishes it (with its
  * own quota check). Refused for paused accounts and full quotas. Later queue posts move up.
  */
 export async function postNow(db: Db, ctx: QueueContext, postId: string): Promise<void> {
   const post = await loadPost(db, ctx, postId);
-  const since = new Date(ctx.now.getTime() - DAY_MS).toISOString();
-  const used = await db
-    .from("posts")
-    .select("id", { count: "exact", head: true })
-    .eq("workspace_id", ctx.workspaceId)
-    .eq("account_id", post.account_id)
-    .or(`status.eq.publishing,and(status.eq.published,published_at.gt.${since})`);
-  if (used.error) fail("reading the quota", used.error);
   const problem = postNowProblem({
     status: post.status,
     accountStatus: post.social_accounts.status,
-    postsUsed24h: used.count ?? 0,
+    postsUsed24h: await postsUsed24h(db, ctx, post.account_id),
   });
   if (problem) throw new QueueEditError(problem);
 

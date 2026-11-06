@@ -17,6 +17,7 @@ import {
   type PostDetail,
   type PostMetricRow,
 } from "@/lib/domain/details";
+import type { JobLogLine } from "@/lib/domain/failed-posts";
 import { loadAccountDetails } from "./details";
 import { createServerSupabase } from "./server";
 import type { Database } from "./types";
@@ -95,7 +96,7 @@ export async function loadWorkflow(): Promise<WorkflowData> {
     db
       .from("posts")
       .select(
-        "id, account_id, caption, timing, queue_position, status, scheduled_at, published_at, last_error, attempts, permalink, media_assets(duration_s, thumbnail_path)",
+        "id, account_id, caption, timing, queue_position, status, scheduled_at, published_at, last_error, attempts, permalink, container_id, media_assets(duration_s, thumbnail_path)",
       )
       .eq("workspace_id", workspace.id)
       .or(`status.in.(queued,paused,publishing,failed),published_at.gte.${since}`)
@@ -133,6 +134,27 @@ export async function loadWorkflow(): Promise<WorkflowData> {
         saves: m.saves,
         missed: m.missed,
       });
+    }
+  }
+
+  // Failed posts' publish log: the drawer's attempts list (BC-20).
+  const failedIds = posts.data.filter((p) => p.status === "failed").map((p) => p.id);
+  const history = new Map<string, JobLogLine[]>();
+  if (failedIds.length > 0) {
+    const res = await db
+      .from("job_log")
+      .select("post_id, ok, message, at")
+      .eq("workspace_id", workspace.id)
+      .eq("kind", "publish")
+      .in("post_id", failedIds)
+      .order("at", { ascending: true })
+      .order("id", { ascending: true });
+    if (res.error) fail("job log", res.error);
+    for (const line of res.data) {
+      if (!line.post_id) continue;
+      const list = history.get(line.post_id) ?? [];
+      list.push({ at: new Date(line.at), ok: line.ok, message: line.message });
+      history.set(line.post_id, list);
     }
   }
 
@@ -186,6 +208,8 @@ export async function loadWorkflow(): Promise<WorkflowData> {
         lastError: p.last_error,
         attempts: p.attempts,
         permalink: p.permalink,
+        containerId: p.container_id,
+        history: history.get(p.id),
       })),
       metricRows,
     ),

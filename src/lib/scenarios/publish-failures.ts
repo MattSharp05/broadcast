@@ -25,7 +25,7 @@ export const publishQuotaExhausted: Scenario = {
 export const publishContainerError: Scenario = {
   name: "publish-container-error",
   description:
-    "A post is due whose video Instagram rejects (1080 × 1350). Run tick now twice on /dev: it uploads, then fails with the reason.",
+    "A post is due whose video Instagram rejects (1080 × 1350). Run tick now twice on /dev: it uploads, then fails with the reason. Replace video with a 9:16 file fixes it.",
   build: ({ now }) =>
     dueSeed({
       name: "publish-container-error",
@@ -33,5 +33,6 @@ export const publishContainerError: Scenario = {
       now,
       description: "Its next video is 1080 × 1350, not 9:16.",
       failure: "aspect_ratio",
+      dueSize: { width: 1080, height: 1350 },
     }),
 };

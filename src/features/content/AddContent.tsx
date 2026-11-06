@@ -16,8 +16,8 @@ import { duration as durationLabel, whenLabel } from "@/lib/domain/format";
 import { sizeLabel } from "@/lib/media/checks";
 import styles from "./content.module.css";
 import { readVideo, type ReadVideo } from "./media";
-import type { ActionResult, AddContentInput, AddedContent, UploadTicket } from "./types";
-import { putFile } from "./upload";
+import type { ActionResult, AddContentInput, AddedContent } from "./types";
+import { putFile, requestUploadTicket } from "./upload";
 
 export interface AddContentPreset {
   accountIds: string[];
@@ -54,17 +54,6 @@ function slotLabel(account: ContentAccount, now: Date, timezone: string): string
   if (account.paused) return "Paused";
   if (!account.nextOpenSlot) return "No slots yet";
   return `Next open slot ${whenLabel(new Date(account.nextOpenSlot), now, timezone)}`;
-}
-
-async function requestTicket(file: File): Promise<UploadTicket> {
-  const res = await fetch("/api/uploads", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ fileName: file.name, contentType: file.type, bytes: file.size }),
-  });
-  const body = (await res.json().catch(() => ({}))) as Partial<UploadTicket> & { error?: string };
-  if (!res.ok) throw new Error(body.error ?? "Couldn't start the upload. Try again.");
-  return body as UploadTicket;
 }
 
 /**
@@ -205,7 +194,7 @@ function AddContentForm({
     abort.current = controller;
     try {
       setPhase({ kind: "uploading", progress: 0 });
-      const ticket = await requestTicket(video.file);
+      const ticket = await requestUploadTicket(video.file);
       await putFile(
         ticket.video.uploadUrl,
         video.file,

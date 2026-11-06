@@ -187,6 +187,19 @@ describe("fake provider: failure modes", () => {
     expect((await provider.getPublishingQuota(ctx)).used).toBe(0);
   });
 
+  it("aspect_ratio passes a video the store knows is 9:16 (a replaced video)", async () => {
+    const { provider, store } = setup({ failureMode: "aspect_ratio", readyAfterChecks: 1 });
+    const sizes: Record<string, { width: number; height: number }> = {
+      "wide.mp4": { width: 1080, height: 1350 },
+      "tall.mp4": { width: 1080, height: 1920 },
+    };
+    store.videoSize = (url) => Promise.resolve(sizes[url] ?? null);
+    const wide = await provider.createReelContainer(ctx, { videoUrl: "wide.mp4", caption: "" });
+    expect((await provider.getContainerStatus(ctx, wide.containerId)).state).toBe("error");
+    const tall = await provider.createReelContainer(ctx, { videoUrl: "tall.mp4", caption: "" });
+    expect((await provider.getContainerStatus(ctx, tall.containerId)).state).toBe("finished");
+  });
+
   it("aspect_ratio ends the container in a non-retryable error", async () => {
     const { provider } = setup({ failureMode: "aspect_ratio" });
     const { containerId } = await provider.createReelContainer(ctx, {

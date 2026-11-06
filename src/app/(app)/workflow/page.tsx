@@ -5,7 +5,10 @@ import {
   addContent,
   movePostAction,
   postNowAction,
+  removeFailedAction,
   removePostAction,
+  replaceVideoAction,
+  retryPostAction,
   savePost,
   saveSlots,
 } from "./actions";
@@ -33,6 +36,9 @@ export default async function WorkflowPage() {
         removePost: removePostAction,
         saveSlots,
         movePost: movePostAction,
+        retryPost: retryPostAction,
+        replaceVideo: replaceVideoAction,
+        removeFailed: removeFailedAction,
       }}
     />
   );

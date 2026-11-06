@@ -37,6 +37,15 @@ export interface MovedChange extends QueueChange {
   undo: MovePostInput;
 }
 
+/** "Replace video" on a failed post (BC-20): the new upload, already in Storage. */
+export interface ReplaceVideoInput {
+  postId: string;
+  fileName: string;
+  videoPath: string;
+  /** null when the browser couldn't grab a frame. */
+  thumbnailPath: string | null;
+}
+
 /** The queue editing actions, passed from the Workflow page down to the drawers. */
 export interface QueueActions {
   savePost: (input: SavePostInput) => Promise<ActionResult<QueueChange>>;
@@ -45,6 +54,10 @@ export interface QueueActions {
   saveSlots: (input: SaveSlotsInput) => Promise<ActionResult<QueueChange>>;
   /** Drag on the canvas or "Move to…" in the drawer; `undoing` words the toast for an Undo. */
   movePost: (input: MovePostInput, undoing?: boolean) => Promise<ActionResult<MovedChange>>;
+  /** A failed post's drawer (BC-20): "Retry now", "Replace video" and "Remove". */
+  retryPost?: (postId: string) => Promise<ActionResult<QueueChange>>;
+  replaceVideo?: (input: ReplaceVideoInput) => Promise<ActionResult<QueueChange>>;
+  removeFailed?: (postId: string) => Promise<ActionResult<QueueChange>>;
 }
 
 /**

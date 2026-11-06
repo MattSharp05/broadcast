@@ -1,7 +1,14 @@
 import type { Metadata } from "next";
 import { WorkflowView } from "@/features/canvas/content/WorkflowView";
 import { loadWorkflow } from "@/lib/db/canvas";
-import { addContent, postNowAction, removePostAction, savePost, saveSlots } from "./actions";
+import {
+  addContent,
+  movePostAction,
+  postNowAction,
+  removePostAction,
+  savePost,
+  saveSlots,
+} from "./actions";
 
 export const metadata: Metadata = {
   title: "Workflow · Broadcast",
@@ -20,7 +27,13 @@ export default async function WorkflowPage() {
       details={data.details}
       contentAccounts={data.contentAccounts}
       addContent={addContent}
-      queueActions={{ savePost, postNow: postNowAction, removePost: removePostAction, saveSlots }}
+      queueActions={{
+        savePost,
+        postNow: postNowAction,
+        removePost: removePostAction,
+        saveSlots,
+        movePost: movePostAction,
+      }}
     />
   );
 }

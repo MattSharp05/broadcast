@@ -29,6 +29,29 @@
   height: 16px;
 }
 
+.action {
+  margin-left: 6px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--r-s);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.action:hover {
+  background: color-mix(in srgb, var(--on-now) 14%, transparent);
+}
+
+.action:focus-visible {
+  outline: 2px solid var(--on-now);
+  outline-offset: 1px;
+}
+
 @keyframes rise {
   from {
     opacity: 0;

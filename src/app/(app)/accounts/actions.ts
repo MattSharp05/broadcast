@@ -1,6 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { nowFor } from "@/lib/clock";
+import { hasTokenKey, tokenKeyFromEnv } from "@/lib/crypto/tokens";
+import { loadConnectedAccount, saveAccountSetup } from "@/lib/db/add-account";
+import { createAdminSupabase } from "@/lib/db/admin";
+import { loadAccessToken } from "@/lib/db/credentials";
 import {
   DuplicateBrandError,
   NotFoundError,
@@ -10,10 +15,14 @@ import {
   saveAccountTags,
 } from "@/lib/db/accounts";
 import { createServerSupabase } from "@/lib/db/server";
-import { currentWorkspaceKind } from "@/lib/db/workspace";
-import { WORKSPACE_IDS } from "@/lib/db/workspaces";
+import { currentWorkspaceKind, loadWorkspace } from "@/lib/db/workspace";
+import { WORKSPACE_IDS, workspaceKindOf } from "@/lib/db/workspaces";
 import { cleanBrandName, cleanDescription } from "@/lib/domain/accounts";
+import { cleanSlots, cleanVaultUrl, type ConnectedAccount } from "@/lib/domain/add-account";
 import { cleanTags } from "@/lib/domain/tags";
+import { providerFor } from "@/lib/providers";
+import { createDbFakeStore } from "@/lib/providers/fake-store";
+import { instagramConfigFromEnv } from "@/lib/providers/instagram";
 import type { ActionResult } from "@/features/accounts/table/actions";
 
 /**
@@ -98,5 +107,87 @@ export async function updateBrandName(
   return run(async (db, ws) => {
     await renameBrand(db, ws, brandId, clean);
     return clean;
+  });
+}
+
+/**
+ * The Add account wizard's Connect step: the account the connect popup reported, read back from
+ * the database (the popup's message is only a hint: /connect/done can be opened with any id).
+ */
+export async function readConnectedAccount(
+  accountId: string,
+): Promise<ActionResult<ConnectedAccount>> {
+  if (!UUID.test(accountId)) return invalid("That account isn't in this workspace.");
+  return run(
+    async (db, ws) => {
+      const admin = createAdminSupabase();
+      return loadConnectedAccount(db, ws, accountId, {
+        admin,
+        quota: async (account) => {
+          const workspace = await loadWorkspace(db, workspaceKindOf(ws));
+          const provider = providerFor(account, {
+            fakeStore: createDbFakeStore(admin),
+            now: () => nowFor(workspace),
+            instagram: instagramConfigFromEnv(),
+          });
+          let accessToken = "";
+          if (account.platform === "instagram") {
+            if (!hasTokenKey()) return null;
+            const token = await loadAccessToken(admin, ws, account.id, tokenKeyFromEnv());
+            if (!token) return null;
+            accessToken = token;
+          }
+          return {
+            provider,
+            account: { accountId: account.id, platformUserId: account.platformUserId, accessToken },
+          };
+        },
+      });
+    },
+    { revalidate: false },
+  );
+}
+
+export interface AddAccountSetup {
+  tags: string[];
+  description: string;
+  slots: string[];
+  vaultUrl: string;
+}
+
+const strings = (v: unknown) => Array.isArray(v) && v.every((x) => typeof x === "string");
+
+/** Server actions take anything from the network: check the shape before reading it. */
+function isSetup(v: unknown): v is AddAccountSetup {
+  if (typeof v !== "object" || v === null) return false;
+  const s = v as Record<string, unknown>;
+  return (
+    strings(s.tags) &&
+    strings(s.slots) &&
+    typeof s.description === "string" &&
+    typeof s.vaultUrl === "string"
+  );
+}
+
+/** The wizard's Add account: saves tags, description, slots and the vault link. */
+export async function finishAddAccount(
+  accountId: string,
+  setup: AddAccountSetup,
+): Promise<ActionResult<{ handle: string; slots: number }>> {
+  if (!UUID.test(accountId) || !isSetup(setup)) {
+    return invalid("That account can't be changed.");
+  }
+  const slots = cleanSlots(setup.slots);
+  if (slots.length === 0) return invalid("Add at least one posting slot.");
+  const vault = cleanVaultUrl(setup.vaultUrl);
+  if (!vault.valid) return invalid("The vault link must be an https:// link.");
+  return run(async (db, ws) => {
+    const saved = await saveAccountSetup(db, ws, accountId, {
+      tags: cleanTags(setup.tags),
+      description: cleanDescription(setup.description),
+      slots,
+      vaultUrl: vault.url,
+    });
+    return { handle: saved.handle, slots: slots.length };
   });
 }

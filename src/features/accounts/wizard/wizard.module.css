@@ -1,0 +1,501 @@
+/* The Add account wizard (docs/DESIGN.md → Layout: a 720px modal with a vertical stepper). */
+
+.wiz {
+  display: grid;
+  flex: 1;
+  grid-template-columns: 190px 1fr;
+  min-height: 0;
+}
+
+.stepper {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 18px 0 18px 22px;
+  border-right: 1px solid var(--line);
+  background: var(--surface-2);
+  list-style: none;
+}
+
+.stepper li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 0;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+.n {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--line-2);
+  border-radius: 50%;
+  background: var(--surface);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.n svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2.4;
+}
+
+.stepper li[data-state="current"] {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.stepper li[data-state="current"] .n {
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.stepper li[data-state="done"] {
+  color: var(--ink-2);
+}
+
+.stepper li[data-state="done"] .n {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  min-height: 0;
+  padding: 18px 22px;
+  overflow: auto;
+}
+
+.lead {
+  margin: 0;
+  color: var(--ink-2);
+  line-height: 1.5;
+}
+
+/* ── fields ── */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.label {
+  padding: 0;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.input {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-s);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+
+textarea.input {
+  min-height: 70px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.input[aria-invalid="true"] {
+  border-color: var(--bad);
+}
+
+.help {
+  color: var(--ink-3);
+  font-size: 12.5px;
+}
+
+.error {
+  margin: 0;
+  color: var(--bad);
+  font-size: 12.5px;
+}
+
+.footError {
+  max-width: 50%;
+  color: var(--bad);
+  font-size: 12.5px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.extBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 13px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-s);
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 500;
+  text-decoration: none;
+  box-shadow: var(--shadow);
+}
+
+.extBtn:hover {
+  background: var(--hover);
+}
+
+.extBtn svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* ── platform options ── */
+
+.pick {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.opt {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r);
+  background: var(--surface);
+  color: var(--ink);
+  text-align: left;
+}
+
+.opt[aria-pressed="true"] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.opt:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.opt b {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.opt span {
+  color: var(--ink-3);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+/* ── checklist ── */
+
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.check input {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  accent-color: var(--accent);
+}
+
+.check b {
+  display: block;
+  font-weight: 500;
+}
+
+.check span span {
+  color: var(--ink-3);
+  font-size: 12.5px;
+}
+
+.check a {
+  color: var(--accent-ink);
+}
+
+/* ── notes ── */
+
+.note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.note > svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  color: var(--ink-3);
+}
+
+.note[data-tone="good"] {
+  border-color: var(--good);
+  background: var(--good-soft);
+  color: var(--ink);
+}
+
+.note[data-tone="good"] > svg {
+  color: var(--good);
+}
+
+.note[data-tone="warn"] {
+  border-color: var(--warn-line);
+  background: var(--warn-soft);
+  color: var(--ink);
+}
+
+.note[data-tone="warn"] > svg {
+  color: var(--warn);
+}
+
+.note[data-tone="bad"] {
+  border-color: var(--bad-line);
+  background: var(--bad-soft);
+  color: var(--ink);
+}
+
+.note[data-tone="bad"] > svg {
+  color: var(--bad);
+}
+
+/* ── connect result ── */
+
+.dl {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+}
+
+.dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+
+.dl div:last-child {
+  border-bottom: 0;
+}
+
+.dl dt {
+  color: var(--ink-3);
+}
+
+.dl dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.yes,
+.no {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+}
+
+.yes {
+  color: var(--good);
+}
+
+.no {
+  color: var(--bad);
+}
+
+.yes svg,
+.no svg {
+  width: 14px;
+  height: 14px;
+}
+
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── posting setup ── */
+
+.tags,
+.slots {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.tagInput {
+  height: 26px;
+  width: 140px;
+  padding: 0 8px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-xs);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.tagInput:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.slot {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 6px 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-s);
+  background: var(--surface-2);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.slot button {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--r-xs);
+  color: var(--ink-3);
+}
+
+.slot button:hover {
+  background: var(--hover);
+  color: var(--bad);
+}
+
+.slot button svg {
+  width: 12px;
+  height: 12px;
+}
+
+.timeInput {
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-s);
+  background: var(--surface);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.linkBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 6px;
+  border-radius: var(--r-xs);
+  color: var(--accent-ink);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.linkBtn:hover:not(:disabled) {
+  background: var(--accent-soft);
+}
+
+.linkBtn:disabled {
+  opacity: 0.5;
+}
+
+.linkBtn svg {
+  width: 14px;
+  height: 14px;
+}
+
+@media (max-width: 760px) {
+  .wiz {
+    grid-template-columns: 1fr;
+  }
+
+  .stepper {
+    flex-direction: row;
+    gap: 12px;
+    padding: 10px 16px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    overflow-x: auto;
+  }
+
+  .stepName {
+    display: none;
+  }
+
+  .stepper li[data-state="current"] .stepName {
+    display: inline;
+  }
+
+  .body {
+    padding: 16px;
+  }
+
+  .pick {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation: none;
+  }
+}

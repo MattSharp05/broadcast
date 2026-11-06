@@ -7,10 +7,6 @@
   min-height: 0;
 }
 
-.soon {
-  display: inline-flex;
-}
-
 /* ── toolbar ── */
 
 .toolbar {
@@ -101,6 +97,8 @@
 }
 
 .tablewrap {
+  /* Positioned, so absolutely placed children (.srOnly) are clipped too and can't widen the page. */
+  position: relative;
   overflow-x: auto;
   background: var(--surface);
   border: 1px solid var(--line);
@@ -435,6 +433,15 @@
   color: var(--on-now);
   font-size: 13.5px;
   box-shadow: var(--shadow-lg);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toastIcon {
+  flex: none;
+  width: 16px;
+  height: 16px;
 }
 
 .srOnly {

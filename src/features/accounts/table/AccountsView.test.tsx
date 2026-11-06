@@ -13,6 +13,7 @@ const actions = {
   addBrand: ok,
   updateBrandName: ok,
 } as unknown as AccountsActions;
+const workspace = { id: "00000000-0000-4000-8000-000000000002", kind: "sandbox" as const };
 
 function row(
   id: string,
@@ -58,6 +59,7 @@ describe("AccountsView", () => {
           { id: "b-Sport", name: "Sport" },
           { id: "b-new", name: "Kart Racer" },
         ]}
+        workspace={workspace}
         actions={actions}
       />,
     );
@@ -78,9 +80,14 @@ describe("AccountsView", () => {
   });
 
   it("shows the empty state when there is nothing at all", () => {
-    const html = renderToStaticMarkup(<AccountsView accounts={[]} brands={[]} actions={actions} />);
+    const html = renderToStaticMarkup(
+      <AccountsView accounts={[]} brands={[]} workspace={workspace} actions={actions} />,
+    );
     expect(html).toContain("No accounts yet. Add your first account to start posting.");
     expect(html).not.toContain("<table");
+    // Add account is enabled (BC-13): no disabled button any more.
+    expect(html).toMatch(/<button[^>]*>.*Add account<\/button>/);
+    expect(html).not.toMatch(/<button[^>]*disabled[^>]*>.*Add account/);
   });
 });
 

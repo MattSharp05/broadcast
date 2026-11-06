@@ -85,6 +85,7 @@ async function flagOnAuthError(
 ): Promise<void> {
   if (!isAuthError(err) || run.flagged.has(accountId)) return;
   run.flagged.add(accountId);
+  run.summary.flagged += 1;
   await flagAccount(run.db, { workspaceId, accountId, reason: err.userMessage, kind: "stats" });
 }
 
@@ -105,6 +106,8 @@ interface StatsSummary {
   released: number;
   followers: number;
   followerErrors: number;
+  /** Accounts flagged Needs attention (their access is gone). */
+  flagged: number;
 }
 
 const NO_NUMBERS: MediaInsights = {
@@ -214,6 +217,7 @@ interface Run {
   limited: Set<string>;
   /** Accounts flagged Needs attention this tick (their access is gone): no more calls. */
   flagged: Set<string>;
+  summary: StatsSummary;
 }
 
 /** ms left in the tick's budget. */
@@ -428,6 +432,16 @@ export function createCollectStats(deps: CollectStatsDeps = {}): Step {
       const instagram = deps.instagram === undefined ? instagramConfigFromEnv() : deps.instagram;
       const tokenKey = resolveTokenKey(deps.tokenKey);
       const reader = createTokenReader(ctx.db, tokenKey);
+      const summary: StatsSummary = {
+        claimed: 0,
+        collected: 0,
+        missed: 0,
+        retrying: 0,
+        released: 0,
+        followers: 0,
+        followerErrors: 0,
+        flagged: 0,
+      };
       const run: Run = {
         db: ctx.db,
         ctx,
@@ -438,15 +452,7 @@ export function createCollectStats(deps: CollectStatsDeps = {}): Step {
         fakeStore: createDbFakeStore(ctx.db),
         limited: new Set(),
         flagged: new Set(),
-      };
-      const summary: StatsSummary = {
-        claimed: 0,
-        collected: 0,
-        missed: 0,
-        retrying: 0,
-        released: 0,
-        followers: 0,
-        followerErrors: 0,
+        summary,
       };
       await collectSnapshots(run, summary);
       await collectFollowers(run, summary);

@@ -41,12 +41,16 @@ Auth magic link, Storage, `pg_cron` + `pg_net`) · plain CSS with tokens + CSS M
 Playwright · MSW. Details and reasons: `docs/TDD.md`, ADRs in `docs/decisions/`.
 
 ## Commands
-(Set up by BC-1; keep this list current.)
+(Set up by BC-1 and BC-5; keep this list current.)
 - `pnpm install` · `pnpm dev` (app on :3000) · `pnpm build` · `pnpm start` (serve the build)
 - `pnpm lint` · `pnpm typecheck` (`next typegen` + `tsc`) · `pnpm format` / `pnpm format:check`
 - `pnpm test` (Vitest, `src/**/*.test.ts`) · `pnpm test:watch`
-- Not yet present: `pnpm e2e` (Playwright; needs `supabase start`), added with the Playwright setup in a later ticket;
-  `pnpm supabase start` / `stop`, `pnpm db:reset` (migrations + seed), `pnpm db:types`, added by BC-5.
+- `pnpm supabase start` / `stop` (local stack in Docker; Mailpit on :54324 catches magic-link
+  emails) · `pnpm db:reset` (migrations + `supabase/seed.sql`) · `pnpm db:types` (regenerates
+  `src/lib/db/types.ts`; CI fails if it's stale) · `pnpm -s db:env >> .env.local` (local URL + keys)
+- `pnpm test:integration` (Vitest, `tests/integration/`; needs `supabase start`; the sign-in gate
+  test also needs a running app: `E2E=1 pnpm start` and `APP_TEST_URL=http://localhost:3000`)
+- Not yet present: `pnpm e2e` (Playwright; needs `supabase start`), added with the Playwright setup in BC-8.
 
 ## Structure
 `src/app` routes · `src/features/{canvas,accounts,content,drawers}` · `src/components` shared UI ·
@@ -58,6 +62,9 @@ Playwright · MSW. Details and reasons: `docs/TDD.md`, ADRs in `docs/decisions/`
 - Pure logic in `src/lib/domain` (no I/O), unit tested. Handlers are thin.
 - All provider calls go through `SocialProvider` (`instagram` | `fake`). Never call the Graph API elsewhere.
 - Every query is scoped by `workspace_id` (helpers in `src/lib/db`). Service-role client only in `src/lib/db/admin.ts` (`server-only`).
+- New tables (new migration file in `supabase/migrations`): `workspace_id` + composite FK to the
+  parent, RLS on with an `allowed_user_all` policy (or none for service-role-only data), an
+  explicit `grant … to authenticated` (browser roles get nothing by default), add it to `ALL_TABLES` in `tests/integration/helpers.ts`, then `pnpm db:types`.
 - Times stored in UTC; workspace timezone only for display and slot maths.
 - UI: tokens only (no literal colours), sentence case, IBM Plex Sans; follow `docs/DESIGN.md`.
 

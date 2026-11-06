@@ -136,7 +136,7 @@ describe("stats step", () => {
 
   it("runs after publishing in the full tick", async () => {
     const summary = await runTick({ db: admin, workspaceIds: [SANDBOX], recordHeartbeat: false });
-    expect(Object.keys(summary.steps)).toEqual(["publishDue", "collectStats"]);
+    expect(Object.keys(summary.steps)).toEqual(["publishDue", "collectStats", "refreshTokens"]);
     expect(summary.steps.collectStats).toMatchObject({ collected: 2 });
   });
 });

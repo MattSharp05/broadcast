@@ -51,6 +51,8 @@ export interface AccountsViewProps {
   actions: AccountsActions;
   /** The account drawer's data (BC-15). Without it, Details is disabled. */
   details?: AccountsDetails;
+  /** The Status filter to start with (`/accounts?status=…`, the rail's attention link). */
+  initialStatus?: StatusFilter;
 }
 
 export interface AccountsDetails {
@@ -114,7 +116,14 @@ interface TagEdit {
 }
 
 /** The Accounts tab: top bar, toolbar (search, Tag, Status, New brand) and the grouped table. */
-export function AccountsView({ accounts, brands, workspace, actions, details }: AccountsViewProps) {
+export function AccountsView({
+  accounts,
+  brands,
+  workspace,
+  actions,
+  details,
+  initialStatus = "all",
+}: AccountsViewProps) {
   const [opened, setOpened] = useState<{ id: string; opener: HTMLElement } | null>(null);
   const openedAccount = opened ? details?.accounts.find((a) => a.id === opened.id) : undefined;
   const detailClock = useMemo(
@@ -128,7 +137,10 @@ export function AccountsView({ accounts, brands, workspace, actions, details }: 
     rows.map((a) => (a.id === edit.accountId ? { ...a, tags: edit.tags } : a)),
   );
   const [, startTransition] = useTransition();
-  const [filters, setFilters] = useState<AccountFilters>(NO_FILTERS);
+  const [filters, setFilters] = useState<AccountFilters>({
+    ...NO_FILTERS,
+    status: initialStatus,
+  });
   const [sort, setSort] = useState<AccountSort>(DEFAULT_SORT);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);

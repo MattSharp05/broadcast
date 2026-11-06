@@ -1,7 +1,12 @@
 import { openSlots, planQueue, type PlannerPost } from "@/lib/domain/queue";
 import { addDays, toLocalDate } from "@/lib/domain/time";
 import { stableUuid } from "@/lib/hash";
-import { FAKE_PERMALINK_BASE, fakeInsights, type FakeFailureMode } from "@/lib/providers/fake";
+import {
+  FAKE_PERMALINK_BASE,
+  fakeInsights,
+  fakeUserId,
+  type FakeFailureMode,
+} from "@/lib/providers/fake";
 import { isoDay, pastSlotTimes } from "./slots";
 import { emptySeed, type Scenario, type SandboxSeed } from "./types";
 
@@ -187,7 +192,8 @@ export const canvasBusy: Scenario = {
         ).toISOString(),
         brand_id: brandId,
         platform: "fake",
-        platform_user_id: `fake_user_${spec.key}`,
+        // The fake user the consent screen signs in as, so Reconnect finds the same account.
+        platform_user_id: fakeUserId(spec.handle),
         handle: spec.handle,
         profile_url: `${FAKE_PERMALINK_BASE}/${spec.handle}`,
         description: spec.description,

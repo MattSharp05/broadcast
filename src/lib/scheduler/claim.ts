@@ -6,7 +6,8 @@ type Platform = Database["public"]["Enums"]["platform"];
 
 /**
  * The kinds of work a tick claims: due posts to publish, and published posts with a stats
- * snapshot due (BC-21). Token refresh (BC-19) adds its own.
+ * snapshot due (BC-21). Token refresh (BC-19) claims credentials instead: `claim_refresh`
+ * (migration 0008, src/lib/scheduler/refresh-tokens.ts).
  */
 export type WorkKind = "publish" | "stats";
 

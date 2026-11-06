@@ -51,6 +51,17 @@ export async function runSandboxTick(prev: TickState): Promise<TickState> {
   if (collected > 0) {
     parts.push(`stats refreshed for ${collected} ${collected === 1 ? "post" : "posts"}`);
   }
+  // Connection health (BC-19).
+  const health = summary.steps.refreshTokens ?? {};
+  if (typeof health.error === "string") parts.push(`token refresh failed: ${health.error}`);
+  const renewed = typeof health.refreshed === "number" ? health.refreshed : 0;
+  const flagged =
+    (typeof health.flagged === "number" ? health.flagged : 0) +
+    (typeof stats.flagged === "number" ? stats.flagged : 0);
+  if (renewed > 0) parts.push(`${renewed} ${renewed === 1 ? "token" : "tokens"} renewed`);
+  if (flagged > 0) {
+    parts.push(`${flagged} ${flagged === 1 ? "account needs" : "accounts need"} attention`);
+  }
   return {
     message: parts.length ? `Tick done: ${parts.join(", ")}.` : "Tick done: nothing was due.",
     runs,

@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Button } from "@/components/Button";
+import { createServerSupabase } from "@/lib/db/server";
+import { WORKSPACE_IDS } from "@/lib/db/workspaces";
 import styles from "../connect.module.css";
 
 export const metadata: Metadata = { title: "Allow access · Sandbox" };
@@ -10,6 +12,32 @@ const PERMISSIONS = [
   { scope: "fake_content_publish", label: "Publish Reels" },
   { scope: "fake_insights", label: "Read post insights" },
 ] as const;
+
+/**
+ * The handle of the account a Reconnect is for (BC-19), so the fake user is filled in, like
+ * Instagram showing the account that is signed in. Null for a new connection.
+ */
+async function reconnectingHandle(state: string): Promise<string | null> {
+  try {
+    const db = await createServerSupabase();
+    const attempt = await db
+      .from("oauth_states")
+      .select("account_id")
+      .eq("workspace_id", WORKSPACE_IDS.sandbox)
+      .eq("state", state)
+      .maybeSingle();
+    if (!attempt.data?.account_id) return null;
+    const account = await db
+      .from("social_accounts")
+      .select("handle")
+      .eq("workspace_id", WORKSPACE_IDS.sandbox)
+      .eq("id", attempt.data.account_id)
+      .maybeSingle();
+    return account.data?.handle ?? null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * The Sandbox's stand-in for Instagram's consent screen (the fake provider's authorizeUrl). Pick
@@ -23,6 +51,7 @@ export default async function FakeConsentPage({
   const params = await searchParams;
   const state = typeof params.state === "string" ? params.state : "";
   const invalid = params.invalid === "handle";
+  const reconnecting = state ? await reconnectingHandle(state) : null;
 
   return (
     <main className={styles.page}>
@@ -41,7 +70,7 @@ export default async function FakeConsentPage({
             <span>Instagram user</span>
             <input
               name="handle"
-              defaultValue="sandbox.creator"
+              defaultValue={reconnecting ?? "sandbox.creator"}
               required
               pattern="@?[A-Za-z0-9._]{1,30}"
               autoComplete="off"

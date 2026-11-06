@@ -70,6 +70,12 @@ export async function loadScenario(
       db.from("fake_accounts").insert(inSandbox(seed.fakeAccounts), { defaultToNull: false }),
     );
   }
+  if (seed.credentials.length) {
+    await run(
+      "credentials",
+      db.from("oauth_credentials").insert(inSandbox(seed.credentials), { defaultToNull: false }),
+    );
+  }
   if (seed.fakeContainers.length) {
     await run(
       "fake containers",
@@ -109,6 +115,7 @@ export async function loadScenario(
       brands: seed.brands.length,
       accounts: seed.accounts.length,
       fakeAccounts: seed.fakeAccounts.length,
+      credentials: seed.credentials.length,
       fakeContainers: seed.fakeContainers.length,
       media: seed.media.length,
       posts: seed.posts.length,

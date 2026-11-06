@@ -3,11 +3,13 @@ import { NextResponse, type NextRequest } from "next/server";
 import { decideAccess, isPublicPath } from "@/lib/db/access";
 import { readPublicSupabaseEnv } from "@/lib/db/env";
 import type { Database } from "@/lib/db/types";
+import { scenarioRedirect } from "@/lib/scenarios/url";
 
 /**
  * Refreshes the Supabase session cookies on every request and keeps the dashboard private:
  * signed-out visitors go to /login; a user with any email but ALLOWED_EMAIL is signed out and sees
  * "This dashboard is private." Without Supabase settings nothing is reachable (fails closed).
+ * For the signed-in owner, `?scenario=` and `?now=` on any page go through /api/dev first.
  */
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -40,7 +42,12 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const decision = decideAccess({ pathname, userEmail: user?.email ?? null, allowedEmail });
-  if (decision === "allow") return response;
+  if (decision === "allow") {
+    // `?scenario=` / `?now=` on any page: load it (Sandbox only), then come back without them.
+    const target = scenarioRedirect(request.nextUrl);
+    if (target) return withCookies(NextResponse.redirect(new URL(target, request.url)), response);
+    return response;
+  }
 
   if (decision === "private") {
     await supabase.auth.signOut();

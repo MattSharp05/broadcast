@@ -1,0 +1,97 @@
+.page {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 32px var(--gutter) 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.head h1 {
+  font-size: 19px;
+  font-weight: 600;
+}
+
+.head p,
+.help {
+  color: var(--ink-2);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.section h2 {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: var(--shadow);
+}
+
+.list li {
+  display: grid;
+  grid-template-columns: minmax(140px, 200px) 1fr;
+  gap: 12px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+}
+
+.list li:first-child {
+  border-top: 0;
+}
+
+.list span {
+  color: var(--ink-2);
+}
+
+.page a {
+  color: var(--accent-ink);
+  font-weight: 500;
+}
+
+.help code {
+  font: inherit;
+  color: var(--ink);
+}
+
+.debug {
+  margin: 0;
+  padding: 14px 16px;
+  overflow: auto;
+  max-height: 480px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  font: inherit;
+  font-size: 12.5px;
+  white-space: pre;
+}
+
+@media (max-width: 760px) {
+  .page {
+    --gutter: 16px;
+    padding-top: 20px;
+  }
+
+  .list li {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}

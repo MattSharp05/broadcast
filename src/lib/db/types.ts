@@ -137,6 +137,113 @@ export type Database = {
           },
         ];
       };
+      fake_accounts: {
+        Row: {
+          account_id: string;
+          created_at: string;
+          failure_mode: string | null;
+          failures_left: number | null;
+          quota_limit: number;
+          ready_after_checks: number;
+          updated_at: string;
+          workspace_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          account_id: string;
+          created_at?: string;
+          failure_mode?: string | null;
+          failures_left?: number | null;
+          quota_limit?: number;
+          ready_after_checks?: number;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          account_id?: string;
+          created_at?: string;
+          failure_mode?: string | null;
+          failures_left?: number | null;
+          quota_limit?: number;
+          ready_after_checks?: number;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "fake_accounts_account_id_workspace_id_fkey";
+            columns: ["account_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "social_accounts";
+            referencedColumns: ["id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "fake_accounts_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      fake_containers: {
+        Row: {
+          account_id: string;
+          caption: string;
+          created_at: string;
+          id: string;
+          media_id: string | null;
+          permalink: string | null;
+          published_at: string | null;
+          status_checks: number;
+          updated_at: string;
+          video_url: string;
+          workspace_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          account_id: string;
+          caption?: string;
+          created_at?: string;
+          id: string;
+          media_id?: string | null;
+          permalink?: string | null;
+          published_at?: string | null;
+          status_checks?: number;
+          updated_at?: string;
+          video_url: string;
+          workspace_id: string;
+        };
+        Update: {
+          account_id?: string;
+          caption?: string;
+          created_at?: string;
+          id?: string;
+          media_id?: string | null;
+          permalink?: string | null;
+          published_at?: string | null;
+          status_checks?: number;
+          updated_at?: string;
+          video_url?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "fake_containers_account_id_workspace_id_fkey";
+            columns: ["account_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "social_accounts";
+            referencedColumns: ["id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "fake_containers_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       job_log: {
         Row: {
           account_id: string | null;
@@ -491,6 +598,7 @@ export type Database = {
       };
       settings: {
         Row: {
+          clock_override: string | null;
           created_at: string;
           timezone: string | null;
           updated_at: string;
@@ -498,12 +606,14 @@ export type Database = {
         };
         ComputedFields: never;
         Insert: {
+          clock_override?: string | null;
           created_at?: string;
           timezone?: string | null;
           updated_at?: string;
           workspace_id: string;
         };
         Update: {
+          clock_override?: string | null;
           created_at?: string;
           timezone?: string | null;
           updated_at?: string;
@@ -623,6 +733,7 @@ export type Database = {
     };
     Functions: {
       is_allowed_user: { Args: Record<PropertyKey, never>; Returns: boolean };
+      reset_sandbox: { Args: Record<PropertyKey, never>; Returns: undefined };
       valid_slots: { Args: { slots: string[] }; Returns: boolean };
     };
     Enums: {

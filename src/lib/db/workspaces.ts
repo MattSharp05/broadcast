@@ -5,3 +5,21 @@ export const WORKSPACE_IDS = {
 } as const;
 
 export type WorkspaceKind = keyof typeof WORKSPACE_IDS;
+
+export const WORKSPACE_NAMES: Record<WorkspaceKind, string> = { live: "Live", sandbox: "Sandbox" };
+
+/** Cookie holding the workspace the dashboard shows (`live` | `sandbox`). */
+export const WORKSPACE_COOKIE = "bc-workspace";
+
+/** The workspace named by the cookie; anything else (or nothing) means Live. */
+export function parseWorkspaceKind(value: string | null | undefined): WorkspaceKind {
+  return value === "sandbox" ? "sandbox" : "live";
+}
+
+/** Cookie options: a year, whole site, not readable by scripts. */
+export const WORKSPACE_COOKIE_OPTIONS = {
+  path: "/",
+  sameSite: "lax",
+  httpOnly: true,
+  maxAge: 60 * 60 * 24 * 365,
+} as const;

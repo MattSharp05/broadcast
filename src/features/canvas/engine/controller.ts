@@ -185,6 +185,8 @@ export class CanvasController {
   private gestureStartScale = 1;
   private press: ItemPress | null = null;
   private item: ItemDrag | null = null;
+  /** An item drag was cancelled mid-move; its release is swallowed like a pan's. */
+  private swallowRelease = false;
   private suppressClick = false;
 
   private animation = 0;
@@ -256,7 +258,8 @@ export class CanvasController {
   /** Cancels an item drag in progress (Escape does this too). */
   cancelItemDrag(): void {
     this.clearPress();
-    this.endItem(false);
+    // The button is still down: the release that follows mustn't click what's under it.
+    if (this.endItem(false)) this.swallowRelease = true;
   }
 
   destroy(): void {
@@ -743,7 +746,7 @@ export class CanvasController {
   private onPointerUp(e: PointerEvent): void {
     if (!this.pointers.delete(e.pointerId)) return;
     if (this.press?.pointerId === e.pointerId) this.clearPress(); // a click
-    let wasMoving = this.pinch !== null || (this.drag?.moved ?? false);
+    let wasMoving = this.pinch !== null || (this.drag?.moved ?? false) || this.swallowRelease;
     if (this.item?.pointerId === e.pointerId) {
       wasMoving = this.endItem(e.type === "pointerup") || wasMoving;
     }
@@ -758,6 +761,7 @@ export class CanvasController {
       return;
     }
     if (this.pointers.size === 0) {
+      this.swallowRelease = false;
       this.drag = null;
       this.pinch = null;
       this.setPanning(false);

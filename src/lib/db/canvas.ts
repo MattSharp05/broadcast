@@ -1,0 +1,149 @@
+import "server-only";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { nowFor } from "@/lib/clock";
+import {
+  POSTED_DAYS,
+  buildCanvas,
+  type CanvasModel,
+  type CanvasPostInput,
+  type PostMetricsInput,
+} from "@/lib/domain/canvas";
+import { createServerSupabase } from "./server";
+import type { Database } from "./types";
+import { currentWorkspace, type Workspace } from "./workspace";
+
+/** Bucket holding uploaded videos and their thumbnails (ADR 0005). */
+const VIDEOS_BUCKET = "videos";
+const THUMBNAIL_TTL_S = 60 * 60;
+const DAY_MS = 86_400_000;
+
+export interface WorkflowData extends CanvasModel {
+  workspace: Pick<Workspace, "id" | "kind">;
+  /** ISO; the workspace clock (frozen in a Sandbox scenario with `?now=`). */
+  now: string;
+  frozen: boolean;
+  timezone: string;
+}
+
+function fail(what: string, error: { message: string }): never {
+  throw new Error(`Loading the Workflow canvas failed at ${what}: ${error.message}`);
+}
+
+function date(value: string | null): Date | null {
+  return value ? new Date(value) : null;
+}
+
+/** Signed URLs for thumbnails; a thumbnail that can't be signed falls back to the placeholder. */
+async function signThumbnails(
+  db: SupabaseClient<Database>,
+  paths: readonly string[],
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (paths.length === 0) return out;
+  try {
+    const { data } = await db.storage
+      .from(VIDEOS_BUCKET)
+      .createSignedUrls([...paths], THUMBNAIL_TTL_S);
+    for (const row of data ?? []) {
+      if (row.path && row.signedUrl && !row.error) out.set(row.path, row.signedUrl);
+    }
+  } catch {
+    // No bucket yet (or Storage down): placeholders.
+  }
+  return out;
+}
+
+/**
+ * Everything the Workflow canvas shows for the current workspace, in one call: accounts (in the
+ * order they were added), their waiting posts, the last POSTED_DAYS days of posted ones with
+ * their latest stats, and every failed post. Read as the signed-in user (RLS applies).
+ */
+export async function loadWorkflow(): Promise<WorkflowData> {
+  const db = await createServerSupabase();
+  const workspace = await currentWorkspace();
+  const now = nowFor(workspace);
+  const timezone = workspace.timezone ?? "UTC";
+  const since = new Date(now.getTime() - (POSTED_DAYS + 1) * DAY_MS).toISOString();
+
+  const [accounts, posts] = await Promise.all([
+    db
+      .from("social_accounts")
+      .select("id, handle, platform, tags, slots, status, status_reason, followers, brands(name)")
+      .eq("workspace_id", workspace.id)
+      .order("created_at")
+      .order("handle"),
+    db
+      .from("posts")
+      .select(
+        "id, account_id, caption, timing, queue_position, status, scheduled_at, published_at, last_error, media_assets(duration_s, thumbnail_path)",
+      )
+      .eq("workspace_id", workspace.id)
+      .or(`status.in.(queued,paused,publishing,failed),published_at.gte.${since}`)
+      .order("scheduled_at", { ascending: true, nullsFirst: false }),
+  ]);
+  if (accounts.error) fail("accounts", accounts.error);
+  if (posts.error) fail("posts", posts.error);
+
+  const publishedIds = posts.data.filter((p) => p.status === "published").map((p) => p.id);
+  const metrics = new Map<string, PostMetricsInput>();
+  if (publishedIds.length > 0) {
+    const res = await db
+      .from("post_metrics")
+      .select("post_id, views, likes, comments, taken_at")
+      .eq("workspace_id", workspace.id)
+      .in("post_id", publishedIds)
+      .not("taken_at", "is", null)
+      .order("taken_at", { ascending: false });
+    if (res.error) fail("stats", res.error);
+    for (const m of res.data) {
+      if (!metrics.has(m.post_id)) metrics.set(m.post_id, m);
+    }
+  }
+
+  const thumbPaths = posts.data
+    .map((p) => p.media_assets.thumbnail_path)
+    .filter((p): p is string => Boolean(p));
+  const thumbs = await signThumbnails(db, thumbPaths);
+
+  const postInputs: CanvasPostInput[] = posts.data.map((p) => ({
+    id: p.id,
+    accountId: p.account_id,
+    caption: p.caption,
+    timing: p.timing,
+    queuePosition: p.queue_position,
+    status: p.status,
+    scheduledAt: date(p.scheduled_at),
+    publishedAt: date(p.published_at),
+    lastError: p.last_error,
+    durationS: p.media_assets.duration_s,
+    thumbnailUrl: p.media_assets.thumbnail_path
+      ? (thumbs.get(p.media_assets.thumbnail_path) ?? null)
+      : null,
+  }));
+
+  const model = buildCanvas({
+    accounts: accounts.data.map((a) => ({
+      id: a.id,
+      handle: a.handle,
+      brand: a.brands.name,
+      platform: a.platform,
+      tags: a.tags,
+      slots: a.slots,
+      status: a.status,
+      statusReason: a.status_reason,
+      followers: a.followers,
+    })),
+    posts: postInputs,
+    metrics,
+    now,
+    timezone,
+  });
+
+  return {
+    ...model,
+    workspace: { id: workspace.id, kind: workspace.kind },
+    now: now.toISOString(),
+    frozen: workspace.kind === "sandbox" && workspace.clockOverride !== null,
+    timezone,
+  };
+}

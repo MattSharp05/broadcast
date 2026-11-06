@@ -1,34 +1,21 @@
-import { Plus } from "lucide-react";
 import type { Metadata } from "next";
-import { Button } from "@/components/Button";
-import { PageHeader } from "@/components/PageHeader";
-import { Select } from "@/components/Select";
+import { WorkflowView } from "@/features/canvas/content/WorkflowView";
+import { loadWorkflow } from "@/lib/db/canvas";
 
 export const metadata: Metadata = {
   title: "Workflow · Broadcast",
 };
 
-export default function WorkflowPage() {
+/** The Workflow tab: every account's timeline around "now" on the canvas (one loader). */
+export default async function WorkflowPage() {
+  const data = await loadWorkflow();
   return (
-    <PageHeader
-      title="Workflow"
-      stats={[
-        { value: 0, label: "scheduled" },
-        { value: "none", label: "Next post", labelFirst: true },
-        { value: 0, label: "posted today" },
-        { value: 0, label: "failed" },
-      ]}
-      actions={
-        <>
-          <Select label="Tag" defaultValue="all">
-            <option value="all">All tags</option>
-          </Select>
-          <Button variant="primary">
-            <Plus aria-hidden="true" />
-            Add content
-          </Button>
-        </>
-      }
+    <WorkflowView
+      columns={data.columns}
+      stats={data.stats}
+      now={data.now}
+      frozen={data.frozen}
+      timezone={data.timezone}
     />
   );
 }

@@ -33,6 +33,9 @@
   --hdr-ink-2: #b4c0d6;
   --hdr-line: #2a3a5e;
   --hdr-warn: #f3bd63;
+  --hdr-hover: rgba(255, 255, 255, 0.12);
+  --hdr-shadow: 0 6px 18px -8px rgba(20, 32, 58, 0.55);
+  --hdr-shadow-hover: 0 10px 24px -10px rgba(20, 32, 58, 0.6);
   --good: #17784a;
   --good-soft: #e8f5ee;
   --warn: #a5560a;
@@ -102,6 +105,9 @@
     --hdr-ink-2: #b4c0d6;
     --hdr-line: #36497a;
     --hdr-warn: #f3bd63;
+    --hdr-hover: rgba(255, 255, 255, 0.12);
+    --hdr-shadow: 0 6px 18px -8px rgba(0, 0, 0, 0.6);
+    --hdr-shadow-hover: 0 10px 24px -10px rgba(0, 0, 0, 0.7);
     --good: #58c48e;
     --good-soft: #15301f;
     --warn: #efb25a;
@@ -149,6 +155,9 @@
   --hdr-ink-2: #b4c0d6;
   --hdr-line: #36497a;
   --hdr-warn: #f3bd63;
+  --hdr-hover: rgba(255, 255, 255, 0.12);
+  --hdr-shadow: 0 6px 18px -8px rgba(0, 0, 0, 0.6);
+  --hdr-shadow-hover: 0 10px 24px -10px rgba(0, 0, 0, 0.7);
   --good: #58c48e;
   --good-soft: #15301f;
   --warn: #efb25a;

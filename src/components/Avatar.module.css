@@ -1,0 +1,33 @@
+.avatar {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: var(--avatar-size, 36px);
+  height: var(--avatar-size, 36px);
+  border-radius: 50%;
+  background: var(--avatar-bg, var(--avatar-6));
+  color: var(--on-avatar);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.badge {
+  position: absolute;
+  right: -5px;
+  bottom: -4px;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+.badge svg {
+  width: 11px;
+  height: 11px;
+  stroke-width: 2;
+}

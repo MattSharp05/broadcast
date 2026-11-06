@@ -13,7 +13,8 @@ export interface SandboxSeed {
   /** IANA timezone for the Sandbox's slot maths and display. */
   timezone: string;
   brands: Insert<"brands">[];
-  accounts: Insert<"social_accounts">[];
+  /** `created_at` may be set: the canvas shows accounts in the order they were added. */
+  accounts: (Insert<"social_accounts"> & { created_at?: string })[];
   fakeAccounts: Insert<"fake_accounts">[];
   /** The fake provider's record of already-published posts (so their stats can be fetched). */
   fakeContainers: Insert<"fake_containers">[];

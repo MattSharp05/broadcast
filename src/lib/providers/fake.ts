@@ -335,7 +335,7 @@ export function createFakeProvider({ store, now }: FakeProviderDeps): SocialProv
     async getContainerStatus(ctx, containerId): Promise<ContainerStatus> {
       const state = await guard(ctx);
       const c = await container(containerId, ctx.accountId);
-      if (c.mediaId) return { state: "finished" };
+      if (c.mediaId) return { state: "published" };
       if (await fails(state, ["aspect_ratio"])) {
         return { state: "error", error: errorFor("aspect_ratio") };
       }

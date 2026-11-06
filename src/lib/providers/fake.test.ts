@@ -69,6 +69,8 @@ describe("fake provider: container progression", () => {
     expect(first.permalink).toContain("/codingjourney/reel/");
     // Publishing again returns the same media: never posted twice.
     expect(await provider.publishContainer(ctx, containerId)).toEqual(first);
+    // And the container now reports that it is published.
+    expect(await provider.getContainerStatus(ctx, containerId)).toEqual({ state: "published" });
   });
 
   it("refuses to publish a container that is still processing", async () => {
@@ -129,9 +131,9 @@ describe("fake provider: quota and insights", () => {
     const { provider, advance } = setup();
     const { media } = await publishOne(provider);
     advance(3_600_000);
-    const hour1 = await provider.getMediaInsights(ctx, media.mediaId);
+    const hour1 = await provider.getMediaInsights(ctx, media.mediaId ?? "");
     advance(47 * 3_600_000);
-    const hour48 = await provider.getMediaInsights(ctx, media.mediaId);
+    const hour48 = await provider.getMediaInsights(ctx, media.mediaId ?? "");
     expect(hour48.views).toBeGreaterThan(hour1.views);
     expect(hour48.likes).toBeGreaterThanOrEqual(hour1.likes);
     expect(fakeInsights("m1", 1000, 10)).toEqual(fakeInsights("m1", 1000, 10));

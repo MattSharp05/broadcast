@@ -1,8 +1,12 @@
 import { CONNECT_ERRORS, requiredScopes } from "@/lib/domain/connect";
 import {
   ProviderError,
+  type ContainerStatus,
   type Profile,
   type ProviderAccount,
+  type PublishHint,
+  type PublishedMedia,
+  type PublishingQuota,
   type SocialProvider,
   type TokenSet,
 } from "./types";
@@ -12,8 +16,9 @@ import {
  * The only module that talks to Instagram (CLAUDE.md → Conventions).
  *
  * BC-9 implements the connection: authorize URL, code → short-lived → long-lived token, token
- * refresh and the profile. Publishing (BC-16) and stats (BC-17) come later; until then those
- * calls fail with `unsupported`.
+ * refresh and the profile. BC-16 adds publishing Reels: the publishing quota, the container
+ * (upload), its status, and media_publish. Stats (BC-17/BC-21) come later; until then
+ * `getMediaInsights` fails with `unsupported`.
  *
  * Tokens travel only between this server and Instagram. Error messages never include a URL or a
  * token (request URLs carry `access_token` as a query parameter, as Instagram's docs do).
@@ -27,6 +32,14 @@ const PROFILE_FIELDS = "user_id,username,account_type,followers_count,profile_pi
 /** Long-lived tokens last 60 days; used when Instagram leaves expires_in out. */
 const DEFAULT_TOKEN_SECONDS = 60 * 24 * 3600;
 const TIMEOUT_MS = 15_000;
+/** Instagram's documented limit of API-published posts per rolling 24 hours, if `config` is missing. */
+export const IG_DEFAULT_QUOTA = 100;
+const DEFAULT_QUOTA_SECONDS = 24 * 3600;
+/** Recent posts searched for a container whose publish answer was lost. */
+const RECENT_MEDIA_LIMIT = 25;
+/** Clock skew allowed between our container time and Instagram's post timestamp. */
+const RECOVERY_SKEW_MS = 5 * 60_000;
+const CONTAINER_LIFETIME_MS = 24 * 3_600_000;
 
 export interface InstagramConfig {
   appId: string;
@@ -38,6 +51,8 @@ export interface InstagramProviderDeps {
   now: () => Date;
   /** Injected for tests; MSW intercepts the global fetch anyway. */
   fetch?: typeof fetch;
+  /** Per-request timeout (default 15 s). */
+  timeoutMs?: number;
 }
 
 /** IG_APP_ID + IG_APP_SECRET from the environment, or null when either is missing. */
@@ -80,6 +95,21 @@ const errors = {
       userMessage: "Instagram is limiting requests for this account. Try again in an hour.",
       message: detail,
     }),
+  notConnected: () =>
+    new ProviderError({
+      code: "token_expired",
+      retryable: false,
+      userMessage:
+        "Broadcast doesn't know this Instagram account's id. Reconnect it to resume posting.",
+    }),
+  noPermission: (detail?: string) =>
+    new ProviderError({
+      code: "token_expired",
+      retryable: false,
+      userMessage:
+        "Broadcast isn't allowed to publish on this Instagram account. Reconnect it and allow publishing.",
+      message: detail,
+    }),
   unsupported: (what: string) =>
     new ProviderError({
       code: "unsupported",
@@ -89,23 +119,111 @@ const errors = {
 };
 
 interface GraphErrorBody {
-  error?: { message?: string; type?: string; code?: number; error_subtype?: number };
+  error?: {
+    message?: string;
+    type?: string;
+    code?: number;
+    error_subcode?: number;
+    error_subtype?: number;
+    error_user_msg?: string;
+  };
   error_type?: string;
   error_message?: string;
   code?: number;
+}
+
+/**
+ * What's wrong with a video, from Instagram's error subcode or message: the reasons the dashboard
+ * shows (DESIGN.md → Copy: what went wrong and how to fix it). Null when it isn't about the video.
+ */
+export function mediaProblem(
+  subcode: number | undefined,
+  text: string,
+  detail: string = text,
+): ProviderError | null {
+  const t = text.toLowerCase();
+  if (subcode === 2207009 || t.includes("aspect ratio")) {
+    return new ProviderError({
+      code: "invalid_media",
+      retryable: false,
+      userMessage:
+        "Instagram rejected the video's shape. Reels must be 9:16 (1080 × 1920); re-export it and add it again.",
+      message: detail,
+    });
+  }
+  if (/duration|too long|too short|length of the video/.test(t)) {
+    return new ProviderError({
+      code: "invalid_media",
+      retryable: false,
+      userMessage:
+        "Instagram rejected the video's length. Reels must be between 3 seconds and 15 minutes (up to 90 seconds for full reach).",
+      message: detail,
+    });
+  }
+  if (subcode === 2207026 || /video format|file format|codec/.test(t)) {
+    return new ProviderError({
+      code: "invalid_media",
+      retryable: false,
+      userMessage:
+        "Instagram couldn't read the video file. Export it as MP4 (H.264 video, AAC audio) and add it again.",
+      message: detail,
+    });
+  }
+  if (
+    subcode === 2207003 ||
+    subcode === 2207020 ||
+    subcode === 2207052 ||
+    /download|fetch|retriev/.test(t)
+  ) {
+    return new ProviderError({
+      code: "network",
+      retryable: true,
+      userMessage: "Instagram couldn't download the video. Broadcast will upload it again.",
+      message: detail,
+    });
+  }
+  return null;
 }
 
 /** Maps an Instagram error response to a ProviderError. */
 export function graphError(status: number, body: unknown): ProviderError {
   const b = (body ?? {}) as GraphErrorBody;
   const code = b.error?.code ?? b.code;
-  const detail = `Instagram ${status}: ${b.error?.message ?? b.error_message ?? "no message"}`;
+  const subcode = b.error?.error_subcode ?? b.error?.error_subtype;
+  const message = b.error?.message ?? b.error_message ?? "no message";
+  const detail = `Instagram ${status}: ${message}${subcode ? ` (${subcode})` : ""}`;
   if (code === 190 || (b.error?.type === "OAuthException" && status === 401)) {
     return errors.tokenExpired(detail);
   }
   if (code === 4 || code === 17 || code === 32 || code === 613 || status === 429) {
     return errors.rateLimited(detail);
   }
+  // "Maximum number of posts reached" (the 24-hour publishing limit).
+  if (subcode === 2207042) {
+    return new ProviderError({
+      code: "quota_exhausted",
+      retryable: true,
+      userMessage:
+        "This account has used its 24-hour Instagram publishing limit. Posting resumes when it frees up.",
+      message: detail,
+    });
+  }
+  // "Media not ready for publishing": the container is still processing.
+  if (code === 9007 || subcode === 2207027) {
+    return new ProviderError({
+      code: "not_ready",
+      retryable: true,
+      userMessage: "Instagram is still processing the video. Broadcast will try again shortly.",
+      message: detail,
+    });
+  }
+  // Missing permission (instagram_business_content_publish not granted).
+  if (code === 10 || code === 200) return errors.noPermission(detail);
+  const media =
+    status < 500
+      ? mediaProblem(subcode, `${message} ${b.error?.error_user_msg ?? ""}`, detail)
+      : null;
+  if (media) return media;
   if (status >= 500) {
     return new ProviderError({
       code: "network",
@@ -142,6 +260,13 @@ export function parseGraphJson(text: string): unknown {
   return JSON.parse(text.replace(/("(?:user_id|id)"\s*:\s*)(-?\d+)(?=\s*[,}\]])/g, '$1"$2"'));
 }
 
+/** Instagram timestamps look like 2026-11-06T10:00:00+0000. Epoch ms, or null. */
+function parseGraphTime(value: unknown): number | null {
+  if (typeof value !== "string") return null;
+  const t = Date.parse(value.replace(/([+-]\d{2})(\d{2})$/, "$1:$2"));
+  return Number.isNaN(t) ? null : t;
+}
+
 export function createInstagramProvider(deps: InstagramProviderDeps): SocialProvider {
   // Looked up per call (not captured once), so test interceptors installed later still apply.
   const doFetch: typeof fetch = (input, init) => (deps.fetch ?? globalThis.fetch)(input, init);
@@ -150,7 +275,10 @@ export function createInstagramProvider(deps: InstagramProviderDeps): SocialProv
   async function call(url: URL | string, init?: RequestInit): Promise<Record<string, unknown>> {
     let res: Response;
     try {
-      res = await doFetch(url, { ...init, signal: AbortSignal.timeout(TIMEOUT_MS) });
+      res = await doFetch(url, {
+        ...init,
+        signal: AbortSignal.timeout(deps.timeoutMs ?? TIMEOUT_MS),
+      });
     } catch {
       throw errors.network();
     }
@@ -196,6 +324,141 @@ export function createInstagramProvider(deps: InstagramProviderDeps): SocialProv
       accountType: asString(res.account_type),
       pictureUrl: asString(res.profile_picture_url),
     };
+  }
+
+  /** POST with form parameters (the caption can be long; it doesn't belong in the URL). */
+  function post(path: string, params: Record<string, string>): Promise<Record<string, unknown>> {
+    return call(new URL(path, IG_GRAPH), {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams(params),
+    });
+  }
+
+  function userId(account: ProviderAccount): string {
+    if (!account.platformUserId) throw errors.notConnected();
+    return account.platformUserId;
+  }
+
+  async function containerStatus(
+    account: ProviderAccount,
+    containerId: string,
+  ): Promise<ContainerStatus> {
+    const res = await call(
+      graphUrl(`/${IG_GRAPH_VERSION}/${encodeURIComponent(containerId)}`, {
+        fields: "status_code,status",
+        access_token: account.accessToken,
+      }),
+    );
+    const code = asString(res.status_code);
+    const text = asString(res.status) ?? "";
+    switch (code) {
+      case "IN_PROGRESS":
+        return { state: "in_progress" };
+      case "FINISHED":
+        return { state: "finished" };
+      case "PUBLISHED":
+        return { state: "published" };
+      case "EXPIRED":
+        // Not published within 24 hours. A fresh upload fixes it.
+        return {
+          state: "error",
+          error: new ProviderError({
+            code: "network",
+            retryable: true,
+            userMessage:
+              "Instagram's copy of the video expired before it was published. Broadcast will upload it again.",
+            message: `Container ${containerId} EXPIRED: ${text}`,
+          }),
+        };
+      case "ERROR":
+        return {
+          state: "error",
+          error:
+            mediaProblem(
+              Number(/\b(22\d{5})\b/.exec(text)?.[1]) || undefined,
+              text,
+              `Container ${containerId} ERROR: ${text}`,
+            ) ??
+            new ProviderError({
+              code: "invalid_media",
+              retryable: false,
+              userMessage: text
+                ? `Instagram couldn't process the video: ${text.replace(/^Error:\s*/i, "")}`
+                : "Instagram couldn't process the video. Check it plays and is a 9:16 MP4, then add it again.",
+              message: `Container ${containerId} ERROR: ${text}`,
+            }),
+        };
+      default:
+        throw errors.rejected(
+          `Container ${containerId}: unexpected status_code ${code ?? "none"}.`,
+        );
+    }
+  }
+
+  async function permalinkOf(account: ProviderAccount, mediaId: string): Promise<string | null> {
+    try {
+      const res = await call(
+        graphUrl(`/${IG_GRAPH_VERSION}/${encodeURIComponent(mediaId)}`, {
+          fields: "permalink",
+          access_token: account.accessToken,
+        }),
+      );
+      return asString(res.permalink);
+    } catch {
+      // The post is live either way; a missing link mustn't make anyone publish it again.
+      return null;
+    }
+  }
+
+  /**
+   * Finds the post an already-published container became: Instagram doesn't link a container to
+   * its media, so look through the account's recent Reels for the same caption, posted no earlier
+   * than the container was made. The oldest match wins.
+   */
+  async function findPublished(
+    account: ProviderAccount,
+    hint: PublishHint | undefined,
+  ): Promise<PublishedMedia> {
+    const none: PublishedMedia = { mediaId: null, permalink: null };
+    // Without the container's time a match could be an older post with the same caption.
+    if (!hint?.containerCreatedAt) return none;
+    let res: Record<string, unknown>;
+    try {
+      res = await call(
+        graphUrl(`/${IG_GRAPH_VERSION}/${userId(account)}/media`, {
+          fields: "id,caption,permalink,timestamp,media_product_type",
+          limit: String(RECENT_MEDIA_LIMIT),
+          access_token: account.accessToken,
+        }),
+      );
+    } catch {
+      return none;
+    }
+    const since = hint.containerCreatedAt.getTime() - RECOVERY_SKEW_MS;
+    // A container can only be published within 24 hours of being made.
+    const until = hint.containerCreatedAt.getTime() + CONTAINER_LIFETIME_MS + RECOVERY_SKEW_MS;
+    const items = Array.isArray(res.data) ? (res.data as Record<string, unknown>[]) : [];
+    const matches = items
+      .map((m) => ({
+        id: asString(m.id),
+        caption: typeof m.caption === "string" ? m.caption : "",
+        permalink: asString(m.permalink),
+        at: parseGraphTime(m.timestamp),
+        type: asString(m.media_product_type),
+      }))
+      .filter(
+        (m) =>
+          m.id &&
+          (m.type === null || m.type === "REELS") &&
+          m.caption.trim() === hint.caption.trim() &&
+          m.at !== null &&
+          m.at >= since &&
+          m.at <= until,
+      )
+      .sort((a, b) => (a.at ?? 0) - (b.at ?? 0));
+    const found = matches[0];
+    return found ? { mediaId: found.id, permalink: found.permalink } : none;
   }
 
   return {
@@ -278,17 +541,77 @@ export function createInstagramProvider(deps: InstagramProviderDeps): SocialProv
       return (await getProfile(account)).followers;
     },
 
-    getPublishingQuota() {
-      return Promise.reject(errors.unsupported("Checking the publishing limit"));
+    async getPublishingQuota(account): Promise<PublishingQuota> {
+      const res = await call(
+        graphUrl(`/${IG_GRAPH_VERSION}/${userId(account)}/content_publishing_limit`, {
+          fields: "quota_usage,config",
+          access_token: account.accessToken,
+        }),
+      );
+      const entry = (Array.isArray(res.data) ? res.data[0] : null) as
+        | { quota_usage?: unknown; config?: { quota_total?: unknown; quota_duration?: unknown } }
+        | null
+        | undefined;
+      if (!entry || typeof entry.quota_usage !== "number") {
+        throw errors.rejected("Publishing limit response without quota_usage.");
+      }
+      const total = entry.config?.quota_total;
+      const seconds = entry.config?.quota_duration;
+      return {
+        used: entry.quota_usage,
+        limit: typeof total === "number" ? total : IG_DEFAULT_QUOTA,
+        windowHours: Math.round(
+          (typeof seconds === "number" && seconds > 0 ? seconds : DEFAULT_QUOTA_SECONDS) / 3600,
+        ),
+      };
     },
-    createReelContainer() {
-      return Promise.reject(errors.unsupported("Publishing"));
+
+    async createReelContainer(account, { videoUrl, caption }) {
+      const res = await post(`/${IG_GRAPH_VERSION}/${userId(account)}/media`, {
+        media_type: "REELS",
+        video_url: videoUrl,
+        caption,
+        share_to_feed: "true",
+        access_token: account.accessToken,
+      });
+      const containerId = asString(res.id);
+      if (!containerId) throw errors.rejected("Container response without an id.");
+      return { containerId };
     },
-    getContainerStatus() {
-      return Promise.reject(errors.unsupported("Publishing"));
-    },
-    publishContainer() {
-      return Promise.reject(errors.unsupported("Publishing"));
+
+    getContainerStatus: containerStatus,
+
+    async publishContainer(account, containerId, hint): Promise<PublishedMedia> {
+      // A container is published at most once: if it already was (a lost answer), find that post.
+      const before = await containerStatus(account, containerId);
+      if (before.state === "published") return findPublished(account, hint);
+      if (before.state === "in_progress") {
+        throw new ProviderError({
+          code: "not_ready",
+          retryable: true,
+          userMessage: "Instagram is still processing the video. Broadcast will try again shortly.",
+        });
+      }
+      if (before.state === "error") throw before.error;
+
+      let res: Record<string, unknown>;
+      try {
+        res = await post(`/${IG_GRAPH_VERSION}/${userId(account)}/media_publish`, {
+          creation_id: containerId,
+          access_token: account.accessToken,
+        });
+      } catch (err) {
+        // The call may have gone through even though it failed here (a timeout): ask again.
+        const after = await containerStatus(account, containerId).catch(() => null);
+        if (after?.state === "published") return findPublished(account, hint);
+        throw err;
+      }
+      const mediaId = asString(res.id);
+      if (!mediaId) {
+        // Instagram accepted it; without an id, find the post the same way as after a lost answer.
+        return findPublished(account, hint);
+      }
+      return { mediaId, permalink: await permalinkOf(account, mediaId) };
     },
     getMediaInsights() {
       return Promise.reject(errors.unsupported("Collecting stats"));

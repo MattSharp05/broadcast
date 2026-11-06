@@ -1,0 +1,12 @@
+{
+  "error": {
+    "message": "Invalid parameter",
+    "type": "OAuthException",
+    "code": 100,
+    "error_subcode": 2207009,
+    "is_transient": false,
+    "error_user_title": "Aspect ratio not supported",
+    "error_user_msg": "The submitted video's aspect ratio is not supported.",
+    "fbtrace_id": "AFixtureTraceId"
+  }
+}

@@ -11,9 +11,13 @@ import {
   fixtures,
   instagramHandlers,
 } from "../../../tests/fixtures/instagram/handlers";
+import { publishFixtures } from "../../../tests/fixtures/instagram/publish/server";
 import {
+  IG_DEFAULT_QUOTA,
   IG_GRAPH_VERSION,
   createInstagramProvider,
+  graphError,
+  mediaProblem,
   instagramConfigFromEnv,
   parseGraphJson,
 } from "./instagram";
@@ -229,12 +233,86 @@ describe("instagram: getProfile", () => {
   });
 });
 
-describe("instagram: not built yet", () => {
-  it("publishing and stats fail as unsupported until BC-16/BC-17", async () => {
-    expect((await rejection(provider.getPublishingQuota(account))).code).toBe("unsupported");
+describe("instagram: publishing", () => {
+  const PUBLISH = "https://graph.instagram.com/:version/:user/content_publishing_limit";
+
+  it("reads the publishing quota (usage, total, window)", async () => {
+    server.use(
+      http.get(PUBLISH, ({ params }) => {
+        expect(params.user).toBe(FIXTURE_ME.user_id);
+        return HttpResponse.json(publishFixtures.contentPublishingLimit);
+      }),
+    );
+    expect(await provider.getPublishingQuota(account)).toEqual({
+      used: 2,
+      limit: 100,
+      windowHours: 24,
+    });
+  });
+
+  it("assumes Instagram's documented limit when config is missing", async () => {
+    server.use(http.get(PUBLISH, () => HttpResponse.json({ data: [{ quota_usage: 7 }] })));
+    expect(await provider.getPublishingQuota(account)).toEqual({
+      used: 7,
+      limit: IG_DEFAULT_QUOTA,
+      windowHours: 24,
+    });
+  });
+
+  it("needs the account's Instagram user id", async () => {
+    const err = await rejection(provider.getPublishingQuota({ ...account, platformUserId: null }));
+    expect(err.code).toBe("token_expired");
+    expect(err.userMessage).toMatch(/Reconnect/);
+  });
+
+  it("maps every container status_code", async () => {
+    const bodies: Record<string, unknown> = {
+      a: publishFixtures.containerInProgress,
+      b: publishFixtures.containerFinished,
+      c: publishFixtures.containerPublished,
+    };
+    server.use(
+      http.get("https://graph.instagram.com/:version/:id", ({ params }) =>
+        HttpResponse.json(bodies[String(params.id)] ?? publishFixtures.containerExpired),
+      ),
+    );
+    expect(await provider.getContainerStatus(account, "a")).toEqual({ state: "in_progress" });
+    expect(await provider.getContainerStatus(account, "b")).toEqual({ state: "finished" });
+    expect(await provider.getContainerStatus(account, "c")).toEqual({ state: "published" });
+    const expired = await provider.getContainerStatus(account, "d");
+    expect(expired.state).toBe("error");
+    if (expired.state === "error") {
+      expect(expired.error.retryable).toBe(true);
+      expect(expired.error.userMessage).toMatch(/expired/);
+    }
+  });
+
+  it("maps publishing errors to reasons people can act on", () => {
+    expect(graphError(400, publishFixtures.errorMaxPosts).code).toBe("quota_exhausted");
+    expect(graphError(400, publishFixtures.errorNotReady).code).toBe("not_ready");
+    const aspect = graphError(400, publishFixtures.errorAspectRatio);
+    expect(aspect.code).toBe("invalid_media");
+    expect(aspect.retryable).toBe(false);
+    expect(aspect.userMessage).toMatch(/9:16/);
+    expect(graphError(403, publishFixtures.errorNoPermission).code).toBe("token_expired");
+    // A missing object is not a video problem.
     expect(
-      (await rejection(provider.createReelContainer(account, { videoUrl: "x", caption: "" }))).code,
-    ).toBe("unsupported");
+      graphError(400, {
+        error: { message: "Unsupported get request", code: 100, error_subcode: 33 },
+      }).code,
+    ).toBe("unknown");
+  });
+
+  it("names a too-long video and an unreadable file", () => {
+    expect(mediaProblem(undefined, "The video duration is too long")?.userMessage).toMatch(
+      /length/,
+    );
+    expect(mediaProblem(2207026, "Unsupported")?.userMessage).toMatch(/MP4/);
+    expect(mediaProblem(undefined, "Something else")).toBeNull();
+  });
+
+  it("stats aren't built yet (BC-17)", async () => {
+    expect((await rejection(provider.getMediaInsights(account, "m"))).code).toBe("unsupported");
   });
 });
 

@@ -54,6 +54,8 @@ test("at 390px the board scrolls inside its own container, not the page", async 
   expect(sizes.mainScroll).toBeLessThanOrEqual(0);
 
   // The last column can be reached by scrolling the board.
-  await board.evaluate((el) => el.scrollTo({ left: el.scrollWidth }));
+  await board.evaluate((el) => {
+    el.scrollTo({ left: el.scrollWidth });
+  });
   await expect(board.getByRole("heading", { name: /Ready for the queue/ })).toBeInViewport();
 });

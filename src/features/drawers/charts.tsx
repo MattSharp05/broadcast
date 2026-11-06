@@ -56,7 +56,10 @@ export function RefreshChart({ snapshots }: { snapshots: readonly StatSnapshot[]
   const slot = (BW - PAD_L * 2) / Math.max(1, snapshots.length);
   const base = BH - PAD_B;
   const label = snapshots
-    .map((s) => `${STAT_OFFSET_LABELS[s.offset]}: ${s.views ?? (s.missed ? "missed" : "not yet")}`)
+    .map(
+      (s) =>
+        `${STAT_OFFSET_LABELS[s.offset]}: ${s.views ?? (s.missed ? "missed" : s.taken ? "not reported" : "not yet")}`,
+    )
     .join(", ");
   return (
     <svg
@@ -74,7 +77,7 @@ export function RefreshChart({ snapshots }: { snapshots: readonly StatSnapshot[]
         const name = STAT_OFFSET_LABELS[s.offset];
         if (s.views === null) {
           return (
-            <g key={s.offset} data-bar={s.missed ? "missed" : "missing"}>
+            <g key={s.offset} data-bar={s.missed ? "missed" : s.taken ? "unreported" : "missing"}>
               <rect className={styles.missing} x={x} y={base - 20} width={w} height={20} rx={3} />
               <text x={x + w / 2} y={BH - 8} textAnchor="middle">
                 {name}

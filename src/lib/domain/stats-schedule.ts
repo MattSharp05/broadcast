@@ -30,6 +30,8 @@ export function statDueAt(publishedAt: Date, offset: StatOffset): Date {
 /** A post's existing snapshot row. */
 export interface StatRowState {
   offset: StatOffset;
+  /** When the row says it is due (it wins over publishedAt + offset, so the claim agrees). */
+  dueAt?: Date;
   /** Filled in (or marked missed) at this time; null while still to come. */
   takenAt: Date | null;
 }
@@ -42,18 +44,22 @@ export interface StatsPlan {
 }
 
 /**
- * Which snapshots are due for a post at `now`. An offset with no row counts as not taken (the step
- * creates it). An offset whose time hasn't come is never due.
+ * Which snapshots are due for a post at `now`. A row's own due time counts; an offset with no row
+ * is due at publishedAt + offset (the step creates the row) and never due without publishedAt.
+ * An offset whose time hasn't come is never due.
  */
 export function dueSnapshots(input: {
-  publishedAt: Date;
+  publishedAt: Date | null;
   rows: readonly StatRowState[];
   now: Date;
 }): StatsPlan {
-  const taken = new Set(input.rows.filter((r) => r.takenAt !== null).map((r) => r.offset));
-  const due = STAT_OFFSETS.filter(
-    (o) => !taken.has(o) && statDueAt(input.publishedAt, o).getTime() <= input.now.getTime(),
-  );
+  const rows = new Map(input.rows.map((r) => [r.offset, r]));
+  const due = STAT_OFFSETS.filter((o) => {
+    const row = rows.get(o);
+    if (row && row.takenAt !== null) return false;
+    const at = row?.dueAt ?? (input.publishedAt ? statDueAt(input.publishedAt, o) : null);
+    return at !== null && at.getTime() <= input.now.getTime();
+  });
   const take = due.at(-1) ?? null;
   return { take, missed: due.slice(0, -1) };
 }

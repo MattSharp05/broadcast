@@ -75,6 +75,19 @@ describe("dueSnapshots", () => {
     });
   });
 
+  it("a row's own due time wins (so the step agrees with the claim), even without publishedAt", () => {
+    const rows: StatRowState[] = [
+      { offset: "1h", dueAt: at(3), takenAt: null },
+      { offset: "6h", dueAt: at(8), takenAt: null },
+    ];
+    expect(dueSnapshots({ publishedAt: PUBLISHED, rows, now: at(2) }).take).toBeNull();
+    expect(dueSnapshots({ publishedAt: null, rows, now: at(3) })).toEqual({
+      take: "1h",
+      missed: [],
+    });
+    expect(dueSnapshots({ publishedAt: null, rows: [], now: at(500) }).take).toBeNull();
+  });
+
   it("all five taken: nothing left", () => {
     const rows = ALL.map((r) => ({ ...r, takenAt: at(200) }));
     expect(dueSnapshots({ publishedAt: PUBLISHED, rows, now: at(500) })).toEqual({

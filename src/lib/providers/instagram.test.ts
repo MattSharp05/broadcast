@@ -16,6 +16,7 @@ import {
   FULL_MEDIA,
   NO_SHARES_MEDIA,
   RATE_LIMITED_MEDIA,
+  SHARES_REFUSED_MEDIA,
   statsHandlers,
 } from "../../../tests/fixtures/instagram/stats/server";
 import {
@@ -350,8 +351,20 @@ describe("instagram: getMediaInsights (MSW)", () => {
     expect(expired).toMatchObject({ code: "token_expired", retryable: false });
   });
 
-  it("a deleted post fails without retrying", async () => {
+  it("a metric Instagram refuses for the media type (error 100) is null; the others still come", async () => {
+    expect(await provider.getMediaInsights(account, SHARES_REFUSED_MEDIA)).toEqual({
+      views: 1520,
+      reach: 1184,
+      likes: 96,
+      comments: 7,
+      shares: null,
+      saves: 21,
+    });
+  });
+
+  it("a deleted post is not_found, without retrying", async () => {
     expect(await rejection(provider.getMediaInsights(account, "999"))).toMatchObject({
+      code: "not_found",
       retryable: false,
     });
   });

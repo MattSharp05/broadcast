@@ -61,6 +61,8 @@ export interface StatSnapshot {
   views: number | null;
   /** The refresh came due while the scheduler was down and was skipped. */
   missed: boolean;
+  /** The refresh happened (its views may still be null: not reported). */
+  taken: boolean;
 }
 
 export interface PostDetail {
@@ -131,6 +133,7 @@ export function postDetail(post: PostDetailInput, rows: readonly PostMetricRow[]
       offset,
       views: taken.get(offset)?.views ?? null,
       missed: missed.has(offset),
+      taken: taken.has(offset),
     })),
     nextRefresh: published
       ? (STAT_OFFSETS.find((o) => !taken.has(o) && !missed.has(o)) ?? null)

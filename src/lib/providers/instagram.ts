@@ -120,7 +120,27 @@ const errors = {
         "Broadcast isn't allowed to publish on this Instagram account. Reconnect it and allow publishing.",
       message: detail,
     }),
+  mediaGone: () =>
+    new ProviderError({
+      code: "not_found",
+      retryable: false,
+      userMessage: "Instagram no longer has this post, so it has no stats.",
+    }),
 };
+
+/** "Unsupported get request" (100/33): the object doesn't exist (e.g. a deleted post). */
+function isDeletedMedia(err: unknown): boolean {
+  return err instanceof ProviderError && /^Instagram 400: .*\(33\)$/.test(err.message);
+}
+
+/** Error 100 about a metric: it isn't available for this media type. */
+function isUnsupportedMetric(err: unknown): boolean {
+  return (
+    err instanceof ProviderError &&
+    err.code !== "token_expired" &&
+    /^Instagram 400: .*\bmetric/i.test(err.message)
+  );
+}
 
 interface GraphErrorBody {
   error?: {
@@ -655,14 +675,33 @@ export function createInstagramProvider(deps: InstagramProviderDeps): SocialProv
       return { mediaId, permalink: await permalinkOf(account, mediaId) };
     },
     async getMediaInsights(account, mediaId): Promise<MediaInsights> {
-      const res = await call(
-        graphUrl(`/${IG_GRAPH_VERSION}/${encodeURIComponent(mediaId)}/insights`, {
-          metric: Object.values(IG_INSIGHT_METRICS).join(","),
-          access_token: account.accessToken,
-        }),
-      );
-      if (!Array.isArray(res.data)) throw errors.rejected("Insights response without data.");
-      return parseInsights(res.data);
+      const insights = (metrics: readonly string[]) =>
+        call(
+          graphUrl(`/${IG_GRAPH_VERSION}/${encodeURIComponent(mediaId)}/insights`, {
+            metric: metrics.join(","),
+            access_token: account.accessToken,
+          }),
+        ).then((res) => {
+          if (!Array.isArray(res.data)) throw errors.rejected("Insights response without data.");
+          return res.data as unknown[];
+        });
+      try {
+        return parseInsights(await insights(Object.values(IG_INSIGHT_METRICS)));
+      } catch (err) {
+        if (isDeletedMedia(err)) throw errors.mediaGone();
+        if (!isUnsupportedMetric(err)) throw err;
+      }
+      // Instagram refuses the whole request when one metric doesn't apply to this media type:
+      // ask for each metric on its own and leave out (null) the ones it refuses.
+      const data: unknown[] = [];
+      for (const metric of Object.values(IG_INSIGHT_METRICS)) {
+        try {
+          data.push(...(await insights([metric])));
+        } catch (err) {
+          if (!isUnsupportedMetric(err)) throw err;
+        }
+      }
+      return parseInsights(data);
     },
   };
 }

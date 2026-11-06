@@ -22,13 +22,23 @@ export const RATE_LIMITED_MEDIA = "18034567890123458";
 const GRAPH = "https://graph.instagram.com";
 const VALID_TOKENS = new Set([FIXTURE_TOKENS.long, FIXTURE_TOKENS.refreshed]);
 
+/** Media Instagram refuses `shares` for: the whole request fails with #100, as Instagram does. */
+export const SHARES_REFUSED_MEDIA = "18034567890123459";
+
+const METRICS = ["views", "reach", "likes", "comments", "shares", "saved"];
+
+function only(body: { data: { name: string }[] }, metrics: readonly string[]) {
+  return { data: body.data.filter((d) => metrics.includes(d.name)) };
+}
+
 export const statsHandlers = [
   http.get(`${GRAPH}/:version/:mediaId/insights`, ({ request, params }) => {
     const q = new URL(request.url).searchParams;
     if (!VALID_TOKENS.has(q.get("access_token") ?? "")) {
       return HttpResponse.json(errorTokenExpired, { status: 400 });
     }
-    if (q.get("metric") !== "views,reach,likes,comments,shares,saved") {
+    const metrics = (q.get("metric") ?? "").split(",");
+    if (metrics.some((m) => !METRICS.includes(m))) {
       return HttpResponse.json(
         { error: { message: "(#100) Invalid metric", type: "OAuthException", code: 100 } },
         { status: 400 },
@@ -36,9 +46,24 @@ export const statsHandlers = [
     }
     switch (params.mediaId) {
       case FULL_MEDIA:
-        return HttpResponse.json(mediaInsights);
+        return HttpResponse.json(only(mediaInsights, metrics));
       case NO_SHARES_MEDIA:
-        return HttpResponse.json(mediaInsightsNoShares);
+        return HttpResponse.json(only(mediaInsightsNoShares, metrics));
+      case SHARES_REFUSED_MEDIA:
+        if (metrics.includes("shares")) {
+          return HttpResponse.json(
+            {
+              error: {
+                message:
+                  "(#100) The Media Insights API does not support the shares metric for this media product type.",
+                type: "OAuthException",
+                code: 100,
+              },
+            },
+            { status: 400 },
+          );
+        }
+        return HttpResponse.json(only(mediaInsights, metrics));
       case RATE_LIMITED_MEDIA:
         return HttpResponse.json(errorRateLimited, { status: 400 });
       default:

@@ -59,7 +59,7 @@ interface LoadedPost {
   media_ig_id: string | null;
   published_at: string | null;
   social_accounts: { handle: string; platform: ProviderPlatform; platform_user_id: string | null };
-  post_metrics: { stat_offset: StatOffset; taken_at: string | null }[];
+  post_metrics: { stat_offset: StatOffset; due_at: string; taken_at: string | null }[];
 }
 
 interface AccountRow {
@@ -145,15 +145,16 @@ async function backOff(db: Db, c: Claim, seconds: number, realNow: Date): Promis
 async function writeSnapshots(
   db: Db,
   post: LoadedPost,
-  publishedAt: Date,
   writes: ReadonlyMap<StatOffset, MetricWrite>,
   takenAt: Date,
 ): Promise<void> {
+  const dueAt = new Map(post.post_metrics.map((m) => [m.stat_offset, m.due_at]));
+  const publishedAt = new Date(post.published_at ?? takenAt);
   const rows = [...writes].map(([offset, w]) => ({
     workspace_id: post.workspace_id,
     post_id: post.id,
     stat_offset: offset,
-    due_at: statDueAt(publishedAt, offset).toISOString(),
+    due_at: dueAt.get(offset) ?? statDueAt(publishedAt, offset).toISOString(),
     taken_at: takenAt.toISOString(),
     ...w,
   }));
@@ -194,7 +195,7 @@ async function loadPosts(db: Db, claims: readonly Claim[]): Promise<Map<string, 
       .from("posts")
       .select(
         "id, workspace_id, account_id, media_ig_id, published_at, " +
-          "social_accounts(handle, platform, platform_user_id), post_metrics(stat_offset, taken_at)",
+          "social_accounts(handle, platform, platform_user_id), post_metrics(stat_offset, due_at, taken_at)",
       )
       .eq("workspace_id", workspaceId)
       .in("id", ids)
@@ -213,6 +214,8 @@ interface Run {
   settings: Map<string, WorkspaceSettings>;
   providerAccount: (account: AccountRow) => Promise<ProviderAccount>;
   fakeStore: ReturnType<typeof createDbFakeStore>;
+  /** Accounts Instagram rate-limited this tick: left alone for the rest of it. */
+  limited: Set<string>;
 }
 
 /** ms left in the tick's budget. */
@@ -249,29 +252,25 @@ async function collectSnapshots(run: Run, summary: StatsSummary): Promise<void> 
   for (const [id, s] of await loadSettings(db, [...new Set(claims.map((c) => c.workspaceId))])) {
     run.settings.set(id, s);
   }
-  const limited = new Set<string>();
-
   for (const c of claims) {
     const post = posts.get(c.postId);
-    if (!post || limited.has(post.account_id) || remaining(ctx) < MIN_CALL_MS) {
+    if (!post || run.limited.has(post.account_id) || remaining(ctx) < MIN_CALL_MS) {
       await release(db, c);
       summary.released += 1;
       continue;
     }
     const ws = workspaceOf(run, c.workspaceId);
     const now = ws.now();
-    const publishedAt = post.published_at ? new Date(post.published_at) : null;
-    const plan = publishedAt
-      ? dueSnapshots({
-          publishedAt,
-          rows: post.post_metrics.map((m) => ({
-            offset: m.stat_offset,
-            takenAt: m.taken_at ? new Date(m.taken_at) : null,
-          })),
-          now,
-        })
-      : null;
-    if (!publishedAt || !plan?.take) {
+    const plan = dueSnapshots({
+      publishedAt: post.published_at ? new Date(post.published_at) : null,
+      rows: post.post_metrics.map((m) => ({
+        offset: m.stat_offset,
+        dueAt: new Date(m.due_at),
+        takenAt: m.taken_at ? new Date(m.taken_at) : null,
+      })),
+      now,
+    });
+    if (!plan.take) {
       await release(db, c);
       summary.released += 1;
       continue;
@@ -300,7 +299,6 @@ async function collectSnapshots(run: Run, summary: StatsSummary): Promise<void> 
         post.media_ig_id,
       );
       writes.set(plan.take, { ...insights, missed: false });
-      summary.collected += 1;
     } catch (err) {
       if (err instanceof ProviderError && err.code === "not_found") {
         // The post is gone (or has no id): its due snapshots will never come. Mark them missed.
@@ -314,7 +312,7 @@ async function collectSnapshots(run: Run, summary: StatsSummary): Promise<void> 
           console.error(`collectStats: post ${post.id}:`, err);
         }
         if (err instanceof ProviderError && err.code === "quota_exhausted") {
-          limited.add(post.account_id);
+          run.limited.add(post.account_id);
         }
         await logFailure(db, "stats", post.workspace_id, post.account_id, post.id, errorText(err));
         await backOff(db, c, backoffFor(err), ctx.realNow());
@@ -322,7 +320,8 @@ async function collectSnapshots(run: Run, summary: StatsSummary): Promise<void> 
         continue;
       }
     }
-    await writeSnapshots(db, post, publishedAt, writes, now);
+    await writeSnapshots(db, post, writes, now);
+    if (!writes.get(plan.take)?.missed) summary.collected += 1;
     summary.missed += plan.missed.length;
     await release(db, c);
   }
@@ -379,7 +378,7 @@ async function collectFollowers(run: Run, summary: StatsSummary): Promise<void> 
   );
   const waiting = new Set(failed.data.map((f) => f.account_id));
   const due = accounts.data
-    .filter((a) => !done.has(a.id) && !waiting.has(a.id))
+    .filter((a) => !done.has(a.id) && !waiting.has(a.id) && !run.limited.has(a.id))
     .slice(0, FOLLOWERS_BATCH);
 
   for (const a of due) {
@@ -429,6 +428,7 @@ export function createCollectStats(deps: CollectStatsDeps = {}): Step {
         settings: new Map(),
         providerAccount: tokenReader(ctx.db, tokenKey),
         fakeStore: createDbFakeStore(ctx.db),
+        limited: new Set(),
       };
       const summary: StatsSummary = {
         claimed: 0,

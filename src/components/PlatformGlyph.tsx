@@ -1,7 +1,7 @@
 import type { SVGProps } from "react";
 
 interface PlatformGlyphProps extends SVGProps<SVGSVGElement> {
-  /** `instagram`, `fake` (drawn as Instagram: it mimics it) or `tiktok`. */
+  /** `instagram`, `fake` (drawn as Instagram: it mimics it), `tiktok` or `youtube`. */
   platform: string;
 }
 
@@ -20,7 +20,12 @@ export function PlatformGlyph({ platform, ...rest }: PlatformGlyphProps) {
       aria-hidden="true"
       {...rest}
     >
-      {platform === "tiktok" ? (
+      {platform === "youtube" ? (
+        <>
+          <rect x="2.5" y="5" width="19" height="14" rx="4" />
+          <path d="m10 9 5 3-5 3z" />
+        </>
+      ) : platform === "tiktok" ? (
         <>
           <path d="M14 3v11.5a3.5 3.5 0 1 1-3.5-3.5" />
           <path d="M14 3c.4 2.6 2.2 4.4 5 4.6" />

@@ -6,11 +6,23 @@
  *   BroadcastChannel named CONNECT_CHANNEL (works even when the provider's site cut the opener
  *   link), then closes itself if it is the wizard's popup.
  * - The wizard opens the popup with the window name CONNECT_WINDOW_NAME.
+ * - When the popup is blocked, the wizard connects in its own tab instead: it saves where to come
+ *   back to under CONNECT_RETURN_KEY (sessionStorage), and the done page stores its message under
+ *   CONNECT_RESULT_KEY and goes back there, where the wizard picks it up at the Connect step.
  */
 
 export const CONNECT_MESSAGE_TYPE = "broadcast:connect";
 export const CONNECT_CHANNEL = "broadcast-connect";
 export const CONNECT_WINDOW_NAME = "broadcast-connect";
+/** sessionStorage: the same-site path the done page returns to (same-tab connect). */
+export const CONNECT_RETURN_KEY = "broadcast:connect-return";
+/** sessionStorage: the done page's ConnectMessage, for the page it returned to. */
+export const CONNECT_RESULT_KEY = "broadcast:connect-result";
+
+/** A return path the done page may follow: same-site paths only (never `//host` or a URL). */
+export function isReturnPath(value: string | null): value is string {
+  return typeof value === "string" && /^\/(?![/\\])/.test(value);
+}
 
 export interface ConnectMessage {
   type: typeof CONNECT_MESSAGE_TYPE;

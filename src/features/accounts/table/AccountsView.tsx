@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDown, ArrowUp, ChevronsUpDown, Plus, Search } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, ChevronsUpDown, Plus, Search } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -32,6 +32,8 @@ import {
   type StatusFilter,
 } from "@/lib/domain/accounts";
 import { ALL_TAGS, tagCounts, tagsOf } from "@/lib/domain/tags";
+import { AddAccountWizard } from "../wizard/AddAccountWizard";
+import { hasConnectResult } from "../wizard/draft-storage";
 import { AccountRowView } from "./AccountRowView";
 import styles from "./accounts.module.css";
 import type { AccountsActions } from "./actions";
@@ -42,26 +44,21 @@ import { accountsStats } from "./stats";
 export interface AccountsViewProps {
   accounts: AccountRow[];
   brands: BrandRef[];
+  /** The workspace shown (the wizard keeps one draft per workspace). */
+  workspace: { id: string; kind: "live" | "sandbox" };
   actions: AccountsActions;
 }
 
 const COLUMNS = 8;
 const STATUS_OPTIONS: StatusFilter[] = ["all", "ready", "needs_attention", "not_connected"];
-const ADD_ACCOUNT_SOON = "Adding accounts arrives with the Add account wizard.";
+const NOTICE_MS = 5000;
 
-function AddAccountButton() {
-  // Disabled until the wizard (BC-13) lands; the wrapper carries the tooltip (disabled buttons
-  // don't get hover events in every browser).
+function AddAccountButton({ onClick }: { onClick: () => void }) {
   return (
-    <span className={styles.soon} title={ADD_ACCOUNT_SOON}>
-      <Button variant="primary" disabled aria-describedby="add-account-soon">
-        <Plus aria-hidden="true" />
-        Add account
-      </Button>
-      <span id="add-account-soon" hidden>
-        {ADD_ACCOUNT_SOON}
-      </span>
-    </span>
+    <Button variant="primary" onClick={onClick}>
+      <Plus aria-hidden="true" />
+      Add account
+    </Button>
   );
 }
 
@@ -106,7 +103,7 @@ interface TagEdit {
 }
 
 /** The Accounts tab: top bar, toolbar (search, Tag, Status, New brand) and the grouped table. */
-export function AccountsView({ accounts, brands, actions }: AccountsViewProps) {
+export function AccountsView({ accounts, brands, workspace, actions }: AccountsViewProps) {
   const [optimistic, setOptimisticTags] = useOptimistic(accounts, (rows, edit: TagEdit) =>
     rows.map((a) => (a.id === edit.accountId ? { ...a, tags: edit.tags } : a)),
   );
@@ -114,6 +111,8 @@ export function AccountsView({ accounts, brands, actions }: AccountsViewProps) {
   const [filters, setFilters] = useState<AccountFilters>(NO_FILTERS);
   const [sort, setSort] = useState<AccountSort>(DEFAULT_SORT);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [wizardOpen, setWizardOpen] = useState(false);
 
   const tags = useMemo(() => tagsOf(optimistic), [optimistic]);
   const counts = useMemo(() => tagCounts(optimistic), [optimistic]);
@@ -135,12 +134,29 @@ export function AccountsView({ accounts, brands, actions }: AccountsViewProps) {
       setError(null);
     }, 5000);
   }, []);
+  const noticeTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const showNotice = useCallback((message: string) => {
+    setNotice(message);
+    clearTimeout(noticeTimer.current);
+    noticeTimer.current = setTimeout(() => {
+      setNotice(null);
+    }, NOTICE_MS);
+  }, []);
   useEffect(
     () => () => {
       clearTimeout(errorTimer.current);
+      clearTimeout(noticeTimer.current);
     },
     [],
   );
+
+  // Back from connecting in this tab (the wizard's pop-up was blocked): reopen the wizard.
+  useEffect(() => {
+    if (hasConnectResult()) setWizardOpen(true);
+  }, []);
+  const openWizard = useCallback(() => {
+    setWizardOpen(true);
+  }, []);
 
   const saveTags = useCallback(
     (accountId: string, next: string[]) => {
@@ -215,7 +231,7 @@ export function AccountsView({ accounts, brands, actions }: AccountsViewProps) {
       <PageHeader
         title="Accounts"
         stats={accountsStats(accountStats(optimistic))}
-        actions={<AddAccountButton />}
+        actions={<AddAccountButton onClick={openWizard} />}
       />
       <div className={styles.toolbar} role="search" aria-label="Filter accounts">
         <label className={styles.search}>
@@ -267,7 +283,7 @@ export function AccountsView({ accounts, brands, actions }: AccountsViewProps) {
         {noAccounts && brands.length === 0 ? (
           <div className={styles.empty}>
             <p>No accounts yet. Add your first account to start posting.</p>
-            <AddAccountButton />
+            <AddAccountButton onClick={openWizard} />
           </div>
         ) : (
           <div className={styles.tablewrap}>
@@ -304,6 +320,27 @@ export function AccountsView({ accounts, brands, actions }: AccountsViewProps) {
         <div className={styles.toast} role="alert">
           {error}
         </div>
+      ) : notice ? (
+        <div className={styles.toast} role="status">
+          <Check aria-hidden="true" className={styles.toastIcon} />
+          {notice}
+        </div>
+      ) : null}
+      {wizardOpen ? (
+        <AddAccountWizard
+          workspace={workspace}
+          brands={brands}
+          allTags={tags}
+          actions={actions}
+          onClose={() => {
+            setWizardOpen(false);
+          }}
+          onAdded={(message) => {
+            setSort(DEFAULT_SORT);
+            setFilters(NO_FILTERS);
+            showNotice(message);
+          }}
+        />
       ) : null}
     </div>
   );

@@ -47,14 +47,19 @@ export function cleanTag(raw: string): string | null {
 
 /**
  * The account's tags with `raw` added, or null when there is nothing to add (empty, already there
- * ignoring case, or the account already has TAGS_MAX tags).
+ * ignoring case, or the account already has TAGS_MAX tags). A tag other accounts already use
+ * (`inUse`) keeps their spelling, so "tech" joins "Tech" instead of starting a second filter.
  */
-export function addTag(tags: readonly string[], raw: string): string[] | null {
-  const tag = cleanTag(raw);
-  if (!tag || tags.length >= TAGS_MAX) return null;
-  const lower = tag.toLowerCase();
+export function addTag(
+  tags: readonly string[],
+  raw: string,
+  inUse: readonly string[] = [],
+): string[] | null {
+  const typed = cleanTag(raw);
+  if (!typed || tags.length >= TAGS_MAX) return null;
+  const lower = typed.toLowerCase();
   if (tags.some((t) => t.toLowerCase() === lower)) return null;
-  return [...tags, tag];
+  return [...tags, inUse.find((t) => t.toLowerCase() === lower) ?? typed];
 }
 
 /** The account's tags without `tag`. */

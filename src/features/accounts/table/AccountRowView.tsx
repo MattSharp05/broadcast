@@ -55,7 +55,7 @@ function TagsCell({ account, allTags, onTags }: Pick<RowProps, "account" | "allT
   const finish = (input: HTMLInputElement, save: boolean, keepFocus: boolean) => {
     if (done.current) return;
     done.current = true;
-    const next = save ? addTag(account.tags, input.value) : null;
+    const next = save ? addTag(account.tags, input.value, allTags) : null;
     refocus.current = keepFocus;
     setAdding(false);
     if (next) onTags(account.id, next);

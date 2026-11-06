@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import {
+  DuplicateBrandError,
   NotFoundError,
   createBrand,
   renameBrand,
@@ -17,23 +18,30 @@ import type { ActionResult } from "@/features/accounts/table/actions";
 
 /**
  * The Accounts tab's inline edits. Each acts as the signed-in user (RLS) on the workspace the
- * dashboard shows, and refreshes both tabs (tags feed the Workflow's Tag filter).
+ * dashboard shows. Tag and brand edits refresh both tabs (tags feed the Workflow's Tag filter);
+ * description autosaves refresh nothing (the textarea already shows the text, and a refresh on
+ * every pause in typing would re-read the whole table).
  */
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 async function run<T>(
   work: (db: Awaited<ReturnType<typeof createServerSupabase>>, workspaceId: string) => Promise<T>,
+  options: { revalidate: boolean } = { revalidate: true },
 ): Promise<ActionResult<T>> {
   try {
     const db = await createServerSupabase();
     const workspaceId = WORKSPACE_IDS[await currentWorkspaceKind()];
     const value = await work(db, workspaceId);
-    revalidatePath("/accounts");
-    revalidatePath("/workflow");
+    if (options.revalidate) {
+      revalidatePath("/accounts");
+      revalidatePath("/workflow");
+    }
     return { ok: true, value };
   } catch (e) {
-    if (e instanceof NotFoundError) return { ok: false, error: e.message };
+    if (e instanceof NotFoundError || e instanceof DuplicateBrandError) {
+      return { ok: false, error: e.message };
+    }
     console.error(e);
     return { ok: false, error: "Couldn't save. Check your connection and try again." };
   }
@@ -65,10 +73,13 @@ export async function updateAccountDescription(
     return invalid("That account can't be changed.");
   }
   const clean = cleanDescription(description);
-  return run(async (db, ws) => {
-    await saveAccountDescription(db, ws, accountId, clean);
-    return clean;
-  });
+  return run(
+    async (db, ws) => {
+      await saveAccountDescription(db, ws, accountId, clean);
+      return clean;
+    },
+    { revalidate: false },
+  );
 }
 
 export async function addBrand(name: string): Promise<ActionResult<{ id: string; name: string }>> {

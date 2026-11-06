@@ -53,6 +53,7 @@ describe("tag edits", () => {
       ),
     ).toBeNull();
     expect(cleanTag("x".repeat(60))).toHaveLength(TAG_MAX_LENGTH);
+    expect(addTag(["App"], "tech", ["Tech", "Sport"])).toEqual(["App", "Tech"]);
   });
 
   it("removes a tag", () => {

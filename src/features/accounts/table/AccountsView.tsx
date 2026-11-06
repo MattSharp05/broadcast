@@ -117,7 +117,12 @@ export function AccountsView({ accounts, brands, actions }: AccountsViewProps) {
 
   const tags = useMemo(() => tagsOf(optimistic), [optimistic]);
   const counts = useMemo(() => tagCounts(optimistic), [optimistic]);
-  const activeTag = filters.tag === ALL_TAGS || tags.includes(filters.tag) ? filters.tag : ALL_TAGS;
+  // A filtered tag that no account carries any more falls back to All tags (for good: it doesn't
+  // switch itself back on if the tag returns).
+  if (filters.tag !== ALL_TAGS && !tags.includes(filters.tag)) {
+    setFilters((f) => ({ ...f, tag: ALL_TAGS }));
+  }
+  const activeTag = tags.includes(filters.tag) ? filters.tag : ALL_TAGS;
   const active = useMemo(() => ({ ...filters, tag: activeTag }), [filters, activeTag]);
   const shown = useMemo(() => filterAccounts(optimistic, active), [optimistic, active]);
   const filtered = hasFilters(active);
@@ -248,7 +253,15 @@ export function AccountsView({ accounts, brands, actions }: AccountsViewProps) {
           ))}
         </Select>
         <div className={styles.grow} />
-        <NewBrand onCreate={actions.addBrand} onError={showError} />
+        <NewBrand
+          onCreate={actions.addBrand}
+          onCreated={() => {
+            // Show the new (empty) group: it only appears grouped and unfiltered.
+            setSort(DEFAULT_SORT);
+            setFilters(NO_FILTERS);
+          }}
+          onError={showError}
+        />
       </div>
       <div className={styles.scroll}>
         {noAccounts && brands.length === 0 ? (

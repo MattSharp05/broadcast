@@ -182,4 +182,20 @@ test("no-accounts shows the empty state", async ({ page, loadScenario }) => {
     page.getByText("No accounts yet. Add your first account to start posting."),
   ).toBeVisible();
   await expect(table(page)).toHaveCount(0);
+
+  // A brand without accounts gets its group row, with the hint below the table.
+  await page.getByRole("button", { name: "New brand" }).click();
+  await page.getByRole("textbox", { name: "New brand name" }).fill("Kart Racer");
+  await page.getByRole("button", { name: "Create brand" }).click();
+  await expect(page.locator('tr[data-brand="Kart Racer"]')).toContainText("0 accounts");
+  await expect(
+    page.getByText("No accounts yet. Add your first account to start posting."),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "New brand" }).click();
+  await page.getByRole("textbox", { name: "New brand name" }).fill("kart racer");
+  await page.getByRole("textbox", { name: "New brand name" }).press("Enter");
+  await expect(page.getByRole("alert").filter({ hasText: "already" })).toHaveText(
+    "There is already a brand called Kart Racer.",
+  );
 });

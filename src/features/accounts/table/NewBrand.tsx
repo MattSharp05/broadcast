@@ -9,11 +9,12 @@ import type { AccountsActions } from "./actions";
 
 interface NewBrandProps {
   onCreate: AccountsActions["addBrand"];
+  onCreated: () => void;
   onError: (message: string) => void;
 }
 
 /** The toolbar's "New brand": a small inline form (Enter creates, Escape cancels). */
-export function NewBrand({ onCreate, onError }: NewBrandProps) {
+export function NewBrand({ onCreate, onCreated, onError }: NewBrandProps) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const button = useRef<HTMLButtonElement>(null);
@@ -53,7 +54,8 @@ export function NewBrand({ onCreate, onError }: NewBrandProps) {
         close();
         startTransition(async () => {
           const res = await onCreate(name);
-          if (!res.ok) onError(res.error);
+          if (res.ok) onCreated();
+          else onError(res.error);
         });
       }}
     >

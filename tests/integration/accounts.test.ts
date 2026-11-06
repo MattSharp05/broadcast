@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
+  DuplicateBrandError,
   NotFoundError,
   createBrand,
   loadAccounts,
@@ -18,6 +19,8 @@ import {
   signedInClient,
   type Db,
 } from "./helpers";
+
+const data = (d: { brands: { id: string; name: string }[] }) => d.brands;
 
 // BC-10: the Accounts tab's reads and inline edits, as the signed-in user (RLS applies).
 
@@ -74,7 +77,9 @@ describe("loadAccounts", () => {
       followers: 1240,
       profileUrl: "https://www.instagram.com/codingjourney/",
     });
-    expect(cj?.backlog).toBeGreaterThan(0);
+    // Same as the canvas header ("10 in backlog"); posted and failed posts don't count.
+    expect(cj?.backlog).toBe(10);
+    expect(data.accounts.map((a) => a.backlog).every((n) => n > 0)).toBe(true);
     expect(data.accounts.find((a) => a.handle === "tri.weekly")?.status).toBe("needs_attention");
   });
 
@@ -125,5 +130,15 @@ describe("inline edits", () => {
       NotFoundError,
     );
     await expect(createBrand(stranger, SANDBOX, "Nope")).rejects.toThrow();
+  });
+
+  it("refuses a second brand with the same name (any case)", async () => {
+    await expect(createBrand(owner, SANDBOX, "trip")).rejects.toBeInstanceOf(DuplicateBrandError);
+    const sport = data(await loadAccounts(owner, SANDBOX)).find((b) => b.name === "Sport");
+    await expect(renameBrand(owner, SANDBOX, sport?.id ?? "", "Trip")).rejects.toBeInstanceOf(
+      DuplicateBrandError,
+    );
+    // Renaming to its own name in another case is fine.
+    await renameBrand(owner, SANDBOX, sport?.id ?? "", "SPORT");
   });
 });

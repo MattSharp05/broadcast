@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AccountRow, BrandRef } from "@/lib/domain/accounts";
-import { avatarIndex, profileUrl } from "@/lib/domain/canvas";
+import { UPCOMING_STATUSES, avatarIndex, profileUrl } from "@/lib/domain/canvas";
 import type { Database } from "./types";
 
 /**
@@ -16,31 +16,21 @@ export interface AccountsData {
   brands: BrandRef[];
 }
 
-/** Post statuses that count as "in the backlog" (same as the canvas's upcoming lane). */
-const BACKLOG_STATUSES = ["queued", "paused", "publishing"] as const;
-
 export async function loadAccounts(db: Db, workspaceId: string): Promise<AccountsData> {
-  const [brands, accounts, backlog] = await Promise.all([
+  const [brands, accounts] = await Promise.all([
     db.from("brands").select("id, name").eq("workspace_id", workspaceId).order("name"),
     db
       .from("social_accounts")
       .select(
-        "id, handle, platform, brand_id, description, tags, slots, status, status_reason, followers, brands(name)",
+        "id, handle, platform, brand_id, description, tags, slots, status, status_reason, followers, brands(name), backlog:posts(count)",
       )
       .eq("workspace_id", workspaceId)
+      // Counted in the database: the embedded count only sees waiting posts.
+      .in("posts.status", [...UPCOMING_STATUSES])
       .order("handle"),
-    db
-      .from("posts")
-      .select("account_id")
-      .eq("workspace_id", workspaceId)
-      .in("status", [...BACKLOG_STATUSES]),
   ]);
   if (brands.error) throw new Error(`Loading brands failed: ${brands.error.message}`);
   if (accounts.error) throw new Error(`Loading accounts failed: ${accounts.error.message}`);
-  if (backlog.error) throw new Error(`Loading backlogs failed: ${backlog.error.message}`);
-
-  const waiting = new Map<string, number>();
-  for (const p of backlog.data) waiting.set(p.account_id, (waiting.get(p.account_id) ?? 0) + 1);
 
   return {
     brands: brands.data,
@@ -56,7 +46,7 @@ export async function loadAccounts(db: Db, workspaceId: string): Promise<Account
       statusReason: a.status_reason,
       followers: a.followers,
       slotsPerDay: a.slots.length,
-      backlog: waiting.get(a.id) ?? 0,
+      backlog: a.backlog[0]?.count ?? 0,
       profileUrl: profileUrl(a.platform, a.handle),
       avatar: avatarIndex(a.id),
     })),
@@ -65,6 +55,21 @@ export async function loadAccounts(db: Db, workspaceId: string): Promise<Account
 
 /** Thrown when the row isn't in the workspace (or RLS hides it). */
 export class NotFoundError extends Error {}
+
+/** Thrown when another brand of the workspace already has the name (ignoring case). */
+export class DuplicateBrandError extends Error {
+  constructor(name: string) {
+    super(`There is already a brand called ${name}.`);
+  }
+}
+
+async function assertNameFree(db: Db, workspaceId: string, name: string, except?: string) {
+  const res = await db.from("brands").select("id, name").eq("workspace_id", workspaceId);
+  if (res.error) throw new Error(`Reading brands failed: ${res.error.message}`);
+  const lower = name.toLowerCase();
+  const clash = res.data.find((b) => b.id !== except && b.name.toLowerCase() === lower);
+  if (clash) throw new DuplicateBrandError(clash.name);
+}
 
 async function updateAccount(
   db: Db,
@@ -103,6 +108,7 @@ export function saveAccountDescription(
 }
 
 export async function createBrand(db: Db, workspaceId: string, name: string): Promise<BrandRef> {
+  await assertNameFree(db, workspaceId, name);
   const res = await db
     .from("brands")
     .insert({ workspace_id: workspaceId, name })
@@ -118,6 +124,7 @@ export async function renameBrand(
   brandId: string,
   name: string,
 ): Promise<void> {
+  await assertNameFree(db, workspaceId, name, brandId);
   const res = await db
     .from("brands")
     .update({ name })

@@ -1,0 +1,474 @@
+/* Workflow canvas content (docs/DESIGN.md → Layout → Workflow canvas, Components). Values follow
+   docs/vision-mockup.html (v3). Everything is absolutely positioned in world coordinates. */
+
+.band {
+  position: absolute;
+  background: var(--band);
+  border-top: 1px solid var(--band-line);
+  border-bottom: 1px solid var(--band-line);
+}
+
+.nowLine {
+  position: absolute;
+  top: 0;
+  height: 0;
+  border-top: 1.5px solid var(--now);
+}
+
+.nowTag {
+  position: absolute;
+  top: 0;
+  transform: translateY(-50%);
+  padding: 4px 10px;
+  border-radius: var(--r-s);
+  background: var(--now);
+  color: var(--on-now);
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.chip {
+  position: absolute;
+  top: 0;
+  transform: translate(-50%, -50%);
+  padding: 2px 8px;
+  border-radius: var(--r-xs);
+  background: var(--surface);
+  border: 1px solid var(--band-line);
+  color: var(--ink-2);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.chip b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.lane {
+  position: absolute;
+  width: 170px;
+  color: var(--ink-2);
+}
+
+.lane h2 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.lane h2 svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.6;
+}
+
+.lane p {
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.wires {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.wires path {
+  stroke: var(--line-2);
+  stroke-width: 1.5;
+  fill: none;
+}
+
+.wires path[data-ghost] {
+  stroke-dasharray: 3 5;
+}
+
+/* Account header: a navy card on the band. */
+.header,
+.card {
+  position: absolute;
+  border-radius: var(--r);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  transition:
+    border-color 0.12s,
+    box-shadow 0.12s;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--hdr);
+  border-color: var(--hdr);
+  color: var(--hdr-ink);
+  box-shadow: var(--hdr-shadow);
+}
+
+.header:hover {
+  border-color: var(--accent);
+  box-shadow:
+    0 0 0 3px var(--accent-soft),
+    var(--hdr-shadow-hover);
+}
+
+.header[data-attention] {
+  border-color: var(--hdr-warn);
+  box-shadow:
+    inset 0 3px 0 var(--hdr-warn),
+    var(--hdr-shadow);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.headerAvatar {
+  font-size: 14px;
+  box-shadow: 0 0 0 2px var(--hdr);
+}
+
+.headerAvatar > span {
+  box-shadow: 0 0 0 2px var(--hdr);
+}
+
+.names {
+  flex: 1;
+  min-width: 0;
+}
+
+.names > * {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.handle {
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.small {
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+.header .small {
+  color: var(--hdr-ink-2);
+}
+
+.profile {
+  display: grid;
+  place-items: center;
+  flex: none;
+  align-self: flex-start;
+  width: 28px;
+  height: 28px;
+  margin-left: auto;
+  border-radius: var(--r-s);
+  color: var(--hdr-ink-2);
+  cursor: pointer;
+}
+
+.profile:hover {
+  background: var(--hdr-hover);
+  color: var(--hdr-ink);
+}
+
+.profile:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.profile svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.6;
+}
+
+.facts {
+  display: flex;
+  justify-content: space-between;
+  padding-top: 9px;
+  border-top: 1px solid var(--hdr-line);
+  font-size: 12.5px;
+  color: var(--hdr-ink-2);
+}
+
+.facts b {
+  color: var(--hdr-ink);
+  font-weight: 600;
+}
+
+.header[data-attention] .facts {
+  justify-content: flex-start;
+  align-items: center;
+  gap: 6px;
+  color: var(--hdr-warn);
+  font-weight: 500;
+}
+
+.facts svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 1.6;
+}
+
+/* Post cards */
+.card {
+  display: flex;
+  gap: 12px;
+  padding: 8px;
+}
+
+.card:hover {
+  border-color: var(--line-2);
+  box-shadow: var(--shadow-lg);
+}
+
+.card[data-kind="failed"] {
+  border-color: var(--bad-line);
+  background: var(--bad-soft);
+}
+
+.card[data-kind="paused"] {
+  opacity: 0.62;
+}
+
+.card[data-kind="open"] {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+  padding: 12px 14px;
+  background: transparent;
+  border: 1.5px dashed var(--line-2);
+  box-shadow: none;
+}
+
+.card[data-kind="open"]:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 2px 2px 2px 0;
+}
+
+.head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.when {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.status svg {
+  width: 13px;
+  height: 13px;
+  stroke-width: 1.6;
+  align-self: center;
+}
+
+.status[data-tone="accent"] {
+  color: var(--accent-ink);
+}
+
+.status[data-tone="warn"] {
+  color: var(--warn);
+}
+
+.status[data-tone="bad"] {
+  color: var(--bad);
+}
+
+.title {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--ink);
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.foot {
+  margin-top: auto;
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--ink-3);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.metrics {
+  display: flex;
+  gap: 12px;
+  margin-top: auto;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.metrics span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.metrics svg {
+  width: 13px;
+  height: 13px;
+  stroke-width: 1.6;
+  color: var(--ink-3);
+}
+
+.more {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-3);
+  font-size: 12.5px;
+}
+
+/* The honest 9:16 thumbnail placeholder: account-colour strip, play mark, duration. */
+.thumb {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 50px;
+  height: 88px;
+  overflow: hidden;
+  border-radius: 5px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+}
+
+.thumb::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 1;
+  height: 3px;
+  background: var(--tint);
+}
+
+.thumb img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.play {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--line-2);
+  color: var(--ink-2);
+}
+
+.play svg {
+  width: 10px;
+  height: 10px;
+  margin-left: 1px;
+  fill: currentColor;
+  stroke: none;
+}
+
+.duration {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  font-size: 10px;
+  color: var(--ink-3);
+}
+
+.thumb img ~ .duration {
+  padding: 0 3px;
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--ink-2);
+}
+
+/* Semantic zoom: below 60% small text hides and times and handles grow. */
+:global([data-zoom="far"]) .title,
+:global([data-zoom="far"]) .metrics,
+:global([data-zoom="far"]) .foot,
+:global([data-zoom="far"]) .small,
+:global([data-zoom="far"]) .facts,
+:global([data-zoom="far"]) .status,
+:global([data-zoom="far"]) .chip {
+  visibility: hidden;
+}
+
+:global([data-zoom="far"]) .when {
+  font-size: 17px;
+}
+
+:global([data-zoom="far"]) .handle {
+  font-size: 18px;
+}
+
+.page {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.canvas {
+  flex: 1;
+  min-height: 360px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .header,
+  .card {
+    transition: none;
+  }
+}

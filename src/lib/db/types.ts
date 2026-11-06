@@ -873,6 +873,19 @@ export type Database = {
         }[];
       };
       is_allowed_user: { Args: Record<PropertyKey, never>; Returns: boolean };
+      move_post: {
+        Args: {
+          p_account_id: string;
+          p_post_id: string;
+          p_queue_position?: number;
+          p_renumber?: Json;
+          p_scheduled_at?: string;
+          p_status: Database["public"]["Enums"]["post_status"];
+          p_timing: Database["public"]["Enums"]["post_timing"];
+          p_workspace_id: string;
+        };
+        Returns: string;
+      };
       reset_sandbox: { Args: Record<PropertyKey, never>; Returns: undefined };
       schedule_tick: { Args: Record<PropertyKey, never>; Returns: string };
       unschedule_tick: { Args: Record<PropertyKey, never>; Returns: string };

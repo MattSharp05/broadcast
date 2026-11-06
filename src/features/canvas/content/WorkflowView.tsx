@@ -20,7 +20,9 @@ import { Canvas, type CanvasHandle } from "@/features/canvas/engine";
 import { AddContent, type AddContentPreset } from "@/features/content/AddContent";
 import type { ActionResult, AddContentInput, AddedContent } from "@/features/content/types";
 import { DetailDrawer } from "@/features/drawers/DetailDrawer";
-import type { OnQueueChanged, QueueActions } from "@/features/drawers/edit-types";
+import type { MovePostInput, OnQueueChanged, QueueActions } from "@/features/drawers/edit-types";
+import { MoveChoicesProvider, moveChoices } from "@/features/drawers/post/move";
+import { mediaRules } from "@/lib/domain/move";
 import { Preview } from "@/features/drawers/previews";
 import type { DetailTarget } from "@/features/drawers/types";
 import type { WorkflowDetails } from "@/lib/db/canvas";
@@ -30,6 +32,9 @@ import { nowLabel, shortCountdown } from "@/lib/domain/format";
 import { ALL_TAGS, filterByTag, tagsOf } from "@/lib/domain/tags";
 import { AccountHeader, PostedPostCard, UpcomingPostCard, place, type CanvasClock } from "./cards";
 import styles from "./content.module.css";
+import { DropTargets } from "./drag/DropTargets";
+import type { DropTarget } from "./drag/targets";
+import { useCardDrag } from "./drag/useCardDrag";
 import { DETAIL_SELECTOR, useDetailInteractions } from "./interactions";
 import { LEFT, layoutCanvas, nowAnchor, type CanvasLayout } from "./layout";
 import { workflowStats } from "./stats";
@@ -53,6 +58,9 @@ export interface WorkflowViewProps {
 }
 
 const NARROW_QUERY = "(max-width: 699px)";
+const MOVE_FAILED = "Couldn't move the post. Check your connection and try again.";
+/** The move toast stays long enough to Undo. */
+const UNDO_MS = 10_000;
 
 function subscribeNarrow(onChange: () => void) {
   const mq = window.matchMedia(NARROW_QUERY);
@@ -222,7 +230,18 @@ export function WorkflowView({
   // Add content: the top bar button, or "Add a video for this slot" in an open slot's drawer
   // (that account; pinned to the slot unless it's where a queued video would go anyway).
   const [adding, setAdding] = useState<AddContentPreset | null>(null);
-  const [toast, setToast] = useState<{ id: number; message: string } | null>(null);
+  const [toast, setToast] = useState<{
+    id: number;
+    message: string;
+    undo?: MovePostInput;
+    error?: boolean;
+  } | null>(null);
+  const showToast = useCallback(
+    (message: string, extra?: { undo?: MovePostInput; error?: boolean }) => {
+      setToast((t) => ({ id: (t?.id ?? 0) + 1, message, ...extra }));
+    },
+    [],
+  );
   const clearToast = useCallback(() => {
     setToast(null);
   }, []);
@@ -240,20 +259,88 @@ export function WorkflowView({
     (result: AddedContent) => {
       setAdding(null);
       for (const id of result.postIds) fresh.current.add(id);
-      setToast((t) => ({ id: (t?.id ?? 0) + 1, message: result.message }));
+      showToast(result.message);
       router.refresh();
     },
-    [router],
+    [router, showToast],
   );
   // A drawer edit saved: the action already refreshed the page data (revalidatePath), so the
   // open drawer re-reads its target below; echo the action in a toast.
   const onQueueChanged = useCallback<OnQueueChanged>(
     (message, options) => {
       if (options?.close) close();
-      setToast((t) => ({ id: (t?.id ?? 0) + 1, message }));
+      showToast(message, { undo: options?.undo });
     },
-    [close],
+    [close, showToast],
   );
+
+  // Moving a post (BC-22): dragging a card, "Move to…" in the drawer, and the toast's Undo.
+  const movePost = queueActions?.movePost;
+  const undoMove = useCallback(
+    (input: MovePostInput) => {
+      if (!movePost) return;
+      void movePost(input, true).then(
+        (result) => {
+          if (result.ok) showToast(result.value.message);
+          else showToast(result.error, { error: true });
+        },
+        () => {
+          showToast(MOVE_FAILED, { error: true });
+        },
+      );
+    },
+    [movePost, showToast],
+  );
+  const onDrop = useCallback(
+    (cardId: string, target: DropTarget) => {
+      if (!movePost) return;
+      const el = pageRef.current?.querySelector<HTMLElement>(`[data-post="${CSS.escape(cardId)}"]`);
+      el?.setAttribute("data-moving", "");
+      void movePost({
+        postId: cardId,
+        accountId: target.accountId,
+        placement:
+          target.kind === "gap"
+            ? { kind: "queue", after: target.after }
+            : { kind: "slot", at: target.at.toISOString() },
+      })
+        .then(
+          (result) => {
+            if (result.ok) showToast(result.value.message, { undo: result.value.undo });
+            else showToast(result.error, { error: true });
+          },
+          () => {
+            showToast(MOVE_FAILED, { error: true });
+          },
+        )
+        .finally(() => {
+          el?.removeAttribute("data-moving");
+        });
+    },
+    [movePost, showToast],
+  );
+  const accountsById = details.accounts;
+  const accepts = useCallback(
+    (targetId: string, sourceId: string) => {
+      const target = accountsById[targetId];
+      const source = accountsById[sourceId];
+      return (
+        !!target &&
+        !!source &&
+        target.status === "ready" &&
+        target.slots.length > 0 &&
+        mediaRules(target.platform) === mediaRules(source.platform)
+      );
+    },
+    [accountsById],
+  );
+  const { handler: itemDrag, drag } = useCardDrag({
+    layout,
+    enabled: !!movePost,
+    accepts,
+    onDrop,
+  });
+  const choices = useMemo(() => moveChoices(columns, accepts), [columns, accepts]);
   // The open drawer follows the refreshed data. A post that moved off the canvas (pinned next
   // week, back of a long backlog) keeps its last data rather than closing mid-edit; Remove closes
   // the drawer itself.
@@ -365,6 +452,7 @@ export function WorkflowView({
         bounds={layout.bounds}
         nowAnchor={anchor}
         minimapItems={layout.minimap}
+        itemDrag={itemDrag}
       >
         <div className={styles.content} {...handlers}>
           <CanvasContent
@@ -372,22 +460,25 @@ export function WorkflowView({
             clock={clock}
             empty={columns.length === 0 ? "none" : shown.length === 0 ? "filtered" : null}
           />
+          <DropTargets drag={drag} />
         </div>
       </Canvas>
-      {preview && !openTarget ? (
+      {preview && !openTarget && !drag ? (
         <Popover anchor={preview.anchor} data-testid="canvas-preview">
           <Preview target={preview.target} clock={clock} />
         </Popover>
       ) : null}
-      <DetailDrawer
-        target={openTarget}
-        clock={clock}
-        onClose={close}
-        returnFocus={open?.returnFocus}
-        onAddContent={openAddContent}
-        actions={queueActions}
-        onChanged={onQueueChanged}
-      />
+      <MoveChoicesProvider value={choices}>
+        <DetailDrawer
+          target={openTarget}
+          clock={clock}
+          onClose={close}
+          returnFocus={open?.returnFocus}
+          onAddContent={openAddContent}
+          actions={queueActions}
+          onChanged={onQueueChanged}
+        />
+      </MoveChoicesProvider>
       <AddContent
         open={adding !== null}
         onClose={() => {
@@ -400,7 +491,23 @@ export function WorkflowView({
         addContent={addContent}
         onAdded={onAdded}
       />
-      <Toast message={toast?.message ?? null} id={toast?.id} onDone={clearToast} />
+      <Toast
+        message={toast?.message ?? null}
+        id={toast?.id}
+        onDone={clearToast}
+        tone={toast?.error ? "error" : undefined}
+        duration={toast?.undo ? UNDO_MS : undefined}
+        action={
+          toast?.undo
+            ? {
+                label: "Undo",
+                onClick: () => {
+                  if (toast.undo) undoMove(toast.undo);
+                },
+              }
+            : undefined
+        }
+      />
     </div>
   );
 }

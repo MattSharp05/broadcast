@@ -158,6 +158,56 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
 
+  # Integration tests against a local Supabase stack in Docker (schema, RLS, magic link via Mailpit)
+  # plus the sign-in gate over HTTP against the built app. Services the tests don't use are left
+  # out so `supabase start` stays quick.
+  integration:
+    name: integration (Supabase)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      ALLOWED_EMAIL: ci-allowed@broadcast.test
+      E2E: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Start Supabase
+        run: >-
+          pnpm supabase start
+          -x realtime,storage-api,imgproxy,studio,edge-runtime,logflare,vector,supavisor
+      - name: Export Supabase URL and keys
+        run: pnpm -s db:env | sed 's/"//g' >> "$GITHUB_ENV"
+      - name: Generated types match the migrations
+        run: |
+          pnpm db:types
+          git diff --exit-code src/lib/db/types.ts || {
+            echo "::error::src/lib/db/types.ts is stale: run pnpm db:types and commit it."
+            exit 1
+          }
+      - uses: actions/cache@v4
+        with:
+          path: .next/cache
+          key: nextjs-integration-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('src/**') }}
+          restore-keys: nextjs-integration-${{ hashFiles('pnpm-lock.yaml') }}-
+      - run: pnpm build
+      - name: Start the app
+        run: |
+          pnpm start > app.log 2>&1 &
+          timeout 30 bash -c 'until curl -sf -o /dev/null http://localhost:3000/login; do sleep 1; done'
+      - run: pnpm test:integration
+        env:
+          APP_TEST_URL: http://localhost:3000
+      - name: App log
+        if: failure()
+        run: cat app.log || true
+
   # Placeholder until BC-8 adds Playwright: skipped while tests/e2e has no specs.
   # BC-8: keep the image tag equal to @playwright/test in package.json, and add local Supabase.
   e2e:
@@ -219,3 +269,38 @@ jobs:
           name: playwright-report-phone
           path: playwright-report/
           retention-days: 7
+
+  # Main only: apply new migrations to the production Supabase project. Skips with a notice until
+  # the project exists and its secrets are set (SUPABASE_ACCESS_TOKEN, SUPABASE_PROJECT_REF and
+  # SUPABASE_DB_PASSWORD in GitHub Actions secrets).
+  db-push:
+    name: supabase db push
+    needs: integration
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+    steps:
+      - name: Skip without production secrets
+        if: env.SUPABASE_ACCESS_TOKEN == '' || env.SUPABASE_PROJECT_REF == ''
+        run: |
+          echo "::notice::Production Supabase secrets are not set; migrations were not pushed."
+          echo "Skipped: SUPABASE_ACCESS_TOKEN / SUPABASE_PROJECT_REF not set." >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/checkout@v4
+        if: env.SUPABASE_ACCESS_TOKEN != '' && env.SUPABASE_PROJECT_REF != ''
+      - uses: pnpm/action-setup@v4
+        if: env.SUPABASE_ACCESS_TOKEN != '' && env.SUPABASE_PROJECT_REF != ''
+      - uses: actions/setup-node@v4
+        if: env.SUPABASE_ACCESS_TOKEN != '' && env.SUPABASE_PROJECT_REF != ''
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - name: Push migrations
+        if: env.SUPABASE_ACCESS_TOKEN != '' && env.SUPABASE_PROJECT_REF != ''
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm supabase link --project-ref "$SUPABASE_PROJECT_REF"
+          pnpm supabase db push

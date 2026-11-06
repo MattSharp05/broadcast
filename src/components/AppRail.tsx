@@ -1,6 +1,6 @@
 "use client";
 
-import { Send } from "lucide-react";
+import { LogOut, Send } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import styles from "./AppRail.module.css";
@@ -42,6 +42,12 @@ export function AppRail() {
             <small>Added in a later ticket</small>
           </span>
         </div>
+        <form action="/auth/sign-out" method="post">
+          <button type="submit" className={styles.signOut}>
+            <LogOut aria-hidden="true" />
+            Sign out
+          </button>
+        </form>
       </div>
     </nav>
   );

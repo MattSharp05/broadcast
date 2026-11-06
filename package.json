@@ -17,9 +17,15 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "db:reset": "supabase db reset",
+    "db:types": "supabase gen types typescript --local --schema public > src/lib/db/types.ts && prettier --write src/lib/db/types.ts",
+    "db:env": "supabase status -o env --override-name api.url=NEXT_PUBLIC_SUPABASE_URL --override-name auth.anon_key=NEXT_PUBLIC_SUPABASE_ANON_KEY --override-name auth.service_role_key=SUPABASE_SERVICE_ROLE_KEY | grep -E '^(NEXT_PUBLIC_SUPABASE_|SUPABASE_SERVICE_ROLE_KEY)'"
   },
   "dependencies": {
+    "@supabase/ssr": "0.12.7",
+    "@supabase/supabase-js": "2.119.0",
     "lucide-react": "1.69.0",
     "next": "15.5.29",
     "react": "19.3.1",
@@ -35,6 +41,7 @@
     "eslint-config-next": "15.5.29",
     "eslint-config-prettier": "10.1.8",
     "prettier": "3.9.10",
+    "supabase": "2.122.1",
     "typescript": "5.9.3",
     "typescript-eslint": "8.72.1",
     "vite-tsconfig-paths": "6.1.1",

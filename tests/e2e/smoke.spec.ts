@@ -59,6 +59,7 @@ test("/dev lists every scenario and each link loads it", async ({ page }) => {
     "canvas-busy",
     "empty",
     "connect-missing-permission",
+    "publish-due-now",
     "no-accounts",
   ]);
   await expect(page.getByRole("link", { name: "Canvas engine demo" })).toHaveAttribute(
@@ -70,6 +71,7 @@ test("/dev lists every scenario and each link loads it", async ({ page }) => {
     "canvas-busy": 5,
     empty: 1,
     "connect-missing-permission": 1,
+    "publish-due-now": 1,
     "no-accounts": 0,
   };
   for (const [name, accounts] of Object.entries(expected)) {

@@ -11,10 +11,10 @@ const LIVE = WORKSPACE_IDS.live;
 const SANDBOX = WORKSPACE_IDS.sandbox;
 const NOW = new Date("2026-11-05T22:14:00Z");
 
-/** Tables with a workspace_id (all but app_settings and workspaces itself). */
+/** Tables with a workspace_id (all but the global ones and workspaces itself). */
 const WORKSPACE_TABLES = ALL_TABLES.filter(
-  (t): t is Exclude<TableName, "app_settings" | "workspaces"> =>
-    t !== "app_settings" && t !== "workspaces",
+  (t): t is Exclude<TableName, "app_settings" | "scheduler_status" | "workspaces"> =>
+    t !== "app_settings" && t !== "scheduler_status" && t !== "workspaces",
 );
 
 async function liveSnapshot(): Promise<Record<string, unknown[]>> {

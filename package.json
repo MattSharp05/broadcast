@@ -20,6 +20,7 @@
     "test:watch": "vitest",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "e2e": "playwright test",
+    "tick": "node --env-file-if-exists=.env.local scripts/tick.mjs",
     "db:reset": "supabase db reset",
     "db:types": "supabase gen types typescript --local --schema public > src/lib/db/types.ts && prettier --write src/lib/db/types.ts",
     "db:env": "supabase status -o env --override-name api.url=NEXT_PUBLIC_SUPABASE_URL --override-name auth.anon_key=NEXT_PUBLIC_SUPABASE_ANON_KEY --override-name auth.service_role_key=SUPABASE_SERVICE_ROLE_KEY | grep -E '^(NEXT_PUBLIC_SUPABASE_|SUPABASE_SERVICE_ROLE_KEY)'"

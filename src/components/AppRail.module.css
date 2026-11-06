@@ -128,6 +128,14 @@
   margin-top: 6px;
 }
 
+.sys .sysDot[data-tone="good"] {
+  color: var(--rail-good);
+}
+
+.sys .sysDot[data-tone="warn"] {
+  color: var(--rail-warn);
+}
+
 .signOut {
   display: flex;
   align-items: center;

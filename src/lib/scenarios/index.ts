@@ -1,6 +1,7 @@
 import { canvasBusy } from "./canvas-busy";
 import { connectMissingPermission } from "./connect-missing-permission";
 import { empty } from "./empty";
+import { publishDueNow } from "./publish-due-now";
 import { noAccounts } from "./no-accounts";
 import type { Scenario } from "./types";
 
@@ -11,6 +12,7 @@ export const SCENARIOS: readonly Scenario[] = [
   canvasBusy,
   empty,
   connectMissingPermission,
+  publishDueNow,
   noAccounts,
 ];
 

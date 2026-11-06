@@ -17,7 +17,7 @@ runs:
       shell: bash
       run: |
         (pnpm supabase start \
-          -x realtime,storage-api,imgproxy,studio,edge-runtime,logflare,vector,supavisor \
+          -x realtime,imgproxy,studio,edge-runtime,logflare,vector,supavisor \
           > supabase-start.log 2>&1; echo $? > supabase-start.exit) &
     - name: Playwright version
       id: pw

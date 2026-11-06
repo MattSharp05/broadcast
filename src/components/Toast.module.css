@@ -1,0 +1,50 @@
+/* DESIGN.md → Components → Toasts (mockup .toast). */
+.region {
+  position: fixed;
+  left: 50%;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  z-index: 60;
+  transform: translateX(-50%);
+  max-width: calc(100vw - 32px);
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: var(--r);
+  background: var(--now);
+  color: var(--on-now);
+  font-size: 13px;
+  box-shadow: var(--shadow-lg);
+  animation: rise 0.18s ease-out;
+  pointer-events: auto;
+}
+
+.toast svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+
+/* Above the bottom tab bar on phones. */
+@media (max-width: 760px) {
+  .region {
+    bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation: none;
+  }
+}

@@ -181,7 +181,7 @@ jobs:
       - name: Start Supabase
         run: >-
           pnpm supabase start
-          -x realtime,storage-api,imgproxy,studio,edge-runtime,logflare,vector,supavisor
+          -x realtime,imgproxy,studio,edge-runtime,logflare,vector,supavisor
       - name: Export Supabase URL and keys
         run: pnpm -s db:env | sed 's/"//g' >> "$GITHUB_ENV"
       - name: Generated types match the migrations

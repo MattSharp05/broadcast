@@ -16,7 +16,8 @@ export interface DetailDrawerProps {
   onClose: () => void;
   /** Focus goes back here on close (the card or row that opened it). */
   returnFocus?: HTMLElement | null;
-  onAddContent?: (accountId: string) => void;
+  /** "Add a video for this slot": the account and the slot's time. */
+  onAddContent?: (accountId: string, slotAt: Date) => void;
 }
 
 function heading(target: DetailTarget, clock: DetailClock) {

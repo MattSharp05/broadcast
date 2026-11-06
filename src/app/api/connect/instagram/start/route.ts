@@ -4,7 +4,7 @@ import { nowFor } from "@/lib/clock";
 import { hasTokenKey } from "@/lib/crypto/tokens";
 import { createAdminSupabase } from "@/lib/db/admin";
 import { isSignedInOwner } from "@/lib/db/auth";
-import { brandExists, createOAuthState } from "@/lib/db/connections";
+import { brandExists, createOAuthState, reconnectTarget } from "@/lib/db/connections";
 import { createServerSupabase } from "@/lib/db/server";
 import { currentWorkspaceKind, loadWorkspace } from "@/lib/db/workspace";
 import { providerFor } from "@/lib/providers";
@@ -23,7 +23,8 @@ export const dynamic = "force-dynamic";
 
 /**
  * GET /api/connect/instagram/start?brand=<id>: starts connecting an account to a brand (owner
- * only). Live connects a real Instagram account; the Sandbox connects a fake one through the fake
+ * only). ?account=<id> instead reconnects that account (its drawer's Reconnect, BC-19): the
+ * callback then only accepts the same platform user and resumes its paused posts. Live connects a real Instagram account; the Sandbox connects a fake one through the fake
  * consent screen. Saves a one-time state, then redirects to the consent screen.
  */
 export async function GET(request: NextRequest) {
@@ -49,8 +50,15 @@ export async function GET(request: NextRequest) {
   try {
     const db = await createServerSupabase();
     const workspace = await loadWorkspace(db, kind);
-    const brandId = request.nextUrl.searchParams.get("brand") ?? "";
-    if (!(await brandExists(db, workspace.id, brandId))) {
+    const accountParam = request.nextUrl.searchParams.get("account");
+    let brandId = request.nextUrl.searchParams.get("brand") ?? "";
+    let accountId: string | null = null;
+    if (accountParam !== null) {
+      const target = await reconnectTarget(db, workspace.id, accountParam);
+      if (target?.platform !== platform) return toDonePage(request, { error: "account" });
+      brandId = target.brandId;
+      accountId = target.id;
+    } else if (!(await brandExists(db, workspace.id, brandId))) {
       return toDonePage(request, { error: "brand" });
     }
 
@@ -62,6 +70,7 @@ export async function GET(request: NextRequest) {
       platform,
       state,
       now: new Date(),
+      accountId,
     });
 
     const provider = providerFor(

@@ -362,7 +362,7 @@ export function WorkflowView({
         </Popover>
       ) : null}
       <DetailDrawer
-        target={open?.target ?? null}
+        target={open ? latestTarget(targets, open.target) : null}
         clock={clock}
         onClose={close}
         returnFocus={open?.returnFocus}
@@ -383,4 +383,16 @@ export function WorkflowView({
       <Toast message={toast?.message ?? null} id={toast?.id} onDone={clearToast} />
     </div>
   );
+}
+
+/**
+ * The open drawer's target from the latest page data (after a refresh, e.g. a reconnect), or the
+ * one it opened with when that card is gone.
+ */
+function latestTarget(
+  targets: ReadonlyMap<string, DetailTarget>,
+  target: DetailTarget,
+): DetailTarget {
+  const key = target.kind === "account" ? `account:${target.account.id}` : `post:${target.card.id}`;
+  return targets.get(key) ?? target;
 }

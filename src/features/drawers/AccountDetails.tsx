@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Copy, ExternalLink, Info, TriangleExclamationPoint } from "lucide-react";
+import { Check, Copy, ExternalLink, Info } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button, ButtonLink } from "@/components/Button";
 import { platformName } from "@/components/PlatformGlyph";
@@ -10,13 +10,13 @@ import { STATUS_LABELS } from "@/lib/domain/accounts";
 import {
   DAILY_POST_LIMIT,
   FOLLOWER_DAYS,
-  connectionNote,
   daysLeft,
   followerChange,
   permissionsLabel,
   type AccountDetail,
 } from "@/lib/domain/details";
 import { compactCount, shortDate } from "@/lib/domain/format";
+import { Reconnect } from "./account/Reconnect";
 import { FollowersChart } from "./charts";
 import styles from "./drawers.module.css";
 import { Numbers, Row, UsedBar } from "./previews";
@@ -118,13 +118,7 @@ export function AccountDetails({
         <CopyLinkButton url={a.profileUrl} />
       </div>
 
-      {a.status !== "ready" ? (
-        <div className={styles.note} data-tone="warn">
-          <TriangleExclamationPoint aria-hidden="true" />
-          <span>{connectionNote(a)}</span>
-        </div>
-      ) : null}
-      {/* Reconnect lives with the connect flow (Accounts → Add account / reconnect). */}
+      <Reconnect account={a} />
 
       <section className={styles.section} aria-labelledby={`followers-${a.id}`}>
         <h3 id={`followers-${a.id}`}>Followers, last {FOLLOWER_DAYS} days</h3>

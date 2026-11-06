@@ -38,6 +38,38 @@ export async function brandExists(db: Db, workspaceId: string, brandId: string):
   return data !== null;
 }
 
+export interface ReconnectTarget {
+  id: string;
+  brandId: string;
+  handle: string;
+  platform: ProviderPlatform;
+  platformUserId: string | null;
+}
+
+/** The account a Reconnect is for, or null when the workspace has no such account. */
+export async function reconnectTarget(
+  db: Db,
+  workspaceId: string,
+  accountId: string,
+): Promise<ReconnectTarget | null> {
+  if (!isUuid(accountId)) return null;
+  const { data, error } = await db
+    .from("social_accounts")
+    .select("id, brand_id, handle, platform, platform_user_id")
+    .eq("workspace_id", workspaceId)
+    .eq("id", accountId)
+    .maybeSingle();
+  if (error) fail("Reading the account", error);
+  if (!data) return null;
+  return {
+    id: data.id,
+    brandId: data.brand_id,
+    handle: data.handle,
+    platform: data.platform,
+    platformUserId: data.platform_user_id,
+  };
+}
+
 /** Stores a new state for a connect attempt, and clears the workspace's expired ones. */
 export async function createOAuthState(
   db: Db,
@@ -47,6 +79,8 @@ export async function createOAuthState(
     platform: ProviderPlatform;
     state: string;
     now: Date;
+    /** Reconnecting this account (its drawer's Reconnect): only the same platform user is accepted. */
+    accountId?: string | null;
   },
 ): Promise<void> {
   const cleared = await db
@@ -61,6 +95,7 @@ export async function createOAuthState(
     workspace_id: input.workspaceId,
     brand_id: input.brandId,
     platform: input.platform,
+    account_id: input.accountId ?? null,
     expires_at: new Date(input.now.getTime() + OAUTH_STATE_TTL_MS).toISOString(),
   });
   if (error) fail("Saving the connect attempt", error);
@@ -70,6 +105,8 @@ export interface ConsumedState {
   workspaceId: string;
   brandId: string;
   platform: ProviderPlatform;
+  /** The account being reconnected, when the attempt started from its Reconnect button. */
+  accountId: string | null;
   expired: boolean;
 }
 
@@ -90,7 +127,7 @@ export async function consumeOAuthState(
     .delete()
     .in("workspace_id", Object.values(WORKSPACE_IDS))
     .eq("state", state)
-    .select("workspace_id, brand_id, platform, expires_at");
+    .select("workspace_id, brand_id, platform, account_id, expires_at");
   if (error) fail("Reading the connect attempt", error);
   const row = data[0];
   if (!row) return null;
@@ -98,6 +135,7 @@ export async function consumeOAuthState(
     workspaceId: row.workspace_id,
     brandId: row.brand_id,
     platform: row.platform,
+    accountId: row.account_id,
     expired: new Date(row.expires_at).getTime() <= now.getTime(),
   };
 }

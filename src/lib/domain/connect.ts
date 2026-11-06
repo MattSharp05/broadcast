@@ -85,6 +85,10 @@ export const CONNECT_ERRORS = {
   cross_site:
     "Connecting has to start from Broadcast itself, not from a link on another site. Start connecting again from Accounts.",
   network: "Couldn't reach Instagram. Try again in a few minutes.",
+  account:
+    "That account isn't in this workspace any more. Open Accounts and pick the account to reconnect.",
+  wrong_account:
+    "You signed in as a different Instagram account from the one you're reconnecting. Switch to that account in Instagram, then reconnect again.",
   failed:
     "Connecting failed on Broadcast's side. Try again; if it keeps failing, check the server logs.",
 } as const;

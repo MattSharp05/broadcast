@@ -173,6 +173,19 @@ describe("buildCanvas on empty", () => {
   });
 });
 
+describe("buildCanvas edge cases", () => {
+  it("keeps an overdue queued post as the next one (due now) instead of 'Nothing queued'", () => {
+    const input = inputOf(seedOf("canvas-busy"), new Date("2026-11-06T09:30:00Z"));
+    const cj = buildCanvas(input).columns.find((c) => c.handle === "codingjourney");
+    expect(cj?.next).toEqual({ kind: "next", at: new Date("2026-11-06T09:00:00Z") });
+  });
+
+  it("counts only the failed posts shown on the canvas", () => {
+    const later = buildCanvas(inputOf(seedOf("canvas-busy"), new Date("2026-11-20T12:00:00Z")));
+    expect(later.stats.failed).toBe(0);
+  });
+});
+
 describe("helpers", () => {
   it("links profiles to the platform", () => {
     expect(profileUrl("instagram", "trip.app")).toBe("https://www.instagram.com/trip.app/");

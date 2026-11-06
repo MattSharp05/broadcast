@@ -98,7 +98,9 @@ const CanvasContent = memo(function CanvasContent({
           <div key={column.id} data-column={column.handle}>
             <AccountHeader column={column} rect={col.header} />
             <span className={styles.chip} style={{ left: col.chip.x }} data-chip="">
-              {column.next.kind === "next" ? (
+              {column.next.kind === "next" && column.next.at <= clock.now ? (
+                "Due now"
+              ) : column.next.kind === "next" ? (
                 <>
                   Next in <b>{shortCountdown(column.next.at, clock.now)}</b>
                 </>

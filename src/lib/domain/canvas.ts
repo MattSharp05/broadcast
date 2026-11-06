@@ -77,7 +77,7 @@ export type PostedCard =
   | (CardBase & { kind: "posted"; at: Date; views: number; likes: number; comments: number })
   | (CardBase & { kind: "failed"; at: Date; reason: string });
 
-/** The chip on the now line: the countdown, or why there is none. */
+/** The chip on the now line: the countdown (`at` may be past: due now), or why there is none. */
 export type NextUp = { kind: "next"; at: Date } | { kind: "paused" } | { kind: "none" };
 
 export interface CanvasColumn {
@@ -232,8 +232,10 @@ function buildColumn(
       };
     });
 
+  // The earliest post going out; one whose time has passed is due now (the scheduler picks it up).
   const nextPost = cards.find(
-    (c) => (c.kind === "scheduled" || c.kind === "pinned") && c.at && c.at > now,
+    (c) =>
+      (c.kind === "scheduled" || c.kind === "pinned" || c.kind === "publishing") && c.at !== null,
   );
   let next: NextUp;
   if (
@@ -281,6 +283,7 @@ export function buildCanvas(input: CanvasInput): CanvasModel {
 /** "N scheduled | Next post in … | N posted today | N failed" across the workspace. */
 export function canvasStats(input: Pick<CanvasInput, "posts" | "now" | "timezone">): CanvasStats {
   const { posts, now, timezone } = input;
+  const since = now.getTime() - POSTED_DAYS * DAY_MS;
   const scheduled = posts.filter((p) => p.status === "queued" && p.scheduledAt);
   const future = scheduled
     .map((p) => p.scheduledAt)
@@ -296,6 +299,10 @@ export function canvasStats(input: Pick<CanvasInput, "posts" | "now" | "timezone
         p.publishedAt <= now &&
         sameLocalDay(p.publishedAt, now, timezone),
     ).length,
-    failed: posts.filter((p) => p.status === "failed").length,
+    // The failed cards on the canvas (Posted shows the last POSTED_DAYS days).
+    failed: posts.filter((p) => {
+      const t = postTime(p)?.getTime();
+      return p.status === "failed" && t !== undefined && t >= since && t <= now.getTime();
+    }).length,
   };
 }

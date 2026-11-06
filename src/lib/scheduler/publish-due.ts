@@ -76,7 +76,7 @@ interface LoadedPost {
   media_assets: { storage_path: string };
 }
 
-interface WorkspaceSettings {
+export interface WorkspaceSettings {
   now: () => Date;
   timezone: string;
 }
@@ -146,7 +146,7 @@ async function loadPosts(db: Db, claims: readonly Claim[]): Promise<Map<string, 
   return posts;
 }
 
-async function loadSettings(
+export async function loadSettings(
   db: Db,
   workspaceIds: readonly string[],
 ): Promise<Map<string, WorkspaceSettings>> {

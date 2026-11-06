@@ -134,8 +134,8 @@ describe("fake provider: quota and insights", () => {
     const hour1 = await provider.getMediaInsights(ctx, media.mediaId ?? "");
     advance(47 * 3_600_000);
     const hour48 = await provider.getMediaInsights(ctx, media.mediaId ?? "");
-    expect(hour48.views).toBeGreaterThan(hour1.views);
-    expect(hour48.likes).toBeGreaterThanOrEqual(hour1.likes);
+    expect(hour48.views).toBeGreaterThan(hour1.views ?? Infinity);
+    expect(hour48.likes).toBeGreaterThanOrEqual(hour1.likes ?? Infinity);
     expect(fakeInsights("m1", 1000, 10)).toEqual(fakeInsights("m1", 1000, 10));
     expect(fakeInsights("m1", 1000, 0).views).toBe(0);
   });

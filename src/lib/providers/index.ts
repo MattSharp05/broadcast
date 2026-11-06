@@ -15,6 +15,8 @@ export interface ProviderDeps {
   now: () => Date;
   /** The Instagram app (instagramConfigFromEnv); null or absent when IG_APP_ID/SECRET aren't set. */
   instagram?: InstagramConfig | null;
+  /** Per-request timeout for platform calls (default 15 s); the tick passes what its budget allows. */
+  timeoutMs?: number;
 }
 
 /** The SocialProvider for an account's platform. Every platform call goes through this. */
@@ -33,6 +35,10 @@ export function providerFor(
           userMessage: INSTAGRAM_NOT_CONFIGURED_MESSAGE,
         });
       }
-      return createInstagramProvider({ config: deps.instagram, now: deps.now });
+      return createInstagramProvider({
+        config: deps.instagram,
+        now: deps.now,
+        timeoutMs: deps.timeoutMs,
+      });
   }
 }

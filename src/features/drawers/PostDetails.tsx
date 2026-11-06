@@ -16,19 +16,10 @@ import {
 import { ago, compactCount } from "@/lib/domain/format";
 import { RefreshChart } from "./charts";
 import styles from "./drawers.module.css";
-import { Numbers } from "./previews";
+import { Numbers, Row } from "./previews";
 import type { DetailClock } from "./types";
 
 export const ADD_CONTENT_SOON = "Adding videos arrives with the Add content dialog.";
-
-function Row({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div>
-      <dt>{label}</dt>
-      <dd>{children}</dd>
-    </div>
-  );
-}
 
 function Note({ tone, children }: { tone?: "warn" | "bad"; children: ReactNode }) {
   return (
@@ -161,7 +152,7 @@ export function PostDetails({ card, account, detail, clock, onAddContent }: Post
               <StatusDot tone="bad">Failed</StatusDot>
             </Row>
             <Row label="Tries">{detail?.attempts ?? 0}</Row>
-            <Row label="Last try">{ago(card.at, now)}</Row>
+            <Row label="Was due">{ago(card.at, now)}</Row>
           </dl>
         </div>
         {/* Replace video, Retry now and Remove arrive with failed-post actions (BC-20). */}

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { platformName } from "@/components/PlatformGlyph";
 import { DAILY_POST_LIMIT, connectionNote, type PostStats } from "@/lib/domain/details";
 import { ago, compactCount, inFrom, whenLabel } from "@/lib/domain/format";
@@ -17,6 +18,16 @@ const STAT_ORDER: { key: keyof PostStats; label: string }[] = [
   { key: "saves", label: "Saves" },
   { key: "reach", label: "Reach" },
 ];
+
+/** One label–value line of a drawer's details list (inside a `dl`). */
+export function Row({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div>
+      <dt>{label}</dt>
+      <dd>{children}</dd>
+    </div>
+  );
+}
 
 /** Numbers with labels: a compact 3-column list (previews) or a ruled grid (drawers). */
 export function Numbers({

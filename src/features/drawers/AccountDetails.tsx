@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, Copy, ExternalLink, Info, TriangleExclamationPoint } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button, ButtonLink } from "@/components/Button";
 import { platformName } from "@/components/PlatformGlyph";
 import { StatusDot, type StatusTone } from "@/components/StatusDot";
@@ -19,7 +19,7 @@ import {
 import { compactCount, shortDate } from "@/lib/domain/format";
 import { FollowersChart } from "./charts";
 import styles from "./drawers.module.css";
-import { Numbers, UsedBar } from "./previews";
+import { Numbers, Row, UsedBar } from "./previews";
 import type { DetailClock } from "./types";
 
 const TONES: Record<AccountState, StatusTone> = {
@@ -88,15 +88,6 @@ export function CopyLinkButton({ url, label = "Copy link" }: { url: string; labe
         {state === "copied" ? "Link copied" : state === "failed" ? "Couldn't copy" : label}
       </span>
     </Button>
-  );
-}
-
-function Row({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div>
-      <dt>{label}</dt>
-      <dd>{children}</dd>
-    </div>
   );
 }
 

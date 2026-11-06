@@ -44,7 +44,8 @@ export async function middleware(request: NextRequest) {
   const decision = decideAccess({ pathname, userEmail: user?.email ?? null, allowedEmail });
   if (decision === "allow") {
     // `?scenario=` / `?now=` on any page: load it (Sandbox only), then come back without them.
-    const target = scenarioRedirect(request.nextUrl);
+    const isRead = request.method === "GET" || request.method === "HEAD";
+    const target = isRead ? scenarioRedirect(request.nextUrl) : null;
     if (target) return withCookies(NextResponse.redirect(new URL(target, request.url)), response);
     return response;
   }

@@ -139,11 +139,15 @@ export function createFakeProvider({ store, now }: FakeProviderDeps): SocialProv
     return state;
   }
 
-  /** True (and one failure used up) when the account's failure mode applies to this call. */
-  async function fails(state: FakeAccountState, modes: readonly FakeFailureMode[]) {
+  /**
+   * True when the account's failure mode applies to this call. Uses up one failure unless
+   * `consume` is false (read-only checks, like the quota check before publishing).
+   */
+  async function fails(state: FakeAccountState, modes: readonly FakeFailureMode[], consume = true) {
     if (!state.failureMode || !modes.includes(state.failureMode)) return false;
     if (state.failuresLeft === null) return true;
     if (state.failuresLeft <= 0) return false;
+    if (!consume) return true;
     state.failuresLeft -= 1;
     await store.setFailuresLeft(state.accountId, state.failuresLeft);
     return true;
@@ -211,7 +215,7 @@ export function createFakeProvider({ store, now }: FakeProviderDeps): SocialProv
 
     async getPublishingQuota(ctx) {
       const state = await guard(ctx);
-      if (await fails(state, ["quota_exhausted"])) {
+      if (await fails(state, ["quota_exhausted"], false)) {
         return { used: state.quotaLimit, limit: state.quotaLimit, windowHours: QUOTA_WINDOW_HOURS };
       }
       const since = new Date(now().getTime() - QUOTA_WINDOW_HOURS * HOUR_MS);
@@ -221,20 +225,23 @@ export function createFakeProvider({ store, now }: FakeProviderDeps): SocialProv
 
     async createReelContainer(ctx, { videoUrl, caption }) {
       await guard(ctx);
-      const id = fakeId("fake_container", ctx.accountId, videoUrl, now().toISOString());
-      const existing = await store.getContainer(id);
-      if (!existing) {
-        await store.saveContainer({
-          id,
-          accountId: ctx.accountId,
-          videoUrl,
-          caption,
-          statusChecks: 0,
-          mediaId: null,
-          permalink: null,
-          publishedAt: null,
-        });
+      // Every call makes a new container, like Instagram. Ids are deterministic: the first free one
+      // for (account, video, caption, now).
+      const key = [ctx.accountId, videoUrl, caption, now().toISOString()];
+      let id = fakeId("fake_container", ...key);
+      for (let n = 2; await store.getContainer(id); n++) {
+        id = fakeId("fake_container", ...key, `${n}`);
       }
+      await store.saveContainer({
+        id,
+        accountId: ctx.accountId,
+        videoUrl,
+        caption,
+        statusChecks: 0,
+        mediaId: null,
+        permalink: null,
+        publishedAt: null,
+      });
       return { containerId: id };
     },
 

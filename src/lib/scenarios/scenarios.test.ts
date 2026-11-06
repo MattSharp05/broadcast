@@ -38,6 +38,11 @@ describe("scenario registry", () => {
     expect(seed.fakeAccounts.map((f) => f.account_id).sort()).toEqual([...accounts].sort());
     expect(seed.posts.every((p) => accounts.has(p.account_id) && media.has(p.media_id))).toBe(true);
     expect(seed.postMetrics.every((m) => posts.has(m.post_id))).toBe(true);
+    // Every published post is known to the fake provider, under the same container and media id.
+    const containers = new Map(seed.fakeContainers.map((c) => [c.id, c]));
+    for (const p of seed.posts.filter((x) => x.status === "published")) {
+      expect(containers.get(p.container_id ?? "")?.media_id).toBe(p.media_ig_id);
+    }
   });
 });
 

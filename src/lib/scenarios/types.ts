@@ -15,6 +15,8 @@ export interface SandboxSeed {
   brands: Insert<"brands">[];
   accounts: Insert<"social_accounts">[];
   fakeAccounts: Insert<"fake_accounts">[];
+  /** The fake provider's record of already-published posts (so their stats can be fetched). */
+  fakeContainers: Insert<"fake_containers">[];
   media: Insert<"media_assets">[];
   posts: Insert<"posts">[];
   postMetrics: Insert<"post_metrics">[];
@@ -43,6 +45,7 @@ export function emptySeed(timezone: string): SandboxSeed {
     brands: [],
     accounts: [],
     fakeAccounts: [],
+    fakeContainers: [],
     media: [],
     posts: [],
     postMetrics: [],

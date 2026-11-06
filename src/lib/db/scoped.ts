@@ -10,7 +10,7 @@ export type WorkspaceTable = {
 
 /**
  * Queries limited to one workspace (CLAUDE.md → Conventions: every query is scoped by
- * workspace_id). `scoped(db, workspaceId).from("posts")` reads only that workspace's posts.
+ * workspace_id). `scoped(db, workspaceId).select("posts", "id, status")` reads only that workspace's posts.
  */
 export function scoped(db: SupabaseClient<Database>, workspaceId: string) {
   if (!workspaceId) throw new Error("A workspace id is required.");

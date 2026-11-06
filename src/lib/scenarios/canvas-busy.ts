@@ -292,17 +292,30 @@ export const canvasBusy: Scenario = {
           return;
         }
         const mediaIgId = `fake_media_${spec.key}_${i}`;
+        const containerId = `fake_container_${spec.key}_${i}`;
+        const permalink = `${FAKE_PERMALINK_BASE}/${spec.handle}/reel/${mediaIgId}`;
+        const caption = nextTitle();
+        seed.fakeContainers.push({
+          id: containerId,
+          account_id: accountId,
+          video_url: `sandbox://${NAME}/${postId}.mp4`,
+          caption,
+          status_checks: 2,
+          media_id: mediaIgId,
+          permalink,
+          published_at: iso,
+        });
         seed.posts.push({
           id: postId,
           account_id: accountId,
           media_id: addMedia(postId, iso),
-          caption: nextTitle(),
+          caption,
           timing: "queue",
           scheduled_at: iso,
           status: "published",
-          container_id: `fake_container_${spec.key}_${i}`,
+          container_id: containerId,
           media_ig_id: mediaIgId,
-          permalink: `${FAKE_PERMALINK_BASE}/${spec.handle}/reel/${mediaIgId}`,
+          permalink,
           attempts: 1,
           published_at: iso,
         });

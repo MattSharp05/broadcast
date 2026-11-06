@@ -84,6 +84,14 @@ describe("fake provider: container progression", () => {
     expect(a).toEqual(b);
   });
 
+  it("makes a new container per call, even for the same video under a frozen clock", async () => {
+    const { provider } = setup();
+    const input = { videoUrl: "https://v/1.mp4", caption: "Same" };
+    const a = await provider.createReelContainer(ctx, input);
+    const b = await provider.createReelContainer(ctx, input);
+    expect(a.containerId).not.toBe(b.containerId);
+  });
+
   it("doesn't know another account's container", async () => {
     const { provider } = setup();
     const { containerId } = await provider.createReelContainer(ctx, {
@@ -162,6 +170,15 @@ describe("fake provider: failure modes", () => {
     const err = await rejection(publishOne(provider));
     expect(err.code).toBe("quota_exhausted");
     expect(err.retryable).toBe(true);
+  });
+
+  it("the quota check doesn't use up a limited quota_exhausted failure", async () => {
+    const { provider } = setup({ failureMode: "quota_exhausted", failuresLeft: 1 });
+    expect((await provider.getPublishingQuota(ctx)).used).toBe(100);
+    expect((await provider.getPublishingQuota(ctx)).used).toBe(100);
+    const err = await rejection(publishOne(provider));
+    expect(err.code).toBe("quota_exhausted");
+    expect((await provider.getPublishingQuota(ctx)).used).toBe(0);
   });
 
   it("aspect_ratio ends the container in a non-retryable error", async () => {

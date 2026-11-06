@@ -115,6 +115,23 @@ describe("scenarios", () => {
     expect(await count("posts", SANDBOX)).toBe(loaded.counts.posts);
     expect(await count("post_metrics", SANDBOX)).toBe(loaded.counts.postMetrics);
     expect(await count("fake_accounts", SANDBOX)).toBe(5);
+    expect(await count("fake_containers", SANDBOX)).toBe(loaded.counts.fakeContainers);
+
+    // A seeded published post's stats can be fetched through the fake provider.
+    const published = await admin
+      .from("posts")
+      .select("account_id, media_ig_id")
+      .eq("workspace_id", SANDBOX)
+      .eq("status", "published")
+      .limit(1)
+      .single();
+    if (published.error) throw published.error;
+    const provider = createFakeProvider({ store: createDbFakeStore(admin), now: () => NOW });
+    const insights = await provider.getMediaInsights(
+      { accountId: published.data.account_id, platformUserId: null, accessToken: "unused" },
+      published.data.media_ig_id ?? "",
+    );
+    expect(insights.views).toBeGreaterThan(0);
 
     const settings = await admin
       .from("settings")

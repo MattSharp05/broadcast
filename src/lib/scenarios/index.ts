@@ -1,3 +1,4 @@
+import { addContent } from "./add-content";
 import { canvasBusy } from "./canvas-busy";
 import { connectMissingPermission } from "./connect-missing-permission";
 import { empty } from "./empty";
@@ -17,6 +18,7 @@ export const SCENARIOS: readonly Scenario[] = [
   noAccounts,
   publishQuotaExhausted,
   publishContainerError,
+  addContent,
 ];
 
 export function getScenario(name: string): Scenario | undefined {

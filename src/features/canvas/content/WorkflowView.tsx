@@ -2,17 +2,29 @@
 
 import { ArrowDown, ArrowUp, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { memo, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { Button } from "@/components/Button";
 import { PageHeader } from "@/components/PageHeader";
 import { Popover } from "@/components/Popover";
 import { TagFilter } from "@/components/TagFilter";
+import { Toast } from "@/components/Toast";
 import { Canvas, type CanvasHandle } from "@/features/canvas/engine";
+import { AddContent, type AddContentPreset } from "@/features/content/AddContent";
+import type { ActionResult, AddContentInput, AddedContent } from "@/features/content/types";
 import { DetailDrawer } from "@/features/drawers/DetailDrawer";
 import { Preview } from "@/features/drawers/previews";
 import type { DetailTarget } from "@/features/drawers/types";
 import type { WorkflowDetails } from "@/lib/db/canvas";
 import type { CanvasColumn, CanvasStats } from "@/lib/domain/canvas";
+import type { ContentAccount } from "@/lib/domain/content";
 import { nowLabel, shortCountdown } from "@/lib/domain/format";
 import { ALL_TAGS, filterByTag, tagsOf } from "@/lib/domain/tags";
 import { AccountHeader, PostedPostCard, UpcomingPostCard, place, type CanvasClock } from "./cards";
@@ -32,6 +44,9 @@ export interface WorkflowViewProps {
   timezone: string;
   /** Preview and drawer data (BC-15). */
   details: WorkflowDetails;
+  /** The Add content dialog's accounts and server action (BC-14). */
+  contentAccounts: ContentAccount[];
+  addContent: (input: AddContentInput) => Promise<ActionResult<AddedContent>>;
 }
 
 const NARROW_QUERY = "(max-width: 699px)";
@@ -159,6 +174,8 @@ export function WorkflowView({
   frozen,
   timezone,
   details,
+  contentAccounts,
+  addContent,
 }: WorkflowViewProps) {
   const router = useRouter();
   const initialNow = useMemo(() => new Date(nowIso), [nowIso]);
@@ -197,6 +214,43 @@ export function WorkflowView({
   const { preview, open, close, handlers } = useDetailInteractions(
     (key) => targets.get(key) ?? null,
   );
+
+  // Add content: the top bar button, or "Add a video for this slot" in an open slot's drawer
+  // (that account; pinned to the slot unless it's where a queued video would go anyway).
+  const [adding, setAdding] = useState<AddContentPreset | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const clearToast = useCallback(() => {
+    setToast(null);
+  }, []);
+  const fresh = useRef(new Set<string>());
+  const openAddContent = useCallback(
+    (accountId: string, slotAt?: Date) => {
+      const next = contentAccounts.find((a) => a.id === accountId)?.nextOpenSlot;
+      const pin = slotAt && next && slotAt.getTime() !== new Date(next).getTime();
+      close();
+      setAdding({ accountIds: [accountId], pinAt: pin ? slotAt : undefined });
+    },
+    [contentAccounts, close],
+  );
+  const onAdded = useCallback(
+    (result: AddedContent) => {
+      setAdding(null);
+      for (const id of result.postIds) fresh.current.add(id);
+      setToast(result.message);
+      router.refresh();
+    },
+    [router],
+  );
+  // The new cards get a brief highlight once the refreshed canvas shows them.
+  useEffect(() => {
+    if (fresh.current.size === 0) return;
+    for (const id of [...fresh.current]) {
+      const el = pageRef.current?.querySelector<HTMLElement>(`[data-post="${CSS.escape(id)}"]`);
+      if (!el) continue;
+      el.setAttribute("data-fresh", "");
+      fresh.current.delete(id);
+    }
+  }, [columns, activeTag]);
 
   // Keyboard focus on a card: the browser scrolls the (overflow: hidden) stage to show it, which
   // the transform-based canvas doesn't expect. Undo the scroll and pan to the card instead.
@@ -272,7 +326,13 @@ export function WorkflowView({
                 setTag(t);
               }}
             />
-            <Button variant="primary">
+            <Button
+              variant="primary"
+              onClick={() => {
+                setAdding({ accountIds: [] });
+              }}
+              data-testid="add-content-button"
+            >
               <Plus aria-hidden="true" />
               Add content
             </Button>
@@ -306,7 +366,21 @@ export function WorkflowView({
         clock={clock}
         onClose={close}
         returnFocus={open?.returnFocus}
+        onAddContent={openAddContent}
       />
+      <AddContent
+        open={adding !== null}
+        onClose={() => {
+          setAdding(null);
+        }}
+        accounts={contentAccounts}
+        preset={adding}
+        now={now}
+        timezone={timezone}
+        addContent={addContent}
+        onAdded={onAdded}
+      />
+      <Toast message={toast} onDone={clearToast} />
     </div>
   );
 }

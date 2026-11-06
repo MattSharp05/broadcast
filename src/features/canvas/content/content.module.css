@@ -495,3 +495,24 @@
     transition: none;
   }
 }
+
+/* The fresh-card highlight after Add content (DESIGN.md → Avoid: motion answers actions). */
+.card[data-fresh] {
+  animation: fresh 1.6s ease-out;
+}
+
+@keyframes fresh {
+  from {
+    border-color: var(--accent);
+    box-shadow:
+      0 0 0 4px var(--accent-soft),
+      var(--shadow-lg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card[data-fresh] {
+    animation: none;
+    border-color: var(--accent);
+  }
+}

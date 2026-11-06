@@ -20,6 +20,7 @@ import { Canvas, type CanvasHandle } from "@/features/canvas/engine";
 import { AddContent, type AddContentPreset } from "@/features/content/AddContent";
 import type { ActionResult, AddContentInput, AddedContent } from "@/features/content/types";
 import { DetailDrawer } from "@/features/drawers/DetailDrawer";
+import type { OnQueueChanged, QueueActions } from "@/features/drawers/edit-types";
 import { Preview } from "@/features/drawers/previews";
 import type { DetailTarget } from "@/features/drawers/types";
 import type { WorkflowDetails } from "@/lib/db/canvas";
@@ -47,6 +48,8 @@ export interface WorkflowViewProps {
   /** The Add content dialog's accounts and server action (BC-14). */
   contentAccounts: ContentAccount[];
   addContent: (input: AddContentInput) => Promise<ActionResult<AddedContent>>;
+  /** Editing the queue and slots from the drawers (BC-18). */
+  queueActions?: QueueActions;
 }
 
 const NARROW_QUERY = "(max-width: 699px)";
@@ -176,6 +179,7 @@ export function WorkflowView({
   details,
   contentAccounts,
   addContent,
+  queueActions,
 }: WorkflowViewProps) {
   const router = useRouter();
   const initialNow = useMemo(() => new Date(nowIso), [nowIso]);
@@ -241,6 +245,18 @@ export function WorkflowView({
     },
     [router],
   );
+  // A drawer edit saved: the action already refreshed the page data (revalidatePath), so the
+  // open drawer re-reads its target below; echo the action in a toast.
+  const onQueueChanged = useCallback<OnQueueChanged>(
+    (message, options) => {
+      if (options?.close) close();
+      setToast((t) => ({ id: (t?.id ?? 0) + 1, message }));
+    },
+    [close],
+  );
+  // The open drawer follows the refreshed data (and closes when its post is gone).
+  const openTarget = open ? (targets.get(open.key) ?? null) : null;
+
   // The new cards get a brief highlight once the refreshed canvas shows them.
   useEffect(() => {
     if (fresh.current.size === 0) return;
@@ -356,17 +372,19 @@ export function WorkflowView({
           />
         </div>
       </Canvas>
-      {preview && !open ? (
+      {preview && !openTarget ? (
         <Popover anchor={preview.anchor} data-testid="canvas-preview">
           <Preview target={preview.target} clock={clock} />
         </Popover>
       ) : null}
       <DetailDrawer
-        target={open?.target ?? null}
+        target={openTarget}
         clock={clock}
         onClose={close}
         returnFocus={open?.returnFocus}
         onAddContent={openAddContent}
+        actions={queueActions}
+        onChanged={onQueueChanged}
       />
       <AddContent
         open={adding !== null}

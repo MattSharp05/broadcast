@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AccountRow, BrandRef } from "@/lib/domain/accounts";
 import { UPCOMING_STATUSES, avatarIndex, profileUrl } from "@/lib/domain/canvas";
+import { cleanSlots } from "@/lib/domain/add-account";
+import { replanAccount, type QueueContext } from "./posts";
 import type { Database } from "./types";
 
 /**
@@ -105,6 +107,22 @@ export function saveAccountDescription(
   description: string,
 ): Promise<void> {
   return updateAccount(db, workspaceId, accountId, { description });
+}
+
+/**
+ * Replaces the account's daily posting slots (cleaned: valid, unique, earliest first) and re-times
+ * its queue (BC-18). Returns the slots as saved.
+ */
+export async function saveAccountSlots(
+  db: Db,
+  ctx: QueueContext,
+  accountId: string,
+  slots: readonly string[],
+): Promise<string[]> {
+  const clean = cleanSlots(slots);
+  await updateAccount(db, ctx.workspaceId, accountId, { slots: clean });
+  await replanAccount(db, ctx, accountId);
+  return clean;
 }
 
 export async function createBrand(db: Db, workspaceId: string, name: string): Promise<BrandRef> {

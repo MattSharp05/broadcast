@@ -15,6 +15,8 @@ import {
 } from "@/lib/domain/details";
 import { ago, compactCount } from "@/lib/domain/format";
 import { RefreshChart } from "./charts";
+import type { OnQueueChanged, QueueActions } from "./edit-types";
+import { PostEditor } from "./post/PostEditor";
 import styles from "./drawers.module.css";
 import { Numbers, Row } from "./previews";
 import type { DetailClock } from "./types";
@@ -37,10 +39,21 @@ export interface PostDetailsProps {
   clock: DetailClock;
   /** "Add a video for this slot": opens Add content for the account and slot (BC-14). */
   onAddContent?: (accountId: string, slotAt: Date) => void;
+  /** Editing a waiting post (BC-18); read-only without. */
+  actions?: QueueActions;
+  onChanged?: OnQueueChanged;
 }
 
 /** The post drawer's body for each kind of card: open slot, posted, failed, waiting. */
-export function PostDetails({ card, account, detail, clock, onAddContent }: PostDetailsProps) {
+export function PostDetails({
+  card,
+  account,
+  detail,
+  clock,
+  onAddContent,
+  actions,
+  onChanged,
+}: PostDetailsProps) {
   const { now } = clock;
 
   if (card.kind === "open") {
@@ -160,13 +173,27 @@ export function PostDetails({ card, account, detail, clock, onAddContent }: Post
     );
   }
 
+  if (actions && onChanged && card.kind !== "publishing") {
+    return (
+      <PostEditor
+        // Fresh state once the saved post comes back (new time, kind or caption).
+        key={`${card.id}:${card.kind}:${card.at?.toISOString() ?? ""}:${detail?.caption ?? ""}`}
+        card={card}
+        account={account}
+        detail={detail}
+        clock={clock}
+        actions={actions}
+        onChanged={onChanged}
+      />
+    );
+  }
+
   const pinned = card.kind === "pinned" || detail?.timing === "pinned";
   return (
     <>
       {card.kind === "paused" ? <Note tone="warn">{connectionNote(account)}</Note> : null}
       <div className={styles.split}>
         {thumb}
-        {/* Editing the caption and timing arrives with the post editor (BC-18). */}
         <section className={styles.section} data-section="caption">
           <h3>Caption</h3>
           <p className={styles.caption}>{detail?.caption ?? card.title}</p>

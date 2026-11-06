@@ -1,0 +1,221 @@
+# CI in two levels (docs/TDD.md → Testing strategy → CI pipeline).
+# - Pull requests: a fast gate, jobs in parallel, each ≤ 5 min. The `changes` job decides what else
+#   runs: docs-only PRs skip build and e2e; UI/CSS or CI/config/dependency changes add the phone e2e
+#   job (once a phone Playwright project exists).
+# - Push to main: the full suite (every job, every Playwright project, `@full` tests). Vercel's Git
+#   integration deploys production from main on its own (vercel.json); it doesn't wait for this run.
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  # One group per PR (superseded runs are cancelled); one per commit on main, so a queued main run
+  # is never dropped when the next merge lands.
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+  pull-requests: read
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  changes:
+    name: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      code: ${{ steps.decide.outputs.code }}
+      e2e: ${{ steps.decide.outputs.e2e }}
+      e2e_phone: ${{ steps.decide.outputs.e2e_phone }}
+      full: ${{ steps.decide.outputs.full }}
+    steps:
+      - uses: actions/checkout@v4
+      # PRs only (main runs everything). `code`: true when any changed file is outside docs/ and
+      # isn't Markdown.
+      - uses: dorny/paths-filter@v3
+        if: github.event_name == 'pull_request'
+        id: code
+        with:
+          predicate-quantifier: every
+          filters: |
+            code:
+              - '**'
+              - '!docs/**'
+              - '!**/*.md'
+      - uses: dorny/paths-filter@v3
+        if: github.event_name == 'pull_request'
+        id: areas
+        with:
+          filters: |
+            ui:
+              - 'src/app/**'
+              - 'src/components/**'
+              - 'src/features/**'
+              - 'src/styles/**'
+              - '**/*.css'
+            config:
+              - '.github/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - '.nvmrc'
+              - 'tsconfig.json'
+              - 'next.config.ts'
+              - 'vitest.config.ts'
+              - 'playwright.config.ts'
+              - 'vercel.json'
+      - id: decide
+        env:
+          IS_MAIN: ${{ github.event_name == 'push' }}
+          CODE: ${{ steps.code.outputs.code }}
+          UI: ${{ steps.areas.outputs.ui }}
+          CONFIG: ${{ steps.areas.outputs.config }}
+        run: |
+          # e2e exists once there is a Playwright config and at least one spec (BC-8).
+          has_e2e=false
+          if [ -f playwright.config.ts ] && find tests/e2e -name '*.spec.ts' 2>/dev/null | grep -q .; then
+            has_e2e=true
+          fi
+          has_phone=false
+          if [ "$has_e2e" = true ] && grep -Eq "name: *['\"]phone['\"]" playwright.config.ts; then
+            has_phone=true
+          fi
+
+          full=$IS_MAIN
+          code=$CODE
+          [ "$full" = true ] && code=true
+
+          e2e=false
+          [ "$has_e2e" = true ] && [ "$code" = true ] && e2e=true
+          e2e_phone=false
+          if [ "$has_phone" = true ] && { [ "$full" = true ] || [ "$UI" = true ] || [ "$CONFIG" = true ]; }; then
+            e2e_phone=true
+          fi
+
+          {
+            echo "code=$code"
+            echo "e2e=$e2e"
+            echo "e2e_phone=$e2e_phone"
+            echo "full=$full"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "### What runs"
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Code changed (not docs-only) | $code |"
+            echo "| Build | $code |"
+            echo "| e2e desktop | $e2e (spec files present: $has_e2e) |"
+            echo "| e2e phone | $e2e_phone (phone project present: $has_phone) |"
+            echo "| Full suite (main) | $full |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  check:
+    name: lint+typecheck+build
+    needs: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm format:check
+      - run: pnpm typecheck
+      - uses: actions/cache@v4
+        if: needs.changes.outputs.code == 'true'
+        with:
+          path: .next/cache
+          key: nextjs-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('src/**') }}
+          restore-keys: nextjs-${{ hashFiles('pnpm-lock.yaml') }}-
+      - name: Build
+        if: needs.changes.outputs.code == 'true'
+        run: pnpm build
+      - name: Build skipped (docs-only change)
+        if: needs.changes.outputs.code != 'true'
+        run: echo "Docs-only change, build skipped." | tee -a "$GITHUB_STEP_SUMMARY"
+
+  unit:
+    name: unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+
+  # Placeholder until BC-8 adds Playwright: skipped while tests/e2e has no specs.
+  # BC-8: keep the image tag equal to @playwright/test in package.json, and add local Supabase.
+  e2e:
+    name: e2e desktop (${{ matrix.shard }}/2)
+    needs: changes
+    if: needs.changes.outputs.e2e == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      # PRs skip `@full` tests; main runs everything.
+      - run: >-
+          pnpm exec playwright test --project=desktop --shard=${{ matrix.shard }}/2
+          ${{ needs.changes.outputs.full != 'true' && '--grep-invert @full' || '' }}
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report-desktop-${{ matrix.shard }}
+          path: playwright-report/
+          retention-days: 7
+
+  # Phone layout (and, later, visual baselines): UI/CSS or config changes on PRs, always on main.
+  e2e-phone:
+    name: e2e phone
+    needs: changes
+    if: needs.changes.outputs.e2e_phone == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: >-
+          pnpm exec playwright test --project=phone
+          ${{ needs.changes.outputs.full != 'true' && '--grep-invert @full' || '' }}
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report-phone
+          path: playwright-report/
+          retention-days: 7

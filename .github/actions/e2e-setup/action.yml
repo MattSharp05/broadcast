@@ -1,0 +1,48 @@
+name: e2e set-up
+description: >-
+  Installs dependencies, starts local Supabase (in the background while the browser installs),
+  exports its URL and keys, and builds the app for Playwright.
+runs:
+  using: composite
+  steps:
+    - uses: pnpm/action-setup@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version-file: .nvmrc
+        cache: pnpm
+    - shell: bash
+      run: pnpm install --frozen-lockfile
+    # Pulling the Supabase images is the slow part: start it now and install the browser meanwhile.
+    - name: Start Supabase (background)
+      shell: bash
+      run: |
+        (pnpm supabase start \
+          -x realtime,storage-api,imgproxy,studio,edge-runtime,logflare,vector,supavisor \
+          > supabase-start.log 2>&1; echo $? > supabase-start.exit) &
+    - name: Playwright version
+      id: pw
+      shell: bash
+      run: echo "version=$(pnpm exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+    - uses: actions/cache@v4
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}-chromium
+    - name: Install Chromium and its system libraries
+      shell: bash
+      run: pnpm exec playwright install --with-deps --only-shell chromium
+    - name: Wait for Supabase
+      shell: bash
+      run: |
+        timeout 240 bash -c 'until [ -f supabase-start.exit ]; do sleep 2; done'
+        tail -5 supabase-start.log
+        exit "$(cat supabase-start.exit)"
+    - name: Export Supabase URL and keys
+      shell: bash
+      run: pnpm -s db:env | sed 's/"//g' >> "$GITHUB_ENV"
+    - uses: actions/cache@v4
+      with:
+        path: .next/cache
+        key: nextjs-e2e-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('src/**') }}
+        restore-keys: nextjs-e2e-${{ hashFiles('pnpm-lock.yaml') }}-
+    - shell: bash
+      run: pnpm build

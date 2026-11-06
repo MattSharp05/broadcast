@@ -208,29 +208,25 @@ jobs:
         if: failure()
         run: cat app.log || true
 
-  # Placeholder until BC-8 adds Playwright: skipped while tests/e2e has no specs.
-  # BC-8: keep the image tag equal to @playwright/test in package.json, and add local Supabase.
+  # Playwright against a production build and local Supabase (BC-8). Runs on the runner, not in
+  # the Playwright Docker image: Supabase needs Docker, which a container job doesn't have. The
+  # browser comes from `playwright install --with-deps`, pinned by @playwright/test in the
+  # lockfile (cached per version). Set-up: .github/actions/e2e-setup.
   e2e:
     name: e2e desktop
     needs: changes
     if: needs.changes.outputs.e2e == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-    container:
-      image: mcr.microsoft.com/playwright:v1.63.0-noble
+    timeout-minutes: 8
+    env:
+      ALLOWED_EMAIL: e2e-owner@broadcast.test
     strategy:
       fail-fast: false
       matrix:
         shard: [1, 2]
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm build
+      - uses: ./.github/actions/e2e-setup
       # PRs skip `@full` tests; main runs everything.
       - run: >-
           pnpm exec playwright test --project=desktop --shard=${{ matrix.shard }}/2
@@ -249,17 +245,11 @@ jobs:
     if: needs.changes.outputs.e2e_phone == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    container:
-      image: mcr.microsoft.com/playwright:v1.63.0-noble
+    env:
+      ALLOWED_EMAIL: e2e-owner@broadcast.test
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm build
+      - uses: ./.github/actions/e2e-setup
       - run: >-
           pnpm exec playwright test --project=phone
           ${{ needs.changes.outputs.full != 'true' && '--grep-invert @full' || '' }}

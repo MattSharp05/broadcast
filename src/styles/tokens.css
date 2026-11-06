@@ -1,0 +1,167 @@
+/*
+ * Design tokens. The only file in src/ allowed to hold literal colours
+ * (enforced by src/styles/tokens.test.ts). Values come from docs/DESIGN.md → Tokens.
+ * Light on :root; dark under prefers-color-scheme (unless data-theme="light")
+ * and under data-theme="dark". Keep the two dark blocks identical.
+ */
+:root {
+  --bg: #f4f5f7;
+  --canvas: #eceef2;
+  --dot: #d6dae1;
+  --surface: #ffffff;
+  --surface-2: #f8f9fb;
+  --hover: #f1f3f6;
+  --line: #e2e5ea;
+  --line-2: #cbd0d8;
+  --ink: #141922;
+  --ink-2: #465061;
+  --ink-3: #737c8b;
+  --accent: #2350d1;
+  --accent-hover: #1b41b0;
+  --accent-soft: #e9effc;
+  --accent-ink: #1c3f9f;
+  --on-accent: #ffffff;
+  --rail: #14203a;
+  --rail-2: #1d2c4d;
+  --rail-ink: #b9c4d9;
+  --rail-ink-hi: #ffffff;
+  --rail-line: #26365a;
+  --band: #e1e6ef;
+  --band-line: #c9d1df;
+  --hdr: #14203a;
+  --hdr-ink: #ffffff;
+  --hdr-ink-2: #b4c0d6;
+  --hdr-line: #2a3a5e;
+  --hdr-warn: #f3bd63;
+  --good: #17784a;
+  --good-soft: #e8f5ee;
+  --warn: #a5560a;
+  --warn-soft: #fff5e3;
+  --warn-line: #f1cd8c;
+  --bad: #c42f22;
+  --bad-soft: #fdeeec;
+  --bad-line: #f2b9b2;
+  --now: #141922;
+  --on-now: #ffffff;
+  --shadow: 0 1px 2px rgba(20, 25, 34, 0.06), 0 1px 3px rgba(20, 25, 34, 0.04);
+  --shadow-lg: 0 16px 40px -12px rgba(20, 25, 34, 0.22), 0 2px 6px rgba(20, 25, 34, 0.06);
+  --scrim: rgba(20, 25, 34, 0.32);
+
+  /* Avatar colours (white initials), the same in both themes. */
+  --avatar-1: #2f6f8f;
+  --avatar-2: #3a5bb8;
+  --avatar-3: #6a5a9a;
+  --avatar-4: #a3562d;
+  --avatar-5: #2c7a55;
+  --avatar-6: #5b6577;
+  --on-avatar: #ffffff;
+
+  /* Type */
+  --font-sans: var(--font-plex), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  /* Shape */
+  --r-xs: 4px; /* tags, small chips */
+  --r-s: 6px; /* buttons, inputs, selects */
+  --r: 8px; /* cards, tables, drawers, popovers */
+  --r-lg: 12px; /* modals */
+
+  /* Layout */
+  --rail-w: 220px;
+  --gutter: 24px;
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111317;
+    --canvas: #15181d;
+    --dot: #262b33;
+    --surface: #1b1f25;
+    --surface-2: #20252c;
+    --hover: #262c34;
+    --line: #2b313a;
+    --line-2: #3a424e;
+    --ink: #e7eaef;
+    --ink-2: #a9b1be;
+    --ink-3: #7c8594;
+    --accent: #6f93ff;
+    --accent-hover: #8aa8ff;
+    --accent-soft: #1d2945;
+    --accent-ink: #a8bfff;
+    --on-accent: #0b1020;
+    --rail: #0d1424;
+    --rail-2: #17223a;
+    --rail-ink: #a3afc6;
+    --rail-ink-hi: #ffffff;
+    --rail-line: #1f2b45;
+    --band: #1a1f2b;
+    --band-line: #2a3242;
+    --hdr: #22335a;
+    --hdr-ink: #ffffff;
+    --hdr-ink-2: #b4c0d6;
+    --hdr-line: #36497a;
+    --hdr-warn: #f3bd63;
+    --good: #58c48e;
+    --good-soft: #15301f;
+    --warn: #efb25a;
+    --warn-soft: #30240f;
+    --warn-line: #5c4519;
+    --bad: #f0796c;
+    --bad-soft: #371b18;
+    --bad-line: #62302a;
+    --now: #e7eaef;
+    --on-now: #111317;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 16px 40px -12px rgba(0, 0, 0, 0.7);
+    --scrim: rgba(0, 0, 0, 0.5);
+
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #111317;
+  --canvas: #15181d;
+  --dot: #262b33;
+  --surface: #1b1f25;
+  --surface-2: #20252c;
+  --hover: #262c34;
+  --line: #2b313a;
+  --line-2: #3a424e;
+  --ink: #e7eaef;
+  --ink-2: #a9b1be;
+  --ink-3: #7c8594;
+  --accent: #6f93ff;
+  --accent-hover: #8aa8ff;
+  --accent-soft: #1d2945;
+  --accent-ink: #a8bfff;
+  --on-accent: #0b1020;
+  --rail: #0d1424;
+  --rail-2: #17223a;
+  --rail-ink: #a3afc6;
+  --rail-ink-hi: #ffffff;
+  --rail-line: #1f2b45;
+  --band: #1a1f2b;
+  --band-line: #2a3242;
+  --hdr: #22335a;
+  --hdr-ink: #ffffff;
+  --hdr-ink-2: #b4c0d6;
+  --hdr-line: #36497a;
+  --hdr-warn: #f3bd63;
+  --good: #58c48e;
+  --good-soft: #15301f;
+  --warn: #efb25a;
+  --warn-soft: #30240f;
+  --warn-line: #5c4519;
+  --bad: #f0796c;
+  --bad-soft: #371b18;
+  --bad-line: #62302a;
+  --now: #e7eaef;
+  --on-now: #111317;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 16px 40px -12px rgba(0, 0, 0, 0.7);
+  --scrim: rgba(0, 0, 0, 0.5);
+
+  color-scheme: dark;
+}

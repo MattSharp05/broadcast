@@ -32,13 +32,18 @@ export function Thumb({
   url,
   durationS,
   colour,
+  className,
 }: {
   url: string | null;
   durationS: number | null;
   colour: number;
+  className?: string;
 }) {
   return (
-    <div className={styles.thumb} style={{ "--tint": `var(--avatar-${colour})` } as CSSProperties}>
+    <div
+      className={[styles.thumb, className].filter(Boolean).join(" ")}
+      style={{ "--tint": `var(--avatar-${colour})` } as CSSProperties}
+    >
       {url ? (
         // A signed Storage URL: next/image would need every Supabase host configured.
         // eslint-disable-next-line @next/next/no-img-element
@@ -60,6 +65,10 @@ export function AccountHeader({ column, rect }: { column: CanvasColumn; rect: Re
     <div
       className={styles.header}
       style={place(rect)}
+      role="group"
+      aria-label={`@${column.handle}. Press Enter for account details.`}
+      tabIndex={0}
+      data-detail={`account:${column.id}`}
       data-account={column.handle}
       data-attention={attention ? "" : undefined}
     >
@@ -130,7 +139,9 @@ function CardShell({
   status,
   title,
   footer,
+  label,
 }: {
+  label: string;
   kind: string;
   id: string;
   rect: Rect;
@@ -141,7 +152,17 @@ function CardShell({
   footer: ReactNode;
 }) {
   return (
-    <article className={styles.card} style={place(rect)} data-kind={kind} data-post={id}>
+    <article
+      className={styles.card}
+      style={place(rect)}
+      role="button"
+      tabIndex={0}
+      aria-haspopup="dialog"
+      aria-label={label}
+      data-detail={`post:${id}`}
+      data-kind={kind}
+      data-post={id}
+    >
       {thumb}
       <div className={styles.body}>
         <div className={styles.head}>
@@ -168,7 +189,17 @@ export function UpcomingPostCard({
 }) {
   if (card.kind === "open") {
     return (
-      <div className={styles.card} style={place(rect)} data-kind="open" data-post={card.id}>
+      <div
+        className={styles.card}
+        style={place(rect)}
+        role="button"
+        tabIndex={0}
+        aria-haspopup="dialog"
+        aria-label={`Open slot, ${whenLabel(card.at, clock.now, clock.timezone)}`}
+        data-detail={`post:${card.id}`}
+        data-kind="open"
+        data-post={card.id}
+      >
         <span className={styles.when}>{whenLabel(card.at, clock.now, clock.timezone)}</span>
         <span className={styles.small}>Open slot. Fills from the backlog.</span>
       </div>
@@ -177,6 +208,7 @@ export function UpcomingPostCard({
   const when = card.at ? whenLabel(card.at, clock.now, clock.timezone) : "No slot yet";
   let status: ReactNode;
   let foot: string;
+  let word: string;
   switch (card.kind) {
     case "pinned":
       status = (
@@ -185,6 +217,7 @@ export function UpcomingPostCard({
         </Status>
       );
       foot = "Fixed time";
+      word = "Pinned";
       break;
     case "paused":
       status = (
@@ -193,6 +226,7 @@ export function UpcomingPostCard({
         </Status>
       );
       foot = "Waiting for reconnect";
+      word = "Paused";
       break;
     case "publishing":
       status = (
@@ -201,6 +235,7 @@ export function UpcomingPostCard({
         </Status>
       );
       foot = "Instagram is processing it";
+      word = "Publishing";
       break;
     default:
       status = (
@@ -209,9 +244,11 @@ export function UpcomingPostCard({
         </Status>
       );
       foot = card.at ? "Queue slot" : "Add a slot to schedule it";
+      word = "Scheduled";
   }
   return (
     <CardShell
+      label={`${card.title}, ${word}, ${when}`}
       kind={card.kind}
       id={card.id}
       rect={rect}
@@ -240,6 +277,7 @@ export function PostedPostCard({
   if (card.kind === "failed") {
     return (
       <CardShell
+        label={`${card.title}, failed, ${when}`}
         kind="failed"
         id={card.id}
         rect={rect}
@@ -257,6 +295,7 @@ export function PostedPostCard({
   }
   return (
     <CardShell
+      label={`${card.title}, posted ${when}`}
       kind="posted"
       id={card.id}
       rect={rect}

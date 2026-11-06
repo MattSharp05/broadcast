@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  ago,
   compactCount,
   dayLabel,
   duration,
@@ -7,6 +8,7 @@ import {
   nowLabel,
   sameLocalDay,
   shortCountdown,
+  shortDate,
   whenLabel,
 } from "./format";
 
@@ -50,5 +52,14 @@ describe("format", () => {
     expect(compactCount(1_300_000)).toBe("1.3M");
     expect(duration(42)).toBe("0:42");
     expect(duration(65.4)).toBe("1:05");
+  });
+
+  it("says how long ago, and short dates", () => {
+    expect(ago(NOW, NOW)).toBe("just now");
+    expect(ago(new Date("2026-11-05T22:02:00Z"), NOW)).toBe("12 min ago");
+    expect(ago(new Date("2026-11-05T19:00:00Z"), NOW)).toBe("3 h ago");
+    expect(ago(new Date("2026-11-04T20:00:00Z"), NOW)).toBe("1 day ago");
+    expect(ago(new Date("2026-11-02T22:14:00Z"), NOW)).toBe("3 days ago");
+    expect(shortDate(new Date("2026-11-02T10:00:00Z"), LONDON)).toBe("2 Nov");
   });
 });

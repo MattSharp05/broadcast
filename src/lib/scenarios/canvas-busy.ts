@@ -181,6 +181,10 @@ export const canvasBusy: Scenario = {
       seed.brands.push({ id: brandId, name: spec.brand });
       seed.accounts.push({
         id: accountId,
+        // Added a day apart, in the mockup's column order.
+        created_at: new Date(
+          now.getTime() - (30 - ACCOUNTS.indexOf(spec)) * 24 * HOUR_MS,
+        ).toISOString(),
         brand_id: brandId,
         platform: "fake",
         platform_user_id: `fake_user_${spec.key}`,

@@ -43,6 +43,9 @@ Defined once in `src/styles/tokens.css` on `:root`. The dark values apply under
 | `--band` / `--band-line` | `#e1e6ef` / `#c9d1df` | `#1a1f2b` / `#2a3242` | the account band on the canvas |
 | `--hdr` / `--hdr-ink` / `--hdr-ink-2` / `--hdr-line` | `#14203a` / `#fff` / `#b4c0d6` / `#2a3a5e` | `#22335a` / `#fff` / `#b4c0d6` / `#36497a` | account header cards |
 | `--hdr-warn` | `#f3bd63` | `#f3bd63` | needs-attention marker on a header |
+| `--hdr-hover` | `rgba(255,255,255,.12)` | `rgba(255,255,255,.12)` | hover fill of the icon link on a header |
+| `--hdr-shadow` | `0 6px 18px -8px rgba(20,32,58,.55)` | `0 6px 18px -8px rgba(0,0,0,.6)` | resting header card |
+| `--hdr-shadow-hover` | `0 10px 24px -10px rgba(20,32,58,.6)` | `0 10px 24px -10px rgba(0,0,0,.7)` | hovered header card (under the 3px focus ring) |
 | `--good` / `--good-soft` | `#17784a` / `#e8f5ee` | `#58c48e` / `#15301f` | ready, live, granted |
 | `--warn` / `--warn-soft` / `--warn-line` | `#a5560a` / `#fff5e3` / `#f1cd8c` | `#efb25a` / `#30240f` / `#5c4519` | needs attention, paused |
 | `--bad` / `--bad-soft` / `--bad-line` | `#c42f22` / `#fdeeec` / `#f2b9b2` | `#f0796c` / `#371b18` / `#62302a` | failed, destructive |
@@ -96,6 +99,12 @@ in `src/` other than `tokens.css` holds a literal colour.
     "Next in 10h 46m" chip is centred in the gap to its right.
   - Lane labels ("Upcoming", "Posted") with one line of help sit to the left of the first column.
   - Below 60% zoom, small text hides and times and handles grow (semantic zoom).
+  - Columns follow the order accounts were added. Upcoming shows up to 4 rows (posts by time,
+    then dashed open slots from the planner), then "N more in backlog"; Posted shows the last 7
+    days, newest first, then a dashed tail. Failed cards give a one-line reason ("Wrong aspect
+    ratio. Open to fix."); the full error lives in the post drawer. The chip reads "Next in
+    10h 46m", "Paused" (account needs attention or its queue is paused) or "Nothing queued".
+  - The Tag select filters columns and then fits the remaining ones in view.
 - **Accounts:** a table in one bordered surface, grouped by brand (group rows). Columns: Account
   (avatar, handle linked to the profile, platform), Status (dot + word + reason), Tags (inline
   add/remove), Description (inline textarea, autosaves), Followers, Slots a day, Backlog,

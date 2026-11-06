@@ -4,6 +4,14 @@ import { execFileSync } from "node:child_process";
 export const E2E_EMAIL = process.env.ALLOWED_EMAIL ?? "e2e-owner@broadcast.test";
 
 /**
+ * TOKEN_ENC_KEY for the app under test: a fixed key for e2e only (32 bytes of 0x42, base64). It
+ * encrypts Sandbox tokens in a throwaway local database; it is never a real key.
+ */
+export const E2E_TOKEN_ENC_KEY = process.env.TOKEN_ENC_KEY?.trim()
+  ? process.env.TOKEN_ENC_KEY
+  : Buffer.alloc(32, 0x42).toString("base64");
+
+/**
  * Supabase URL and keys for the app under test: from the environment (CI exports them), else from
  * the local stack's `supabase status`.
  */

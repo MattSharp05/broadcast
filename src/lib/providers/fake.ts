@@ -126,6 +126,68 @@ export function fakeInsights(mediaId: string, followers: number, hours: number):
   };
 }
 
+// ───────────── fake consent (connecting a Sandbox account) ─────────────
+
+/** The fake consent screen: the Sandbox's stand-in for Instagram's "Allow" page. */
+export const FAKE_CONSENT_PATH = "/connect/fake";
+/** Every scope the fake provider can grant. */
+export const FAKE_SCOPES = ["fake_basic", "fake_content_publish", "fake_insights"] as const;
+const FAKE_CODE_PREFIX = "fake_code.";
+const FAKE_USER_PREFIX = "fake_user_";
+const FAKE_NEW_FOLLOWERS_BASE = 500;
+const HANDLE_RE = /^[a-z0-9._]{1,30}$/;
+
+export interface FakeConsent {
+  /** The fake Instagram user who signs in (their handle). */
+  handle: string;
+  /** What they allowed. */
+  scopes: string[];
+}
+
+/** Lower-cased, or null when it isn't a valid Instagram-style handle. */
+export function normalizeFakeHandle(value: string): string | null {
+  const handle = value.trim().replace(/^@/, "").toLowerCase();
+  return HANDLE_RE.test(handle) ? handle : null;
+}
+
+/** The code the fake consent screen hands the callback: who signed in and what they allowed. */
+export function fakeAuthCode(consent: FakeConsent): string {
+  const scopes = consent.scopes.filter((s) => (FAKE_SCOPES as readonly string[]).includes(s));
+  const json = JSON.stringify({ handle: consent.handle, scopes });
+  return FAKE_CODE_PREFIX + Buffer.from(json, "utf8").toString("base64url");
+}
+
+export function parseFakeAuthCode(code: string): FakeConsent | null {
+  if (!code.startsWith(FAKE_CODE_PREFIX)) return null;
+  try {
+    const raw: unknown = JSON.parse(
+      Buffer.from(code.slice(FAKE_CODE_PREFIX.length), "base64url").toString("utf8"),
+    );
+    if (!raw || typeof raw !== "object") return null;
+    const { handle, scopes } = raw as { handle?: unknown; scopes?: unknown };
+    const valid = typeof handle === "string" ? normalizeFakeHandle(handle) : null;
+    if (!valid || !Array.isArray(scopes)) return null;
+    return {
+      handle: valid,
+      scopes: scopes.filter(
+        (s): s is string => typeof s === "string" && (FAKE_SCOPES as readonly string[]).includes(s),
+      ),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** The fake platform user id for a handle: the same handle always reconnects the same user. */
+export function fakeUserId(handle: string): string {
+  return FAKE_USER_PREFIX + handle;
+}
+
+function fakeHandleFromUserId(id: string | null): string | null {
+  if (!id?.startsWith(FAKE_USER_PREFIX)) return null;
+  return normalizeFakeHandle(id.slice(FAKE_USER_PREFIX.length));
+}
+
 export function createFakeProvider({ store, now }: FakeProviderDeps): SocialProvider {
   async function account(ctx: ProviderAccount): Promise<FakeAccountState> {
     const state = await store.getAccount(ctx.accountId);
@@ -179,7 +241,7 @@ export function createFakeProvider({ store, now }: FakeProviderDeps): SocialProv
       accessToken: fakeId("fake_token", seed, now().toISOString()),
       expiresAt: new Date(now().getTime() + TOKEN_DAYS * 24 * HOUR_MS),
       platformUserId,
-      scopes: ["fake_basic", "fake_content_publish", "fake_insights"],
+      scopes: [...FAKE_SCOPES],
     };
   }
 
@@ -187,15 +249,19 @@ export function createFakeProvider({ store, now }: FakeProviderDeps): SocialProv
     platform: "fake",
 
     authorizeUrl({ state, redirectUri }) {
-      // No consent screen: straight back to the callback with a code.
-      const url = new URL(redirectUri);
-      url.searchParams.set("code", fakeId("fake_code", state));
+      // The fake consent screen (src/app/connect/fake), on the same site as the callback.
+      const url = new URL(FAKE_CONSENT_PATH, redirectUri);
       url.searchParams.set("state", state);
       return url.toString();
     },
 
     exchangeCode({ code }) {
-      return Promise.resolve(tokens(fakeId("fake_user", code), code));
+      const consent = parseFakeAuthCode(code);
+      if (!consent) return Promise.resolve(tokens(fakeId("fake_user", code), code));
+      return Promise.resolve({
+        ...tokens(fakeUserId(consent.handle), code),
+        scopes: consent.scopes,
+      });
     },
 
     async refreshToken(ctx) {
@@ -204,6 +270,18 @@ export function createFakeProvider({ store, now }: FakeProviderDeps): SocialProv
     },
 
     async getProfile(ctx) {
+      // Connecting: no fake account exists yet; the profile comes from the consent screen's user.
+      const handle = fakeHandleFromUserId(ctx.platformUserId);
+      if (handle && (!ctx.accountId || !(await store.getAccount(ctx.accountId)))) {
+        return {
+          platformUserId: fakeUserId(handle),
+          handle,
+          profileUrl: `${FAKE_PERMALINK_BASE}/${handle}`,
+          followers: FAKE_NEW_FOLLOWERS_BASE + (hash32(handle) % 9000),
+          accountType: "MEDIA_CREATOR",
+          pictureUrl: null,
+        };
+      }
       const state = await guard(ctx);
       return {
         platformUserId: ctx.platformUserId ?? fakeId("fake_user", ctx.accountId),

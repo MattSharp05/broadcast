@@ -1,4 +1,9 @@
 import { createFakeProvider, type FakeStore } from "./fake";
+import {
+  INSTAGRAM_NOT_CONFIGURED_MESSAGE,
+  createInstagramProvider,
+  type InstagramConfig,
+} from "./instagram";
 import { ProviderError, type ProviderPlatform, type SocialProvider } from "./types";
 
 export * from "./types";
@@ -8,6 +13,8 @@ export interface ProviderDeps {
   fakeStore: FakeStore;
   /** The account's workspace clock (src/lib/clock.ts → nowFor). */
   now: () => Date;
+  /** The Instagram app (instagramConfigFromEnv); null or absent when IG_APP_ID/SECRET aren't set. */
+  instagram?: InstagramConfig | null;
 }
 
 /** The SocialProvider for an account's platform. Every platform call goes through this. */
@@ -19,11 +26,13 @@ export function providerFor(
     case "fake":
       return createFakeProvider({ store: deps.fakeStore, now: deps.now });
     case "instagram":
-      // BC-9 adds the Instagram Graph API provider.
-      throw new ProviderError({
-        code: "unsupported",
-        retryable: false,
-        userMessage: "Instagram accounts can't be reached yet. Use a Sandbox account for now.",
-      });
+      if (!deps.instagram) {
+        throw new ProviderError({
+          code: "unsupported",
+          retryable: false,
+          userMessage: INSTAGRAM_NOT_CONFIGURED_MESSAGE,
+        });
+      }
+      return createInstagramProvider({ config: deps.instagram, now: deps.now });
   }
 }

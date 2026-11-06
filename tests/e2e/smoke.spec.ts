@@ -55,13 +55,17 @@ test("/workflow?scenario=canvas-busy switches to the Sandbox and seeds it", asyn
 test("/dev lists every scenario and each link loads it", async ({ page }) => {
   await page.goto("/dev");
   const links = page.getByRole("region", { name: "Scenarios" }).getByRole("link");
-  await expect(links).toHaveText(["canvas-busy", "empty"]);
+  await expect(links).toHaveText(["canvas-busy", "empty", "connect-missing-permission"]);
   await expect(page.getByRole("link", { name: "Canvas engine demo" })).toHaveAttribute(
     "href",
     "/dev/canvas",
   );
 
-  const expected: Record<string, number> = { "canvas-busy": 5, empty: 1 };
+  const expected: Record<string, number> = {
+    "canvas-busy": 5,
+    empty: 1,
+    "connect-missing-permission": 1,
+  };
   for (const [name, accounts] of Object.entries(expected)) {
     await page.goto("/dev");
     await page.getByRole("link", { name, exact: true }).click();

@@ -1,5 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
-import { E2E_EMAIL, supabaseEnv } from "./tests/e2e/env";
+import { E2E_EMAIL, E2E_TOKEN_ENC_KEY, supabaseEnv } from "./tests/e2e/env";
 
 /**
  * e2e against a production build of the app and the local Supabase stack (`pnpm supabase start`).
@@ -51,6 +51,10 @@ export default defineConfig({
       ...supabaseEnv(),
       E2E: "1",
       ALLOWED_EMAIL: E2E_EMAIL,
+      TOKEN_ENC_KEY: E2E_TOKEN_ENC_KEY,
+      // No Instagram app in e2e: Live connects fail with "not set up"; the Sandbox uses the fake.
+      IG_APP_ID: "",
+      IG_APP_SECRET: "",
       NEXT_TELEMETRY_DISABLED: "1",
     },
   },

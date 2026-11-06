@@ -19,6 +19,24 @@ export interface QueueChange {
   message: string;
 }
 
+/** Where a moved post goes (BC-22); times are ISO strings. See src/lib/domain/move.ts. */
+export type MovePlacementInput =
+  | { kind: "queue"; after: string | null }
+  | { kind: "back" }
+  | { kind: "slot"; at: string }
+  | { kind: "pinned"; at: string };
+
+export interface MovePostInput {
+  postId: string;
+  accountId: string;
+  placement: MovePlacementInput;
+}
+
+export interface MovedChange extends QueueChange {
+  /** The move that puts the post back (the toast's Undo). */
+  undo: MovePostInput;
+}
+
 /** "Replace video" on a failed post (BC-20): the new upload, already in Storage. */
 export interface ReplaceVideoInput {
   postId: string;
@@ -34,11 +52,19 @@ export interface QueueActions {
   postNow: (postId: string) => Promise<ActionResult<QueueChange>>;
   removePost: (postId: string) => Promise<ActionResult<QueueChange>>;
   saveSlots: (input: SaveSlotsInput) => Promise<ActionResult<QueueChange>>;
+  /** Drag on the canvas or "Move to…" in the drawer; `undoing` words the toast for an Undo. */
+  movePost: (input: MovePostInput, undoing?: boolean) => Promise<ActionResult<MovedChange>>;
   /** A failed post's drawer (BC-20): "Retry now", "Replace video" and "Remove". */
   retryPost?: (postId: string) => Promise<ActionResult<QueueChange>>;
   replaceVideo?: (input: ReplaceVideoInput) => Promise<ActionResult<QueueChange>>;
   removeFailed?: (postId: string) => Promise<ActionResult<QueueChange>>;
 }
 
-/** What the drawers do after a change saved: show the toast; `closed` when the drawer should close. */
-export type OnQueueChanged = (message: string, options?: { close?: boolean }) => void;
+/**
+ * What the drawers do after a change saved: show the toast; `close` when the drawer should close,
+ * `undo` to offer an Undo button on the toast.
+ */
+export type OnQueueChanged = (
+  message: string,
+  options?: { close?: boolean; undo?: MovePostInput },
+) => void;

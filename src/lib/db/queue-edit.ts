@@ -9,6 +9,20 @@ import {
   timingPatch,
   type EditProblem,
 } from "@/lib/domain/queue-edit";
+import { newPostStatus } from "@/lib/domain/content";
+import {
+  BACK,
+  MOVE_MESSAGES,
+  backlogOrder,
+  moveProblem,
+  positionChanges,
+  reorder,
+  slotPlacement,
+  undoPlacement,
+  type MoveProblem,
+  type MoveTarget,
+  type QueueRow,
+} from "@/lib/domain/move";
 import type { PostTiming } from "@/lib/domain/queue";
 import { replanAccount, type QueueContext } from "./posts";
 import type { Database } from "./types";
@@ -70,6 +84,14 @@ export function unclaimed(realNow: Date): string {
   return `claimed_until.is.null,claimed_until.lt.${realNow.toISOString()}`;
 }
 
+/** Postgres `unique_violation`. */
+const UNIQUE_VIOLATION = "23505";
+/** Tries at a free queue position before giving up (pinned → queue racing an add). */
+const POSITION_ATTEMPTS = 5;
+
+/** The queue position the update wanted was taken meanwhile (the unique index, 0007). */
+class PositionTaken extends Error {}
+
 /** Applies `patch` only while the post still waits and no tick holds it. */
 async function updateWaiting(
   db: Db,
@@ -85,6 +107,9 @@ async function updateWaiting(
     .in("status", [...EDITABLE_STATUSES])
     .or(unclaimed(new Date()))
     .select("id");
+  if (res.error?.code === UNIQUE_VIOLATION && patch.queue_position != null) {
+    throw new PositionTaken(res.error.message);
+  }
   if (res.error) fail("saving the post", res.error);
   if (res.data.length !== 1) throw new QueueEditError("not_editable");
 }
@@ -111,35 +136,48 @@ export async function editPost(
   if (problem) throw new QueueEditError(problem);
   const post = await loadPost(db, ctx, postId);
 
-  let positions: { queuePosition: number | null }[] = [];
-  if (edit.timing.kind === "queue" && post.timing !== "queue" && post.queue_position === null) {
-    const res = await db
-      .from("posts")
-      .select("queue_position")
-      .eq("workspace_id", ctx.workspaceId)
-      .eq("account_id", post.account_id)
-      .not("queue_position", "is", null);
-    if (res.error) fail("reading the queue", res.error);
-    positions = res.data.map((p) => ({ queuePosition: p.queue_position }));
-  }
-  const next = timingPatch(
-    {
-      timing: post.timing,
-      queuePosition: post.queue_position,
-      scheduledAt: post.scheduled_at ? new Date(post.scheduled_at) : null,
-    },
-    edit.timing,
-    positions,
-  );
+  // Pinned → queue without a kept position: the back of the backlog (after every position of the
+  // account). An add racing for the same position wins the unique index; then try the next one.
+  const needsPosition =
+    edit.timing.kind === "queue" && post.timing !== "queue" && post.queue_position === null;
   const retimed = edit.timing.kind === "pinned" || post.timing !== "queue";
-  await updateWaiting(db, ctx, postId, {
-    caption: edit.caption,
-    timing: next.timing,
-    queue_position: next.queuePosition,
-    scheduled_at: next.scheduledAt?.toISOString() ?? null,
-    // A new time the user chose wins over an earlier retry or quota wait.
-    ...(retimed ? { next_attempt_at: null } : {}),
-  });
+  let next;
+  for (let attempt = 1; ; attempt++) {
+    let positions: { queuePosition: number | null }[] = [];
+    if (needsPosition) {
+      const res = await db
+        .from("posts")
+        .select("queue_position")
+        .eq("workspace_id", ctx.workspaceId)
+        .eq("account_id", post.account_id)
+        .not("queue_position", "is", null);
+      if (res.error) fail("reading the queue", res.error);
+      positions = res.data.map((p) => ({ queuePosition: p.queue_position }));
+    }
+    next = timingPatch(
+      {
+        timing: post.timing,
+        queuePosition: post.queue_position,
+        scheduledAt: post.scheduled_at ? new Date(post.scheduled_at) : null,
+      },
+      edit.timing,
+      positions,
+    );
+    try {
+      await updateWaiting(db, ctx, postId, {
+        caption: edit.caption,
+        timing: next.timing,
+        queue_position: next.queuePosition,
+        scheduled_at: next.scheduledAt?.toISOString() ?? null,
+        // A new time the user chose wins over an earlier retry or quota wait.
+        ...(retimed ? { next_attempt_at: null } : {}),
+      });
+      break;
+    } catch (err) {
+      if (!(err instanceof PositionTaken) || !needsPosition) throw err;
+      if (attempt >= POSITION_ATTEMPTS) fail("saving the post", err);
+    }
+  }
   const times = await replanAccount(db, ctx, post.account_id);
   return {
     timing: next.timing,
@@ -204,4 +242,182 @@ export async function removePost(db: Db, ctx: QueueContext, postId: string): Pro
     }),
   ]);
   return { handle: post.social_accounts.handle, timing: post.timing };
+}
+
+// ── Moving a post (BC-22) ──────────────────────────────────────────────────────────────────────
+
+/** A refused move, with a message for the person who made it. */
+export class MoveError extends Error {
+  constructor(readonly code: MoveProblem) {
+    super(MOVE_MESSAGES[code]);
+    this.name = "MoveError";
+  }
+}
+
+export interface MovedPost {
+  handle: string;
+  /** The post's time after both queues were re-timed (null: it waits in the backlog). */
+  scheduledAt: Date | null;
+  /** Moves the post back where it was. */
+  undo: MoveTarget;
+}
+
+async function queueRows(db: Db, ctx: QueueContext, accountId: string): Promise<QueueRow[]> {
+  const res = await db
+    .from("posts")
+    .select("id, timing, queue_position, scheduled_at, status, claimed_until")
+    .eq("workspace_id", ctx.workspaceId)
+    .eq("account_id", accountId)
+    .in("status", ["queued", "paused", "publishing"]);
+  if (res.error) fail("reading the queue", res.error);
+  const realNow = new Date();
+  return res.data.map((p) => ({
+    id: p.id,
+    timing: p.timing,
+    queuePosition: p.queue_position,
+    scheduledAt: p.scheduled_at ? new Date(p.scheduled_at) : null,
+    status: p.status,
+    claimed: p.claimed_until !== null && new Date(p.claimed_until) > realNow,
+  }));
+}
+
+/**
+ * Positions other posts of the account keep outside `order` (published, removed, failed,
+ * pinned, being published): `queue_position` is unique per account, so the backlog avoids them.
+ */
+async function keptPositions(
+  db: Db,
+  ctx: QueueContext,
+  accountId: string,
+  order: readonly string[],
+): Promise<Set<number>> {
+  const res = await db
+    .from("posts")
+    .select("id, queue_position")
+    .eq("workspace_id", ctx.workspaceId)
+    .eq("account_id", accountId)
+    .not("queue_position", "is", null);
+  if (res.error) fail("reading the queue", res.error);
+  const inOrder = new Set(order);
+  return new Set(res.data.flatMap((p) => (!inOrder.has(p.id) ? [p.queue_position] : [])));
+}
+
+/**
+ * Moves a waiting post to a place in a queue: the same account (a new place in its backlog, or a
+ * slot's time) or another account (same video and caption). The post's change and any renumbering
+ * of the backlog (only when the moved post doesn't fit between its neighbours) are one guarded
+ * transaction, `move_post` (still waiting, not claimed by a tick; 0009_move_positions.sql). Both
+ * accounts' queues are re-timed afterwards.
+ */
+export async function movePost(
+  db: Db,
+  ctx: QueueContext,
+  postId: string,
+  target: MoveTarget,
+): Promise<MovedPost> {
+  const res = await db
+    .from("posts")
+    .select(
+      "id, account_id, timing, queue_position, scheduled_at, status, social_accounts(platform)",
+    )
+    .eq("workspace_id", ctx.workspaceId)
+    .eq("id", postId)
+    .maybeSingle();
+  if (res.error) fail("reading the post", res.error);
+  const post = res.data;
+  if (!post || !isEditable(post.status)) throw new MoveError("not_editable");
+
+  const acc = await db
+    .from("social_accounts")
+    .select("id, handle, status, slots, platform")
+    .eq("workspace_id", ctx.workspaceId)
+    .eq("id", target.accountId)
+    .maybeSingle();
+  if (acc.error) fail("reading the account", acc.error);
+  const account = acc.data;
+  const problem = moveProblem({
+    status: post.status,
+    sourcePlatform: post.social_accounts.platform,
+    target: account,
+    placement: target.placement,
+    now: ctx.now,
+  });
+  if (problem || !account) throw new MoveError(problem ?? "unknown_account");
+
+  const sameAccount = post.account_id === account.id;
+  const targetRows = await queueRows(db, ctx, account.id);
+  const sourceRows = sameAccount ? targetRows : await queueRows(db, ctx, post.account_id);
+  const undo: MoveTarget = {
+    accountId: post.account_id,
+    placement: undoPlacement(
+      {
+        id: post.id,
+        timing: post.timing,
+        scheduledAt: post.scheduled_at ? new Date(post.scheduled_at) : null,
+      },
+      backlogOrder(sourceRows),
+    ),
+  };
+
+  const { placement } = target;
+  let pinAt: Date | null = null;
+  let after: string | null | typeof BACK = BACK;
+  if (placement.kind === "pinned") pinAt = placement.at;
+  else if (placement.kind === "queue") after = placement.after;
+  else if (placement.kind === "slot") {
+    const lands = slotPlacement({
+      rows: targetRows,
+      movedId: post.id,
+      at: placement.at,
+      slots: account.slots,
+      timezone: ctx.timezone,
+      now: ctx.now,
+    });
+    if (lands === "pinned") pinAt = placement.at;
+  }
+
+  let renumber: { id: string; queuePosition: number }[] = [];
+  let queuePosition: number | null = sameAccount ? post.queue_position : null;
+  if (!pinAt) {
+    const backlog = backlogOrder(targetRows);
+    const order = reorder(backlog, post.id, after);
+    if (!order) throw new MoveError("unknown_position");
+    const current = new Map(backlog.map((p) => [p.id, p.queuePosition]));
+    const changes = positionChanges(
+      order,
+      current,
+      post.id,
+      await keptPositions(db, ctx, account.id, order),
+    );
+    queuePosition = changes.find((c) => c.id === post.id)?.queuePosition ?? queuePosition;
+    renumber = changes.filter((c) => c.id !== post.id);
+  }
+
+  // Every position change of the move in one transaction (0009_move_positions.sql), so the
+  // unique queue_position index never sees two posts on one position half-way through.
+  const moved = await db.rpc("move_post", {
+    p_workspace_id: ctx.workspaceId,
+    p_post_id: postId,
+    p_account_id: account.id,
+    p_status: newPostStatus(account.status),
+    p_timing: pinAt ? "pinned" : "queue",
+    // Left out: null (a queue post's time, a pinned post without a backlog place).
+    p_queue_position: queuePosition ?? undefined,
+    p_scheduled_at: pinAt?.toISOString(),
+    p_renumber: renumber.map((c) => ({ id: c.id, queue_position: c.queuePosition })),
+  });
+  if (moved.error) fail("saving the move", moved.error);
+  // Claimed by a tick (or published) since it was read; or the queue changed under the move.
+  if (moved.data === "not_editable") throw new MoveError("not_editable");
+  if (moved.data !== "ok") throw new MoveError("unknown_position");
+
+  const [times] = await Promise.all([
+    replanAccount(db, ctx, account.id),
+    sameAccount ? null : replanAccount(db, ctx, post.account_id),
+  ]);
+  return {
+    handle: account.handle,
+    scheduledAt: times.has(postId) ? (times.get(postId) ?? null) : pinAt,
+    undo,
+  };
 }

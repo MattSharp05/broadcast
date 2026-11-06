@@ -3,6 +3,7 @@ import { WorkflowView } from "@/features/canvas/content/WorkflowView";
 import { loadWorkflow } from "@/lib/db/canvas";
 import {
   addContent,
+  movePostAction,
   postNowAction,
   removeFailedAction,
   removePostAction,
@@ -34,6 +35,7 @@ export default async function WorkflowPage() {
         postNow: postNowAction,
         removePost: removePostAction,
         saveSlots,
+        movePost: movePostAction,
         retryPost: retryPostAction,
         replaceVideo: replaceVideoAction,
         removeFailed: removeFailedAction,

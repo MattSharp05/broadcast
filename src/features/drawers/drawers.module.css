@@ -80,6 +80,33 @@
   gap: 8px;
 }
 
+/* "Move to…" in a waiting post's drawer (BC-22). */
+.move {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface-2);
+}
+
+.moveFields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr);
+  gap: 10px;
+}
+
+.moveFields select {
+  width: 100%;
+}
+
+@media (max-width: 520px) {
+  .moveFields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .note {
   display: flex;
   gap: 10px;

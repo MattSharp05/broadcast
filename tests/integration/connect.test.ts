@@ -187,7 +187,13 @@ describe("oauth states", () => {
     });
     const first = await consumeOAuthState(admin, state, new Date());
     // The attempt's workspace comes from the row, whatever the dashboard shows now.
-    expect(first).toEqual({ workspaceId: SANDBOX, brandId, platform: "fake", expired: false });
+    expect(first).toEqual({
+      workspaceId: SANDBOX,
+      brandId,
+      platform: "fake",
+      accountId: null,
+      expired: false,
+    });
     expect(await consumeOAuthState(admin, state, new Date())).toBeNull();
     expect(await consumeOAuthState(admin, "", new Date())).toBeNull();
   });

@@ -116,7 +116,12 @@ export interface CanvasModel {
   stats: CanvasStats;
 }
 
-const UPCOMING_STATUSES: ReadonlySet<PostStatus> = new Set(["queued", "paused", "publishing"]);
+/** Post statuses that wait in an account's backlog (the upcoming lane; the Accounts tab's Backlog). */
+export const UPCOMING_STATUSES: ReadonlySet<PostStatus> = new Set([
+  "queued",
+  "paused",
+  "publishing",
+]);
 
 /** The account's public profile. The fake provider mimics Instagram, so it links there too. */
 export function profileUrl(platform: string, handle: string): string {

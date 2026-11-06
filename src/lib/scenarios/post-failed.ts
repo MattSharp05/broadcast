@@ -1,3 +1,4 @@
+import { stoppedReason } from "@/lib/domain/publish";
 import { planQueue } from "@/lib/domain/queue";
 import { stableUuid } from "@/lib/hash";
 import { FAKE_PERMALINK_BASE, fakeUserId } from "@/lib/providers/fake";
@@ -127,7 +128,7 @@ export const postFailed: Scenario = {
       container_id: LOST_CONTAINER,
       container_created_at: ago(30),
       attempts: 4,
-      last_error: NETWORK_MESSAGE,
+      last_error: stoppedReason(NETWORK_MESSAGE),
     });
     log(lost, 30, true, `Uploaded the video (container ${LOST_CONTAINER}).`);
     log(lost, 29, false, `Retrying in 1 min: ${NETWORK_MESSAGE}`);

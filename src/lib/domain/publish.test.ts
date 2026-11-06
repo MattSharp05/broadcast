@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   PUBLISH_MAX_RETRIES,
+  STOPPED_NOTE,
   QUOTA_WAIT_MINUTES,
   applyPublishOutcome,
   backoffMinutes,
   nextPublishAction,
   quotaWait,
+  stoppedReason,
   type PublishAccount,
   type PublishOutcome,
   type PublishPost,
@@ -134,9 +136,19 @@ describe("applyPublishOutcome: backoff", () => {
       container_id: null,
       attempts: 4,
       next_attempt_at: null,
-      last_error: "Couldn't reach Instagram.",
+      last_error: `Couldn't reach Instagram. ${STOPPED_NOTE}`,
     });
     expect(last.log.message).toBe("Failed after 3 retries: Couldn't reach Instagram.");
+  });
+
+  it("drops 'Broadcast will try again' from the reason of a post that stopped retrying", () => {
+    expect(
+      stoppedReason("Couldn't reach Instagram. Broadcast will try again in a few minutes."),
+    ).toBe(`Couldn't reach Instagram. ${STOPPED_NOTE}`);
+    expect(
+      stoppedReason("Instagram couldn't download the video. Broadcast will upload it again."),
+    ).toBe(`Instagram couldn't download the video. ${STOPPED_NOTE}`);
+    expect(stoppedReason("Broadcast will try again.")).toBe(STOPPED_NOTE);
   });
 
   it("keeps the container (and publishing) on a retryable error while publishing", () => {

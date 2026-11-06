@@ -44,7 +44,7 @@ Playwright · MSW. Details and reasons: `docs/TDD.md`, ADRs in `docs/decisions/`
 (Set up by BC-1 and BC-5; keep this list current.)
 - `pnpm install` · `pnpm dev` (app on :3000) · `pnpm build` · `pnpm start` (serve the build)
 - `pnpm lint` · `pnpm typecheck` (`next typegen` + `tsc`) · `pnpm format` / `pnpm format:check`
-- `pnpm test` (Vitest, `src/**/*.test.ts`) · `pnpm test:watch`
+- `pnpm test` (Vitest, `src/**/*.test.{ts,tsx}`) · `pnpm test:watch`
 - `pnpm supabase start` / `stop` (local stack in Docker; Mailpit on :54324 catches magic-link
   emails) · `pnpm db:reset` (migrations + `supabase/seed.sql`) · `pnpm db:types` (regenerates
   `src/lib/db/types.ts`; CI fails if it's stale) · `pnpm -s db:env >> .env.local` (local URL + keys)

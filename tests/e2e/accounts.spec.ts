@@ -50,7 +50,7 @@ test.describe("canvas-busy", () => {
       await expect(stats).toContainText("4 ready to publish");
       await expect(stats).toContainText("1 needs attention");
     }
-    await expect(page.getByRole("button", { name: "Add account" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Add account" })).toBeEnabled();
   });
 
   test("handles open the Instagram profile in a new tab", async ({ page }) => {

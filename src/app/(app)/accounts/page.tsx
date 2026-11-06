@@ -5,7 +5,14 @@ import { loadAccounts } from "@/lib/db/accounts";
 import { loadAccountDetails } from "@/lib/db/details";
 import { createServerSupabase } from "@/lib/db/server";
 import { currentWorkspace } from "@/lib/db/workspace";
-import { addBrand, updateAccountDescription, updateAccountTags, updateBrandName } from "./actions";
+import {
+  addBrand,
+  finishAddAccount,
+  readConnectedAccount,
+  updateAccountDescription,
+  updateAccountTags,
+  updateBrandName,
+} from "./actions";
 
 export const metadata: Metadata = {
   title: "Accounts · Broadcast",
@@ -25,7 +32,15 @@ export default async function AccountsPage() {
     <AccountsView
       accounts={data.accounts}
       brands={data.brands}
-      actions={{ updateAccountTags, updateAccountDescription, addBrand, updateBrandName }}
+      workspace={{ id: workspace.id, kind: workspace.kind }}
+      actions={{
+        updateAccountTags,
+        updateAccountDescription,
+        addBrand,
+        updateBrandName,
+        readConnectedAccount,
+        finishAddAccount,
+      }}
       details={{ accounts: accountDetails, now: now.toISOString(), timezone }}
     />
   );

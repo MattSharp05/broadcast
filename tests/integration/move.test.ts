@@ -166,3 +166,104 @@ describe("movePost to another account", () => {
     ).rejects.toMatchObject({ code: "unknown_position" });
   });
 });
+
+// Round 2: queue_position is unique per account (0007). A move writes all its position changes
+// in one transaction (move_post, 0009), never on a position another post keeps.
+describe("movePost and the unique queue position", () => {
+  async function backlog(accountId: string) {
+    const { data, error } = await admin
+      .from("posts")
+      .select("id, queue_position, timing, status")
+      .eq("account_id", accountId)
+      .not("queue_position", "is", null);
+    if (error) throw new Error(error.message);
+    const positions = data.map((p) => p.queue_position);
+    expect(new Set(positions).size).toBe(positions.length);
+    return data
+      .filter((p) => p.timing === "queue" && (p.status === "queued" || p.status === "paused"))
+      .sort((a, b) => a.queue_position - b.queue_position)
+      .map((p) => p.id);
+  }
+
+  it("moves to the front, middle and back and undoes each, renumbering as needed", async () => {
+    const start = await backlog(CJ);
+    expect(start.length).toBeGreaterThanOrEqual(3);
+    const [a, b, c] = start as [string, string, string];
+    const placements = [
+      { post: c, placement: { kind: "queue" as const, after: null } },
+      { post: a, placement: { kind: "queue" as const, after: b } },
+      { post: a, placement: { kind: "back" as const } },
+      { post: b, placement: { kind: "queue" as const, after: c } },
+    ];
+    for (const { post: moving, placement } of placements) {
+      const before = await backlog(CJ);
+      const moved = await movePost(owner, ctx, moving, { accountId: CJ, placement });
+      const after = await backlog(CJ);
+      expect(after).toHaveLength(before.length);
+      if (placement.kind === "back") expect(after.at(-1)).toBe(moving);
+      else if (placement.after === null) expect(after[0]).toBe(moving);
+      else expect(after[after.indexOf(placement.after) + 1]).toBe(moving);
+      await movePost(owner, ctx, moving, moved.undo);
+      expect(await backlog(CJ)).toEqual(before);
+    }
+  });
+
+  it("skips positions that published posts keep", async () => {
+    const [first, second, third] = (await backlog(CJ)) as [string, string, string];
+    // The front post went out: it keeps its position.
+    await admin
+      .from("posts")
+      .update({ status: "published", published_at: NOW.toISOString() })
+      .eq("id", first);
+    await movePost(owner, ctx, third, { accountId: CJ, placement: { kind: "queue", after: null } });
+    expect((await backlog(CJ)).slice(0, 2)).toEqual([third, second]);
+    await movePost(owner, ctx, second, {
+      accountId: CJ,
+      placement: { kind: "queue", after: null },
+    });
+    expect((await backlog(CJ)).slice(0, 2)).toEqual([second, third]);
+  });
+
+  it("moves across accounts into the front, middle and back and back again", async () => {
+    for (const placement of [
+      { kind: "queue" as const, after: null },
+      { kind: "queue" as const, after: Q("trip", 0) },
+      { kind: "back" as const },
+    ]) {
+      const cjBefore = await backlog(CJ);
+      const tripBefore = await backlog(TRIP);
+      const moved = await movePost(owner, ctx, Q("cj", 1), { accountId: TRIP, placement });
+      expect(await backlog(TRIP)).toHaveLength(tripBefore.length + 1);
+      await movePost(owner, ctx, Q("cj", 1), moved.undo);
+      expect(await backlog(CJ)).toEqual(cjBefore);
+      expect(await backlog(TRIP)).toEqual(tripBefore);
+    }
+  });
+
+  it("changes nothing when a post it would renumber is claimed by a tick", async () => {
+    const [first, second] = (await backlog(CJ)) as [string, string];
+    await admin
+      .from("posts")
+      .update({ claimed_until: new Date(Date.now() + 60_000).toISOString() })
+      .eq("id", second);
+    const before = await Promise.all([post(first), post(second)]);
+    await expect(
+      movePost(owner, ctx, first, { accountId: CJ, placement: { kind: "queue", after: second } }),
+    ).rejects.toMatchObject({ code: "unknown_position" });
+    expect(await Promise.all([post(first), post(second)])).toEqual(before);
+  });
+
+  it("only moves posts and to accounts of the given workspace", async () => {
+    const before = await post(Q("cj", 0));
+    const res = await owner.rpc("move_post", {
+      p_workspace_id: WORKSPACE_IDS.live,
+      p_post_id: Q("cj", 0),
+      p_account_id: CJ,
+      p_status: "queued",
+      p_timing: "queue",
+      p_queue_position: 99,
+    });
+    expect(res.data).toBe("not_editable");
+    expect(await post(Q("cj", 0))).toEqual(before);
+  });
+});

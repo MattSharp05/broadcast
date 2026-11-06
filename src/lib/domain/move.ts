@@ -131,28 +131,44 @@ export function reorder(
 /**
  * `queue_position`s for a backlog order: the old positions stay where they already fit, so a move
  * usually rewrites only the moved post; otherwise the backlog is numbered 0, 1, 2, … again.
+ * `taken` holds the positions other posts of the account keep outside the backlog (published,
+ * removed, failed, pinned, being published): `queue_position` is unique per account
+ * (0007_api_keys.sql), so the backlog never takes one of them.
  */
 export function positionChanges(
   order: readonly string[],
   current: ReadonlyMap<string, number | null>,
   movedId: string,
+  taken: ReadonlySet<number> = new Set(),
 ): { id: string; queuePosition: number }[] {
+  const free = (n: number) => !taken.has(n);
   const i = order.indexOf(movedId);
   // undefined: no neighbour on that side; null: a neighbour without a position (renumber).
   const lo = i > 0 ? (current.get(order[i - 1] ?? "") ?? null) : undefined;
   const hi = i >= 0 && i < order.length - 1 ? (current.get(order[i + 1] ?? "") ?? null) : undefined;
   if (lo !== null && hi !== null) {
     let pos: number | null = null;
-    if (lo === undefined && hi === undefined) pos = 0;
-    else if (lo === undefined && hi !== undefined) pos = hi - 1;
-    else if (lo !== undefined && hi === undefined) pos = lo + 1;
-    else if (lo !== undefined && hi !== undefined && hi - lo >= 2) pos = lo + 1;
+    if (lo === undefined && hi === undefined) {
+      pos = 0;
+      while (!free(pos)) pos++;
+    } else if (lo === undefined && hi !== undefined) {
+      pos = hi - 1;
+      while (!free(pos)) pos--;
+    } else if (lo !== undefined && hi === undefined) {
+      pos = lo + 1;
+      while (!free(pos)) pos++;
+    } else if (lo !== undefined && hi !== undefined) {
+      for (let n = lo + 1; n < hi && pos === null; n++) if (free(n)) pos = n;
+    }
     if (pos !== null) return [{ id: movedId, queuePosition: pos }];
   }
   const out: { id: string; queuePosition: number }[] = [];
-  order.forEach((id, k) => {
-    if (id === movedId || current.get(id) !== k) out.push({ id, queuePosition: k });
-  });
+  let next = 0;
+  for (const id of order) {
+    while (!free(next)) next++;
+    if (id === movedId || current.get(id) !== next) out.push({ id, queuePosition: next });
+    next++;
+  }
   return out;
 }
 

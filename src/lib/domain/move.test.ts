@@ -139,6 +139,40 @@ describe("positionChanges", () => {
       { id: "a", queuePosition: 1 },
     ]);
   });
+
+  it("never takes a position another post of the account keeps", () => {
+    const current = new Map<string, number | null>([
+      ["a", 1],
+      ["b", 4],
+      ["z", 9],
+    ]);
+    // Published posts keep 0, 2 and 3.
+    const taken = new Set([0, 2, 3]);
+    expect(positionChanges(["z", "a", "b"], current, "z", taken)).toEqual([
+      { id: "z", queuePosition: -1 },
+    ]);
+    // No free position between a (1) and b (4): renumbered around the kept ones.
+    expect(positionChanges(["a", "z", "b"], current, "z", taken)).toEqual([
+      { id: "z", queuePosition: 4 },
+      { id: "b", queuePosition: 5 },
+    ]);
+    expect(positionChanges(["a", "b", "z"], current, "z", new Set([5, 6]))).toEqual([
+      { id: "z", queuePosition: 7 },
+    ]);
+    expect(positionChanges(["z"], new Map([["z", 5]]), "z", new Set([0, 1]))).toEqual([
+      { id: "z", queuePosition: 2 },
+    ]);
+    // Renumbering skips the kept positions: 1, 4, 5.
+    const full = new Map<string, number | null>([
+      ["a", 1],
+      ["b", 4],
+      ["c", 5],
+    ]);
+    expect(positionChanges(["b", "a", "c"], full, "a", new Set([0, 2, 3]))).toEqual([
+      { id: "b", queuePosition: 1 },
+      { id: "a", queuePosition: 4 },
+    ]);
+  });
 });
 
 describe("slotPlacement", () => {

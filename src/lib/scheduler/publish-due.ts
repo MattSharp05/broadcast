@@ -1,6 +1,6 @@
 import { nowFor } from "@/lib/clock";
 import { hasTokenKey, tokenKeyFromEnv } from "@/lib/crypto/tokens";
-import { loadAccessToken } from "@/lib/db/credentials";
+import { TokenDecryptError, loadAccessToken } from "@/lib/db/credentials";
 import { deletePublishedVideo, signVideoUrl } from "@/lib/db/videos";
 import { workspaceKindOf } from "@/lib/db/workspaces";
 import {
@@ -170,22 +170,31 @@ async function loadSettings(
   return settings;
 }
 
-/** The provider account for a post: the decrypted token for Instagram, none for the fake. */
+/**
+ * The provider account for a post: the decrypted token for Instagram (read once per account per
+ * tick), none for the fake.
+ */
 async function providerAccount(
   db: Db,
   post: LoadedPost,
   tokenKey: Buffer | null,
+  tokens: Map<string, Promise<string | null>>,
 ): Promise<ProviderAccount> {
   const base = {
     accountId: post.account_id,
     platformUserId: post.social_accounts.platform_user_id,
   };
   if (post.social_accounts.platform === "fake") return { ...base, accessToken: "" };
-  const token = tokenKey
-    ? await loadAccessToken(db, post.workspace_id, post.account_id, tokenKey)
-    : null;
-  if (!token) throw MISSING_TOKEN;
-  return { ...base, accessToken: token };
+  let token = tokens.get(post.account_id);
+  if (!token) {
+    token = tokenKey
+      ? loadAccessToken(db, post.workspace_id, post.account_id, tokenKey)
+      : Promise.resolve(null);
+    tokens.set(post.account_id, token);
+  }
+  const accessToken = await token;
+  if (!accessToken) throw MISSING_TOKEN;
+  return { ...base, accessToken };
 }
 
 export function createPublishDue(deps: PublishDeps = {}): Step {
@@ -213,6 +222,7 @@ export function createPublishDue(deps: PublishDeps = {}): Step {
         paused: 0,
         released: 0,
         lost: 0,
+        tokenErrors: 0,
       };
       if (claims.length === 0) return summary;
 
@@ -221,6 +231,7 @@ export function createPublishDue(deps: PublishDeps = {}): Step {
         loadSettings(db, [...new Set(claims.map((c) => c.workspaceId))]),
       ]);
       const fakeStore = createDbFakeStore(db);
+      const tokens = new Map<string, Promise<string | null>>();
 
       for (const c of claims) {
         const post = posts.get(c.postId);
@@ -254,7 +265,7 @@ export function createPublishDue(deps: PublishDeps = {}): Step {
           outcome = await advancePost({
             provider,
             account: callsProvider
-              ? await providerAccount(db, post, tokenKey)
+              ? await providerAccount(db, post, tokenKey, tokens)
               : { accountId: post.account_id, platformUserId: null, accessToken: "" },
             post: stepPost(post),
             action,
@@ -272,6 +283,16 @@ export function createPublishDue(deps: PublishDeps = {}): Step {
               quotaWait({ slots: account.slots, timezone: ws.timezone, now: ws.now() }),
           });
         } catch (err) {
+          if (err instanceof TokenDecryptError) {
+            // TOKEN_ENC_KEY doesn't open the stored token: a server misconfiguration, not the
+            // account's fault. Leave the post untouched (no retry used, no pause) and say so.
+            console.error(
+              `publishDue: post ${post.id}: the account's token can't be decrypted. Check TOKEN_ENC_KEY.`,
+            );
+            await release(db, c);
+            summary.tokenErrors += 1;
+            continue;
+          }
           outcome = errorOutcome(err);
         }
         if (!outcome) {

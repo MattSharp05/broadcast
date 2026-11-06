@@ -39,6 +39,7 @@ const DEFAULT_QUOTA_SECONDS = 24 * 3600;
 const RECENT_MEDIA_LIMIT = 25;
 /** Clock skew allowed between our container time and Instagram's post timestamp. */
 const RECOVERY_SKEW_MS = 5 * 60_000;
+const CONTAINER_LIFETIME_MS = 24 * 3_600_000;
 
 export interface InstagramConfig {
   appId: string;
@@ -420,7 +421,8 @@ export function createInstagramProvider(deps: InstagramProviderDeps): SocialProv
     hint: PublishHint | undefined,
   ): Promise<PublishedMedia> {
     const none: PublishedMedia = { mediaId: null, permalink: null };
-    if (!hint) return none;
+    // Without the container's time a match could be an older post with the same caption.
+    if (!hint?.containerCreatedAt) return none;
     let res: Record<string, unknown>;
     try {
       res = await call(
@@ -433,9 +435,9 @@ export function createInstagramProvider(deps: InstagramProviderDeps): SocialProv
     } catch {
       return none;
     }
-    const since = hint.containerCreatedAt
-      ? hint.containerCreatedAt.getTime() - RECOVERY_SKEW_MS
-      : 0;
+    const since = hint.containerCreatedAt.getTime() - RECOVERY_SKEW_MS;
+    // A container can only be published within 24 hours of being made.
+    const until = hint.containerCreatedAt.getTime() + CONTAINER_LIFETIME_MS + RECOVERY_SKEW_MS;
     const items = Array.isArray(res.data) ? (res.data as Record<string, unknown>[]) : [];
     const matches = items
       .map((m) => ({
@@ -451,7 +453,8 @@ export function createInstagramProvider(deps: InstagramProviderDeps): SocialProv
           (m.type === null || m.type === "REELS") &&
           m.caption.trim() === hint.caption.trim() &&
           m.at !== null &&
-          m.at >= since,
+          m.at >= since &&
+          m.at <= until,
       )
       .sort((a, b) => (a.at ?? 0) - (b.at ?? 0));
     const found = matches[0];

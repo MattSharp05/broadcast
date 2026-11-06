@@ -239,6 +239,22 @@ describe("publishing to Instagram through the tick", () => {
     expect(ig.calls.quota).toBe(0);
   });
 
+  it("a token TOKEN_ENC_KEY can't open leaves the post and the account alone", async () => {
+    const summary = await tick(
+      createPublishDue({ instagram: FIXTURE_APP, tokenKey: randomBytes(32) }),
+    );
+    expect(summary.steps.publishDue).toMatchObject({ claimed: 1, tokenErrors: 1 });
+    const p = await post();
+    expect(p).toMatchObject({ status: "queued", attempts: 0, claim_token: null });
+    const account = await admin
+      .from("social_accounts")
+      .select("status")
+      .eq("id", ids.account)
+      .single();
+    expect(account.data?.status).toBe("ready");
+    expect(ig.calls.quota).toBe(0);
+  });
+
   it("an account without a stored token is paused and flagged", async () => {
     await seed({ withToken: false });
     await tick();

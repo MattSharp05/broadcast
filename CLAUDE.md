@@ -55,6 +55,9 @@ Playwright · MSW. Details and reasons: `docs/TDD.md`, ADRs in `docs/decisions/`
   Specs use `test`/`loadScenario` from `tests/e2e/fixtures.ts`; tests run one at a time (one shared Sandbox).
 - `pnpm tick`: one scheduler tick (`POST $APP_URL/api/cron/tick` with `CRON_SECRET` from the env or
   `.env.local`; the app must run with the same secret). `/dev` → "Run tick now" ticks the Sandbox only.
+- `node scripts/broadcast-upload.mjs --file x.mp4 --accounts a,b [--caption …] [--pin …]`: queues a
+  video through the content API (`BROADCAST_URL` + `BROADCAST_API_KEY` from `/dev/api-keys`);
+  see `docs/content-api.md`.
 - Scenarios: `/workflow?scenario=<name>[&now=ISO]` (signed in) resets the Sandbox and loads one;
   `/dev` lists them. Register new ones in `src/lib/scenarios/index.ts`.
 

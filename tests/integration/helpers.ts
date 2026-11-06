@@ -22,6 +22,7 @@ export const ALL_TABLES = [
   "oauth_states",
   "post_metrics",
   "posts",
+  "scheduler_status",
   "settings",
   "social_accounts",
   "workspaces",

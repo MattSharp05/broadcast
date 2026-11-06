@@ -26,6 +26,9 @@
   --rail-ink: #b9c4d9;
   --rail-ink-hi: #ffffff;
   --rail-line: #26365a;
+  /* State colours on the navy rail (light enough for its dark background, in both themes). */
+  --rail-good: #4cc38a;
+  --rail-warn: #efb25a;
   --band: #e1e6ef;
   --band-line: #c9d1df;
   --hdr: #14203a;

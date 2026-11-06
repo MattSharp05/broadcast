@@ -4,6 +4,7 @@ import { LogOut, Send } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { WorkspaceKind } from "@/lib/db/workspaces";
+import type { SchedulerLine } from "@/lib/domain/scheduler-status";
 import styles from "./AppRail.module.css";
 import { NAV_ITEMS, isActivePath } from "./nav";
 import { StatusDot } from "./StatusDot";
@@ -13,6 +14,8 @@ interface AppRailProps {
   workspace?: WorkspaceKind;
   /** Server action that switches the workspace (form field `workspace`). */
   onSwitchWorkspace?: (formData: FormData) => void | Promise<void>;
+  /** The scheduler's status line for the footer (src/lib/domain/scheduler-status.ts). */
+  scheduler?: SchedulerLine;
 }
 
 const WORKSPACES: readonly { kind: WorkspaceKind; label: string }[] = [
@@ -21,7 +24,7 @@ const WORKSPACES: readonly { kind: WorkspaceKind; label: string }[] = [
 ];
 
 /** The navy navigation rail. Below 760px it becomes a bottom tab bar. */
-export function AppRail({ workspace = "live", onSwitchWorkspace }: AppRailProps) {
+export function AppRail({ workspace = "live", onSwitchWorkspace, scheduler }: AppRailProps) {
   const pathname = usePathname();
 
   return (
@@ -62,14 +65,15 @@ export function AppRail({ workspace = "live", onSwitchWorkspace }: AppRailProps)
       ))}
 
       <div className={styles.foot}>
-        {/* Placeholder until the scheduler exists (Epic 2). */}
-        <div className={styles.sys}>
-          <StatusDot tone="neutral" className={styles.sysDot} />
-          <span>
-            Scheduler not running yet
-            <small>Added in a later ticket</small>
-          </span>
-        </div>
+        {scheduler ? (
+          <div className={styles.sys} data-testid="scheduler-status" data-tone={scheduler.tone}>
+            <StatusDot tone={scheduler.tone} className={styles.sysDot} />
+            <span>
+              {scheduler.title}
+              <small>{scheduler.detail}</small>
+            </span>
+          </div>
+        ) : null}
         <form action="/auth/sign-out" method="post">
           <button type="submit" className={styles.signOut}>
             <LogOut aria-hidden="true" />

@@ -53,6 +53,8 @@ Playwright · MSW. Details and reasons: `docs/TDD.md`, ADRs in `docs/decisions/`
 - `pnpm e2e` (Playwright: builds and serves the app on :3100 with `E2E=1`, signs in through
   `/auth/test-sign-in`; needs `supabase start`). `pnpm e2e --project=desktop` for desktop only.
   Specs use `test`/`loadScenario` from `tests/e2e/fixtures.ts`; tests run one at a time (one shared Sandbox).
+- `pnpm tick`: one scheduler tick (`POST $APP_URL/api/cron/tick` with `CRON_SECRET` from the env or
+  `.env.local`; the app must run with the same secret). `/dev` → "Run tick now" ticks the Sandbox only.
 - Scenarios: `/workflow?scenario=<name>[&now=ISO]` (signed in) resets the Sandbox and loads one;
   `/dev` lists them. Register new ones in `src/lib/scenarios/index.ts`.
 

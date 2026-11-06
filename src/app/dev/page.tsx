@@ -6,6 +6,7 @@ import { WORKSPACE_NAMES } from "@/lib/db/workspaces";
 import { SCENARIOS } from "@/lib/scenarios";
 import { scenarioHref } from "@/lib/scenarios/url";
 import styles from "./dev.module.css";
+import { RunTick } from "./RunTick";
 import { sandboxSummary } from "./summary";
 
 export const metadata: Metadata = {
@@ -49,6 +50,15 @@ export default async function DevPage() {
             </li>
           ))}
         </ul>
+      </section>
+
+      <section className={styles.section} aria-labelledby="scheduler">
+        <h2 id="scheduler">Scheduler</h2>
+        <p className={styles.help}>
+          Runs one tick for the Sandbox now, as the every-minute cron job does: each due post moves
+          one step (upload, then publish).
+        </p>
+        <RunTick />
       </section>
 
       <section className={styles.section} aria-labelledby="pages">

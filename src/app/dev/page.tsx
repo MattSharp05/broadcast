@@ -68,6 +68,10 @@ export default async function DevPage() {
             <Link href="/dev/canvas">Canvas engine demo</Link>
             <span>The pan and zoom engine on 48 static boxes (?boxes=200 for more).</span>
           </li>
+          <li>
+            <Link href="/dev/api-keys">API keys</Link>
+            <span>Keys for the content API (video-editor uploads). Create and revoke.</span>
+          </li>
         </ul>
       </section>
 

@@ -137,6 +137,58 @@ export type Database = {
           },
         ];
       };
+      content_uploads: {
+        Row: {
+          api_key_id: string;
+          content_type: string;
+          created_at: string;
+          expires_at: string;
+          file_name: string;
+          id: string;
+          storage_path: string;
+          used_at: string | null;
+          workspace_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          api_key_id: string;
+          content_type: string;
+          created_at?: string;
+          expires_at: string;
+          file_name: string;
+          id: string;
+          storage_path: string;
+          used_at?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          api_key_id?: string;
+          content_type?: string;
+          created_at?: string;
+          expires_at?: string;
+          file_name?: string;
+          id?: string;
+          storage_path?: string;
+          used_at?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "content_uploads_api_key_id_workspace_id_fkey";
+            columns: ["api_key_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "api_keys";
+            referencedColumns: ["id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "content_uploads_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       fake_accounts: {
         Row: {
           account_id: string;

@@ -21,9 +21,14 @@ type Db = SupabaseClient<Database>;
  * account's backlog (`queue_position` after every other post), a pinned post keeps its time. Then
  * the queue planner (BC-4) times the account again and the changed `scheduled_at`s are saved.
  * Not one transaction (supabase-js has none): if a step fails, the rows written so far are
- * removed again. Two adds racing on one account can get the same `queue_position`; the planner
- * then orders them by insertion, which is harmless for a single-user dashboard.
+ * removed again. `queue_position` is unique per account (0007_api_keys.sql): an add that loses a
+ * race for a position retries with the next one.
  */
+
+/** Postgres `unique_violation`. */
+const UNIQUE_VIOLATION = "23505";
+/** Tries at a free queue position before giving up. */
+const POSITION_ATTEMPTS = 5;
 
 export interface NewMedia {
   /** Path in the `videos` bucket; must start with `<workspace_id>/`. */
@@ -226,36 +231,42 @@ export async function queueContent(db: Db, input: NewContent): Promise<QueuedCon
     for (const accountId of accountIds) {
       const account = byId.get(accountId);
       if (!account) continue; // checked above
-      let queuePosition: number | null = null;
-      if (input.timing.kind === "queue") {
-        const positions = await db
-          .from("posts")
-          .select("queue_position")
-          .eq("workspace_id", ws)
-          .eq("account_id", accountId)
-          .not("queue_position", "is", null)
-          .order("queue_position", { ascending: false })
-          .limit(1);
-        if (positions.error) fail("reading the queue", positions.error);
-        queuePosition = nextQueuePosition(
-          positions.data.map((p) => ({ queuePosition: p.queue_position })),
-        );
-      }
       const status = newPostStatus(account.status);
-      const post = await db
-        .from("posts")
-        .insert({
-          workspace_id: ws,
-          account_id: accountId,
-          media_id: mediaId,
-          caption: input.caption,
-          timing: input.timing.kind,
-          queue_position: queuePosition,
-          scheduled_at: input.timing.kind === "pinned" ? input.timing.at.toISOString() : null,
-          status,
-        })
-        .select("id")
-        .single();
+      // A queue post takes the next free position. Two adds racing on one account can pick the
+      // same one; the unique index (0007) refuses the second insert and it tries the next.
+      let post;
+      for (let attempt = 0; ; attempt++) {
+        let queuePosition: number | null = null;
+        if (input.timing.kind === "queue") {
+          const positions = await db
+            .from("posts")
+            .select("queue_position")
+            .eq("workspace_id", ws)
+            .eq("account_id", accountId)
+            .not("queue_position", "is", null)
+            .order("queue_position", { ascending: false })
+            .limit(1);
+          if (positions.error) fail("reading the queue", positions.error);
+          queuePosition = nextQueuePosition(
+            positions.data.map((p) => ({ queuePosition: p.queue_position })),
+          );
+        }
+        post = await db
+          .from("posts")
+          .insert({
+            workspace_id: ws,
+            account_id: accountId,
+            media_id: mediaId,
+            caption: input.caption,
+            timing: input.timing.kind,
+            queue_position: queuePosition,
+            scheduled_at: input.timing.kind === "pinned" ? input.timing.at.toISOString() : null,
+            status,
+          })
+          .select("id")
+          .single();
+        if (post.error?.code !== UNIQUE_VIOLATION || attempt >= POSITION_ATTEMPTS - 1) break;
+      }
       if (post.error) fail("saving the post", post.error);
       created.push(post.data.id);
       touched.push(account);

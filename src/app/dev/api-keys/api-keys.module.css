@@ -1,0 +1,136 @@
+/* /dev/api-keys (BC-17): a small form, the new key once, and the list. DESIGN.md tokens only. */
+
+.create {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.form {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 220px;
+  max-width: 320px;
+}
+
+.field label {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.input {
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-s);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13.5px;
+}
+
+.input:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.error {
+  color: var(--bad);
+}
+
+.secret {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  background: var(--accent-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+.secretRow {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.secretRow .input {
+  flex: 1;
+  min-width: 0;
+}
+
+.keys {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: var(--shadow);
+}
+
+.keys li {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) 2fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+}
+
+.keys li:first-child {
+  border-top: 0;
+}
+
+.keyName {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.keyName span,
+.meta dt {
+  color: var(--ink-3);
+  font-size: 12px;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+  margin: 0;
+}
+
+.meta dd {
+  margin: 0;
+  color: var(--ink-2);
+}
+
+.revoked {
+  color: var(--ink-3);
+  font-size: 12.5px;
+}
+
+@media (max-width: 760px) {
+  .keys li {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .field {
+    max-width: none;
+  }
+}

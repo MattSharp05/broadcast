@@ -4,6 +4,7 @@ import { LogOut, Send } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { WorkspaceKind } from "@/lib/db/workspaces";
+import { attentionLine } from "@/lib/domain/health";
 import type { SchedulerLine } from "@/lib/domain/scheduler-status";
 import styles from "./AppRail.module.css";
 import { NAV_ITEMS, isActivePath } from "./nav";
@@ -16,6 +17,8 @@ interface AppRailProps {
   onSwitchWorkspace?: (formData: FormData) => void | Promise<void>;
   /** The scheduler's status line for the footer (src/lib/domain/scheduler-status.ts). */
   scheduler?: SchedulerLine;
+  /** Accounts of this workspace that need attention (BC-19): an amber line linking to them. */
+  attention?: number;
 }
 
 const WORKSPACES: readonly { kind: WorkspaceKind; label: string }[] = [
@@ -24,8 +27,14 @@ const WORKSPACES: readonly { kind: WorkspaceKind; label: string }[] = [
 ];
 
 /** The navy navigation rail. Below 760px it becomes a bottom tab bar. */
-export function AppRail({ workspace = "live", onSwitchWorkspace, scheduler }: AppRailProps) {
+export function AppRail({
+  workspace = "live",
+  onSwitchWorkspace,
+  scheduler,
+  attention = 0,
+}: AppRailProps) {
   const pathname = usePathname();
+  const attentionText = attentionLine(attention);
 
   return (
     <nav className={styles.rail} aria-label="Main">
@@ -73,6 +82,17 @@ export function AppRail({ workspace = "live", onSwitchWorkspace, scheduler }: Ap
               <small>{scheduler.detail}</small>
             </span>
           </div>
+        ) : null}
+        {attentionText ? (
+          <Link
+            href="/accounts?status=needs_attention"
+            className={`${styles.sys} ${styles.sysLink}`}
+            data-testid="attention-status"
+            data-tone="warn"
+          >
+            <StatusDot tone="warn" className={styles.sysDot} />
+            <span>{attentionText}</span>
+          </Link>
         ) : null}
         <form action="/auth/sign-out" method="post">
           <button type="submit" className={styles.signOut}>

@@ -124,6 +124,17 @@
   font-size: 12px;
 }
 
+.sysLink {
+  color: inherit;
+  text-decoration: none;
+  border-radius: var(--r);
+}
+
+.sysLink:hover span {
+  color: var(--rail-ink-hi);
+  text-decoration: underline;
+}
+
 .sysDot {
   margin-top: 6px;
 }

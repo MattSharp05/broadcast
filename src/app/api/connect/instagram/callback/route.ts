@@ -3,7 +3,8 @@ import { nowFor } from "@/lib/clock";
 import { TokenKeyError, tokenKeyFromEnv } from "@/lib/crypto/tokens";
 import { createAdminSupabase } from "@/lib/db/admin";
 import { isSignedInOwner } from "@/lib/db/auth";
-import { consumeOAuthState, saveConnection } from "@/lib/db/connections";
+import { consumeOAuthState, reconnectTarget, saveConnection } from "@/lib/db/connections";
+import { clearFakeTokenFailure, resumeAccount } from "@/lib/db/health";
 import { createServerSupabase } from "@/lib/db/server";
 import { loadWorkspace } from "@/lib/db/workspace";
 import { workspaceKindOf } from "@/lib/db/workspaces";
@@ -91,6 +92,15 @@ export async function GET(request: NextRequest) {
       return toDonePage(request, { error });
     }
 
+    if (attempt.accountId) {
+      // Reconnecting a specific account: it must be the same platform user.
+      const target = await reconnectTarget(admin, attempt.workspaceId, attempt.accountId);
+      if (!target) return toDonePage(request, { error: "account" });
+      if (target.platformUserId && target.platformUserId !== profile.platformUserId) {
+        return toDonePage(request, { error: "wrong_account" });
+      }
+    }
+
     const status = connectionStatus({
       platform: attempt.platform,
       grantedScopes: tokens.scopes,
@@ -106,6 +116,16 @@ export async function GET(request: NextRequest) {
       key,
       now: now(),
     });
+    if (!saved.created && status.status === "ready") {
+      // A reconnect that worked: the account's paused posts go back in the queue (BC-19).
+      if (attempt.platform === "fake") await clearFakeTokenFailure(admin, saved.accountId);
+      await resumeAccount(admin, {
+        workspaceId: attempt.workspaceId,
+        accountId: saved.accountId,
+        timezone: workspace.timezone ?? "UTC",
+        now: now(),
+      });
+    }
     return toDonePage(request, { account: saved.accountId });
   } catch (e) {
     console.error("Connect callback failed:", e instanceof Error ? e.message : e);

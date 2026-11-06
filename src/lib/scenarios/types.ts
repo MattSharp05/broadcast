@@ -16,6 +16,11 @@ export interface SandboxSeed {
   /** `created_at` may be set: the canvas shows accounts in the order they were added. */
   accounts: (Insert<"social_accounts"> & { created_at?: string })[];
   fakeAccounts: Insert<"fake_accounts">[];
+  /**
+   * Stored access for fake accounts (BC-19: token expiry and refresh). The fake provider never
+   * reads the token, so `access_token_enc` is a placeholder, not a real or encrypted token.
+   */
+  credentials: Insert<"oauth_credentials">[];
   /** The fake provider's record of already-published posts (so their stats can be fetched). */
   fakeContainers: Insert<"fake_containers">[];
   media: Insert<"media_assets">[];
@@ -46,6 +51,7 @@ export function emptySeed(timezone: string): SandboxSeed {
     brands: [],
     accounts: [],
     fakeAccounts: [],
+    credentials: [],
     fakeContainers: [],
     media: [],
     posts: [],

@@ -355,9 +355,13 @@ export type Database = {
         Row: {
           access_token_enc: string;
           account_id: string;
+          checked_at: string | null;
           created_at: string;
           expires_at: string | null;
           last_refreshed_at: string | null;
+          refresh_claim_token: string | null;
+          refresh_claimed_until: string | null;
+          refresh_retry_at: string | null;
           refresh_token_enc: string | null;
           scopes: string[];
           updated_at: string;
@@ -367,9 +371,13 @@ export type Database = {
         Insert: {
           access_token_enc: string;
           account_id: string;
+          checked_at?: string | null;
           created_at?: string;
           expires_at?: string | null;
           last_refreshed_at?: string | null;
+          refresh_claim_token?: string | null;
+          refresh_claimed_until?: string | null;
+          refresh_retry_at?: string | null;
           refresh_token_enc?: string | null;
           scopes?: string[];
           updated_at?: string;
@@ -378,9 +386,13 @@ export type Database = {
         Update: {
           access_token_enc?: string;
           account_id?: string;
+          checked_at?: string | null;
           created_at?: string;
           expires_at?: string | null;
           last_refreshed_at?: string | null;
+          refresh_claim_token?: string | null;
+          refresh_claimed_until?: string | null;
+          refresh_retry_at?: string | null;
           refresh_token_enc?: string | null;
           scopes?: string[];
           updated_at?: string;
@@ -405,6 +417,7 @@ export type Database = {
       };
       oauth_states: {
         Row: {
+          account_id: string | null;
           brand_id: string;
           created_at: string;
           expires_at: string;
@@ -414,6 +427,7 @@ export type Database = {
         };
         ComputedFields: never;
         Insert: {
+          account_id?: string | null;
           brand_id: string;
           created_at?: string;
           expires_at?: string;
@@ -422,6 +436,7 @@ export type Database = {
           workspace_id: string;
         };
         Update: {
+          account_id?: string | null;
           brand_id?: string;
           created_at?: string;
           expires_at?: string;
@@ -430,6 +445,13 @@ export type Database = {
           workspace_id?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "oauth_states_account_id_workspace_id_fkey";
+            columns: ["account_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "social_accounts";
+            referencedColumns: ["id", "workspace_id"];
+          },
           {
             foreignKeyName: "oauth_states_brand_id_workspace_id_fkey";
             columns: ["brand_id", "workspace_id"];
@@ -769,6 +791,21 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      claim_refresh: {
+        Args: {
+          p_lease_seconds?: number;
+          p_limit: number;
+          p_min_age_seconds: number;
+          p_platforms: Database["public"]["Enums"]["platform"][];
+          p_window_seconds: number;
+          p_workspace_ids?: string[];
+        };
+        Returns: {
+          account_id: string;
+          claim_token: string;
+          workspace_id: string;
+        }[];
+      };
       claim_work: {
         Args: {
           p_kind: string;

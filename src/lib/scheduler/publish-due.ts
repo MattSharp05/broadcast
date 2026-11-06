@@ -1,6 +1,6 @@
 import { nowFor } from "@/lib/clock";
-import { hasTokenKey, tokenKeyFromEnv } from "@/lib/crypto/tokens";
-import { TokenDecryptError, loadAccessToken } from "@/lib/db/credentials";
+import { TokenDecryptError } from "@/lib/db/credentials";
+import { flagAccount } from "@/lib/db/health";
 import { deletePublishedVideo, signVideoUrl } from "@/lib/db/videos";
 import { workspaceKindOf } from "@/lib/db/workspaces";
 import {
@@ -14,13 +14,9 @@ import {
 } from "@/lib/domain/publish";
 import { createDbFakeStore } from "@/lib/providers/fake-store";
 import { instagramConfigFromEnv, type InstagramConfig } from "@/lib/providers/instagram";
-import {
-  ProviderError,
-  providerFor,
-  type ProviderAccount,
-  type ProviderPlatform,
-} from "@/lib/providers";
+import { ProviderError, providerFor, type ProviderPlatform } from "@/lib/providers";
 import { claim, release, type Claim } from "./claim";
+import { createTokenReader, resolveTokenKey } from "./provider-account";
 import { advancePost, errorOutcome } from "./publish-post";
 import type { Db, Step, StepSummary, TickContext } from "./types";
 
@@ -81,13 +77,6 @@ export interface WorkspaceSettings {
   timezone: string;
 }
 
-const MISSING_TOKEN = new ProviderError({
-  code: "token_expired",
-  retryable: false,
-  userMessage:
-    "Broadcast has no working Instagram access for this account. Reconnect it to resume posting.",
-});
-
 const VIDEO_URL_FAILED = new ProviderError({
   code: "network",
   retryable: true,
@@ -117,12 +106,13 @@ async function save(db: Db, c: Claim, post: LoadedPost, result: PublishResult): 
   if (log.error) throw new Error(`Writing the job log failed: ${log.error.message}`);
 
   if (result.accountProblem) {
-    const acc = await db
-      .from("social_accounts")
-      .update({ status: "needs_attention", status_reason: result.accountProblem })
-      .eq("workspace_id", c.workspaceId)
-      .eq("id", post.account_id);
-    if (acc.error) throw new Error(`Flagging the account failed: ${acc.error.message}`);
+    // Access is gone: the account needs attention and its other queued posts pause too.
+    await flagAccount(db, {
+      workspaceId: c.workspaceId,
+      accountId: post.account_id,
+      reason: result.accountProblem,
+      kind: "publish",
+    });
   }
   return true;
 }
@@ -170,41 +160,13 @@ export async function loadSettings(
   return settings;
 }
 
-/**
- * The provider account for a post: the decrypted token for Instagram (read once per account per
- * tick), none for the fake.
- */
-async function providerAccount(
-  db: Db,
-  post: LoadedPost,
-  tokenKey: Buffer | null,
-  tokens: Map<string, Promise<string | null>>,
-): Promise<ProviderAccount> {
-  const base = {
-    accountId: post.account_id,
-    platformUserId: post.social_accounts.platform_user_id,
-  };
-  if (post.social_accounts.platform === "fake") return { ...base, accessToken: "" };
-  let token = tokens.get(post.account_id);
-  if (!token) {
-    token = tokenKey
-      ? loadAccessToken(db, post.workspace_id, post.account_id, tokenKey)
-      : Promise.resolve(null);
-    tokens.set(post.account_id, token);
-  }
-  const accessToken = await token;
-  if (!accessToken) throw MISSING_TOKEN;
-  return { ...base, accessToken };
-}
-
 export function createPublishDue(deps: PublishDeps = {}): Step {
   return {
     name: "publishDue",
     async run(ctx: TickContext): Promise<StepSummary> {
       const { db } = ctx;
       const instagram = deps.instagram === undefined ? instagramConfigFromEnv() : deps.instagram;
-      const tokenKey =
-        deps.tokenKey === undefined ? (hasTokenKey() ? tokenKeyFromEnv() : null) : deps.tokenKey;
+      const tokenKey = resolveTokenKey(deps.tokenKey);
       const sign = deps.signVideoUrl ?? signVideoUrl;
 
       const claims = await claim(db, "publish", PUBLISH_BATCH, {
@@ -231,7 +193,7 @@ export function createPublishDue(deps: PublishDeps = {}): Step {
         loadSettings(db, [...new Set(claims.map((c) => c.workspaceId))]),
       ]);
       const fakeStore = createDbFakeStore(db);
-      const tokens = new Map<string, Promise<string | null>>();
+      const providerAccount = createTokenReader(db, tokenKey);
 
       for (const c of claims) {
         const post = posts.get(c.postId);
@@ -265,7 +227,12 @@ export function createPublishDue(deps: PublishDeps = {}): Step {
           outcome = await advancePost({
             provider,
             account: callsProvider
-              ? await providerAccount(db, post, tokenKey, tokens)
+              ? await providerAccount({
+                  id: post.account_id,
+                  workspaceId: post.workspace_id,
+                  platform: account.platform,
+                  platformUserId: account.platform_user_id,
+                })
               : { accountId: post.account_id, platformUserId: null, accessToken: "" },
             post: stepPost(post),
             action,

@@ -24,7 +24,7 @@ function resolveImport(from: string, spec: string): string | null {
   else if (spec.startsWith(".")) base = resolve(dirname(from), spec);
   else return null; // a package
   for (const candidate of [base, `${base}.ts`, `${base}.tsx`, join(base, "index.ts")]) {
-    if (existsSync(candidate) && candidate.match(/\.tsx?$/)) return candidate;
+    if (existsSync(candidate) && /\.tsx?$/.test(candidate)) return candidate;
   }
   throw new Error(`Can't resolve ${spec} from ${relative(ROOT, from)}`);
 }

@@ -54,6 +54,10 @@ export function Modal({
         e.preventDefault();
         onCloseRef.current();
       }}
+      onClose={() => {
+        // The browser may close it on its own (a second Escape): keep the parent in step.
+        if (open) onCloseRef.current();
+      }}
     >
       {open ? (
         <>

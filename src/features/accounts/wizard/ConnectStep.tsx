@@ -15,6 +15,8 @@ interface ConnectStepProps {
   username: string;
   sandbox: boolean;
   state: ConnectState;
+  /** Waiting, but the pop-up was closed: Connect works again. */
+  canRetry: boolean;
   connected: ConnectedAccount | null;
   /** The brand the wizard is adding to; a reconnected account may belong to another one. */
   brandId: string;
@@ -28,6 +30,7 @@ export function ConnectStep({
   username,
   sandbox,
   state,
+  canRetry,
   connected,
   brandId,
   brandName,
@@ -35,7 +38,7 @@ export function ConnectStep({
   onCancel,
 }: ConnectStepProps) {
   const typed = cleanUsername(username);
-  const busy = state.kind === "waiting" || state.kind === "reading";
+  const busy = (state.kind === "waiting" && !canRetry) || state.kind === "reading";
   const platform = sandbox ? "Sandbox" : "Instagram";
 
   const connectButton = (label: string, reconnect = false) => (
@@ -50,6 +53,11 @@ export function ConnectStep({
         )}
         {busy ? `Waiting for ${platform}` : label}
       </Button>
+      {state.kind === "waiting" && canRetry ? (
+        <span className={styles.help} role="status">
+          The pop-up closed before connecting finished. Connect again to retry.
+        </span>
+      ) : null}
       {state.kind === "waiting" ? (
         <Button variant="ghost" onClick={onCancel}>
           Cancel

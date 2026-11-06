@@ -35,23 +35,26 @@ export async function loadConnectedAccount(
   accountId: string,
   deps: ConnectedAccountDeps,
 ): Promise<ConnectedAccount> {
-  const { data, error } = await db
-    .from("social_accounts")
-    .select(
-      "id, handle, platform, platform_user_id, brand_id, status, status_reason, followers, tags, description, slots",
-    )
-    .eq("workspace_id", workspaceId)
-    .eq("id", accountId)
-    .maybeSingle();
-  if (error) throw new Error(`Reading the account failed: ${error.message}`);
+  // Independent reads: the account (as the user, RLS) and its granted scopes (service role).
+  const [account, creds] = await Promise.all([
+    db
+      .from("social_accounts")
+      .select(
+        "id, handle, platform, platform_user_id, brand_id, status, status_reason, followers, tags, description, slots",
+      )
+      .eq("workspace_id", workspaceId)
+      .eq("id", accountId)
+      .maybeSingle(),
+    deps.admin
+      .from("oauth_credentials")
+      .select("scopes")
+      .eq("workspace_id", workspaceId)
+      .eq("account_id", accountId)
+      .maybeSingle(),
+  ]);
+  if (account.error) throw new Error(`Reading the account failed: ${account.error.message}`);
+  const data = account.data;
   if (!data) throw new NotFoundError("That account isn't in this workspace.");
-
-  const creds = await deps.admin
-    .from("oauth_credentials")
-    .select("scopes")
-    .eq("workspace_id", workspaceId)
-    .eq("account_id", accountId)
-    .maybeSingle();
   if (creds.error) throw new Error(`Reading the permissions failed: ${creds.error.message}`);
 
   let quota: ConnectedAccount["quota"] = null;

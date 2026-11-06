@@ -70,7 +70,13 @@ export function PlatformStep({
   update,
   brands,
   brandError,
-}: StepProps & { brands: readonly BrandRef[]; brandError: string | null }) {
+  locked,
+}: StepProps & {
+  brands: readonly BrandRef[];
+  brandError: string | null;
+  /** An account is already connected to the chosen brand: the brand can't change any more. */
+  locked: boolean;
+}) {
   const brandId = useId();
   return (
     <>
@@ -100,6 +106,7 @@ export function PlatformStep({
           id={brandId}
           className={styles.input}
           value={draft.brandId}
+          disabled={locked}
           onChange={(e) => {
             update({ brandId: e.target.value });
           }}
@@ -130,8 +137,9 @@ export function PlatformStep({
           </p>
         ) : null}
         <span className={styles.help}>
-          A brand groups the accounts that share one audience, such as Coding Journey on Instagram
-          and TikTok.
+          {locked
+            ? "The account is already connected to this brand."
+            : "A brand groups the accounts that share one audience, such as Coding Journey on Instagram and TikTok."}
         </span>
       </div>
     </>

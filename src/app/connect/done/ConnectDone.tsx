@@ -8,7 +8,7 @@ import {
   CONNECT_RESULT_KEY,
   CONNECT_RETURN_KEY,
   CONNECT_WINDOW_NAME,
-  isReturnPath,
+  parseReturn,
   type ConnectMessage,
 } from "@/features/accounts/connect-message";
 import styles from "../connect.module.css";
@@ -19,9 +19,9 @@ const RETURN_AFTER_MS = 2500;
 /** The same-tab connect's return path (the wizard, when its popup was blocked), used once. */
 function takeReturnPath(): string | null {
   try {
-    const path = sessionStorage.getItem(CONNECT_RETURN_KEY);
+    const raw = sessionStorage.getItem(CONNECT_RETURN_KEY);
     sessionStorage.removeItem(CONNECT_RETURN_KEY);
-    return isReturnPath(path) ? path : null;
+    return parseReturn(raw, Date.now());
   } catch {
     return null;
   }

@@ -21,6 +21,7 @@ import {
   CONNECT_CHANNEL,
   CONNECT_RETURN_KEY,
   CONNECT_WINDOW_NAME,
+  encodeReturn,
   isConnectMessage,
   type ConnectMessage,
 } from "../connect-message";
@@ -74,6 +75,8 @@ export function AddAccountWizard({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const popup = useRef<Window | null>(null);
+  /** The pop-up was closed (or looks closed) while waiting: Connect can be pressed again. */
+  const [popupClosed, setPopupClosed] = useState(false);
 
   const update = useCallback((patch: Partial<WizardDraft>) => {
     setError(null);
@@ -137,6 +140,8 @@ export function AddAccountWizard({
     if (!waiting) return;
     const onWindowMessage = (e: MessageEvent) => {
       if (e.origin !== window.location.origin || !isConnectMessage(e.data)) return;
+      // Opener messages must come from this wizard's own pop-up.
+      if (popup.current && e.source !== popup.current) return;
       onMessage(e.data);
     };
     window.addEventListener("message", onWindowMessage);
@@ -149,9 +154,15 @@ export function AddAccountWizard({
     } catch {
       // No BroadcastChannel: the opener message still arrives.
     }
+    // Keep listening after the pop-up closes (a site's opener policy can make it look closed
+    // while it isn't), but let Connect be pressed again instead of looking stuck.
+    const poll = window.setInterval(() => {
+      if (popup.current?.closed) setPopupClosed(true);
+    }, 700);
     return () => {
       window.removeEventListener("message", onWindowMessage);
       channel?.close();
+      window.clearInterval(poll);
     };
   }, [waiting, onMessage]);
 
@@ -160,6 +171,12 @@ export function AddAccountWizard({
   useEffect(() => {
     if (started.current) return;
     started.current = true;
+    // A same-tab connect abandoned earlier must not pull a later one back here.
+    try {
+      sessionStorage.removeItem(CONNECT_RETURN_KEY);
+    } catch {
+      // No storage.
+    }
     const result = takeConnectResult();
     if (result) {
       setDraft((d) => ({ ...d, step: 3 }));
@@ -173,6 +190,8 @@ export function AddAccountWizard({
     if (draft.brandId === NEW_BRAND) return;
     const url = `/api/connect/instagram/start?brand=${encodeURIComponent(draft.brandId)}`;
     setConnect({ kind: "waiting" });
+    setPopupClosed(false);
+    popup.current?.close();
     const win = window.open(url, CONNECT_WINDOW_NAME, POPUP_FEATURES);
     if (win) {
       popup.current = win;
@@ -182,9 +201,10 @@ export function AddAccountWizard({
     // Pop-up blocked: connect in this tab; the done page brings the result back here.
     saveDraft(workspace.id, { ...draft, step: 3 });
     try {
-      sessionStorage.setItem(CONNECT_RETURN_KEY, RETURN_PATH);
+      sessionStorage.setItem(CONNECT_RETURN_KEY, encodeReturn(RETURN_PATH, Date.now()));
     } catch {
-      // Without storage the done page goes to Accounts and the wizard reopens at Connect.
+      // No storage: the done page shows the result and links back to Accounts; the account is
+      // there, but this draft is lost.
     }
     window.location.assign(url);
   };
@@ -240,7 +260,15 @@ export function AddAccountWizard({
   let body: React.ReactNode;
   switch (step) {
     case 0:
-      body = <PlatformStep draft={draft} update={update} brands={brands} brandError={error} />;
+      body = (
+        <PlatformStep
+          draft={draft}
+          update={update}
+          brands={brands}
+          brandError={error}
+          locked={draft.accountId !== null}
+        />
+      );
       break;
     case 1:
       body = <SignupStep draft={draft} update={update} />;
@@ -254,6 +282,7 @@ export function AddAccountWizard({
           username={draft.username}
           sandbox={workspace.kind === "sandbox"}
           state={connect}
+          canRetry={popupClosed}
           connected={connected?.id === draft.accountId ? connected : null}
           brandId={draft.brandId}
           brandName={brandName}

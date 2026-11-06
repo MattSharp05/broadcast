@@ -64,6 +64,7 @@ test("/dev lists every scenario and each link loads it", async ({ page }) => {
     "publish-quota-exhausted",
     "publish-container-error",
     "add-content",
+    "stats-due",
   ]);
   await expect(page.getByRole("link", { name: "Canvas engine demo" })).toHaveAttribute(
     "href",
@@ -79,6 +80,7 @@ test("/dev lists every scenario and each link loads it", async ({ page }) => {
     "publish-quota-exhausted": 1,
     "publish-container-error": 1,
     "add-content": 4,
+    "stats-due": 1,
   };
   for (const [name, accounts] of Object.entries(expected)) {
     await page.goto("/dev");

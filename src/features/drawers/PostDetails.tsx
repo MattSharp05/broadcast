@@ -13,7 +13,7 @@ import {
   type AccountDetail,
   type PostDetail,
 } from "@/lib/domain/details";
-import { ago, compactCount } from "@/lib/domain/format";
+import { ago, statCount } from "@/lib/domain/format";
 import { RefreshChart } from "./charts";
 import styles from "./drawers.module.css";
 import { Numbers, Row } from "./previews";
@@ -80,7 +80,8 @@ export function PostDetails({ card, account, detail, clock, onAddContent }: Post
 
   if (card.kind === "posted") {
     const stats = detail?.stats;
-    const value = (n: number | undefined) => (n === undefined ? "–" : compactCount(n));
+    // "–": no refresh yet; "—": Instagram doesn't report this metric for the post.
+    const value = (n: number | null | undefined) => (n === undefined ? "–" : statCount(n));
     return (
       <>
         <div className={styles.split}>

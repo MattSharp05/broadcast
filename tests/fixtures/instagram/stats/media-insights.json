@@ -1,0 +1,52 @@
+{
+  "data": [
+    {
+      "name": "views",
+      "period": "lifetime",
+      "values": [{ "value": 1520 }],
+      "title": "Views",
+      "description": "The number of times your reel was played or displayed.",
+      "id": "18034567890123456/insights/views/lifetime"
+    },
+    {
+      "name": "reach",
+      "period": "lifetime",
+      "values": [{ "value": 1184 }],
+      "title": "Accounts reached",
+      "description": "The number of unique accounts that have seen this reel at least once.",
+      "id": "18034567890123456/insights/reach/lifetime"
+    },
+    {
+      "name": "likes",
+      "period": "lifetime",
+      "values": [{ "value": 96 }],
+      "title": "Likes",
+      "description": "The number of likes on your reel.",
+      "id": "18034567890123456/insights/likes/lifetime"
+    },
+    {
+      "name": "comments",
+      "period": "lifetime",
+      "values": [{ "value": 7 }],
+      "title": "Comments",
+      "description": "The number of comments on your reel.",
+      "id": "18034567890123456/insights/comments/lifetime"
+    },
+    {
+      "name": "shares",
+      "period": "lifetime",
+      "values": [{ "value": 12 }],
+      "title": "Shares",
+      "description": "The number of shares of your reel.",
+      "id": "18034567890123456/insights/shares/lifetime"
+    },
+    {
+      "name": "saved",
+      "period": "lifetime",
+      "values": [{ "value": 21 }],
+      "title": "Saves",
+      "description": "The number of saves of your reel.",
+      "id": "18034567890123456/insights/saved/lifetime"
+    }
+  ]
+}

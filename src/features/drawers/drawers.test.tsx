@@ -44,11 +44,11 @@ const posted: PostDetail = {
   stats: { views: 1500, reach: 1200, likes: 90, comments: 7, shares: 4, saves: 11 },
   refreshedAt: new Date(NOW.getTime() - 3 * 3_600_000),
   snapshots: [
-    { offset: "1h", views: 300 },
-    { offset: "6h", views: 1500 },
-    { offset: "24h", views: null },
-    { offset: "48h", views: null },
-    { offset: "7d", views: null },
+    { offset: "1h", views: 300, missed: false, taken: true },
+    { offset: "6h", views: 1500, missed: false, taken: true },
+    { offset: "24h", views: null, missed: false, taken: false },
+    { offset: "48h", views: null, missed: false, taken: false },
+    { offset: "7d", views: null, missed: false, taken: false },
   ],
   nextRefresh: "24h",
 };

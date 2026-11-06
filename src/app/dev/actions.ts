@@ -44,6 +44,13 @@ export async function runSandboxTick(prev: TickState): Promise<TickState> {
   const parts = LABELS.flatMap(([key, label]) =>
     typeof step[key] === "number" && step[key] > 0 ? [`${step[key]} ${label}`] : [],
   );
+  // Stats (BC-21): snapshots only; the daily follower count isn't worth a mention.
+  const stats = summary.steps.collectStats ?? {};
+  if (typeof stats.error === "string") parts.push(`stats failed: ${stats.error}`);
+  const collected = typeof stats.collected === "number" ? stats.collected : 0;
+  if (collected > 0) {
+    parts.push(`stats refreshed for ${collected} ${collected === 1 ? "post" : "posts"}`);
+  }
   return {
     message: parts.length ? `Tick done: ${parts.join(", ")}.` : "Tick done: nothing was due.",
     runs,

@@ -1,6 +1,6 @@
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { connectionStatus, requiredScopes } from "@/lib/domain/connect";
 import {
   FIXTURE_APP,
@@ -13,6 +13,13 @@ import {
 } from "../../../tests/fixtures/instagram/handlers";
 import { publishFixtures } from "../../../tests/fixtures/instagram/publish/server";
 import {
+  FULL_MEDIA,
+  NO_SHARES_MEDIA,
+  RATE_LIMITED_MEDIA,
+  SHARES_REFUSED_MEDIA,
+  statsHandlers,
+} from "../../../tests/fixtures/instagram/stats/server";
+import {
   IG_DEFAULT_QUOTA,
   IG_GRAPH_VERSION,
   createInstagramProvider,
@@ -20,6 +27,7 @@ import {
   mediaProblem,
   instagramConfigFromEnv,
   parseGraphJson,
+  parseInsights,
 } from "./instagram";
 import { ProviderError, type ProviderAccount } from "./types";
 
@@ -310,9 +318,65 @@ describe("instagram: publishing", () => {
     expect(mediaProblem(2207026, "Unsupported")?.userMessage).toMatch(/MP4/);
     expect(mediaProblem(undefined, "Something else")).toBeNull();
   });
+});
 
-  it("stats aren't built yet (BC-17)", async () => {
-    expect((await rejection(provider.getMediaInsights(account, "m"))).code).toBe("unsupported");
+describe("instagram: getMediaInsights (MSW)", () => {
+  beforeEach(() => {
+    server.use(...statsHandlers);
+  });
+
+  it("maps a Reel's lifetime insights; Instagram's `saved` is saves", async () => {
+    expect(await provider.getMediaInsights(account, FULL_MEDIA)).toEqual({
+      views: 1520,
+      reach: 1184,
+      likes: 96,
+      comments: 7,
+      shares: 12,
+      saves: 21,
+    });
+  });
+
+  it("a metric Instagram leaves out is null, not 0", async () => {
+    const insights = await provider.getMediaInsights(account, NO_SHARES_MEDIA);
+    expect(insights.shares).toBeNull();
+    expect(insights).toMatchObject({ views: 640, reach: 512, likes: 33, comments: 2, saves: 5 });
+  });
+
+  it("a rate limit is retryable; an expired token isn't", async () => {
+    const limited = await rejection(provider.getMediaInsights(account, RATE_LIMITED_MEDIA));
+    expect(limited).toMatchObject({ code: "quota_exhausted", retryable: true });
+    const expired = await rejection(
+      provider.getMediaInsights({ ...account, accessToken: "stale" }, FULL_MEDIA),
+    );
+    expect(expired).toMatchObject({ code: "token_expired", retryable: false });
+  });
+
+  it("a metric Instagram refuses for the media type (error 100) is null; the others still come", async () => {
+    expect(await provider.getMediaInsights(account, SHARES_REFUSED_MEDIA)).toEqual({
+      views: 1520,
+      reach: 1184,
+      likes: 96,
+      comments: 7,
+      shares: null,
+      saves: 21,
+    });
+  });
+
+  it("a deleted post is not_found, without retrying", async () => {
+    expect(await rejection(provider.getMediaInsights(account, "999"))).toMatchObject({
+      code: "not_found",
+      retryable: false,
+    });
+  });
+
+  it("parseInsights reads total_value too and ignores junk", () => {
+    expect(
+      parseInsights([
+        { name: "views", total_value: { value: 10 } },
+        { name: "likes", values: [{ value: "x" }] },
+        null,
+      ]),
+    ).toEqual({ views: 10, reach: null, likes: null, comments: null, shares: null, saves: null });
   });
 });
 

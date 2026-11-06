@@ -46,6 +46,7 @@ function metric(
     comments: 2,
     shares: 1,
     saves: 3,
+    missed: false,
   } satisfies PostMetricRow;
 }
 
@@ -78,6 +79,27 @@ describe("post details", () => {
       (["1h", "6h", "24h", "48h", "7d"] as const).map((o, i) => metric("p2", o, i + 1, 10 * i)),
     ).p2;
     expect(done?.nextRefresh).toBeNull();
+  });
+
+  it("a missed refresh is skipped: not the latest, not next, shown as missed", () => {
+    const d = buildPostDetails(
+      [post("p1")],
+      [
+        metric("p1", "1h", 1, 120),
+        { ...metric("p1", "6h", 50, 0), views: null, missed: true },
+        { ...metric("p1", "24h", 50, 0), views: null, missed: true },
+        { ...metric("p1", "48h", 50, 700), shares: null },
+      ],
+    ).p1;
+    expect(d?.stats).toMatchObject({ views: 700, shares: null });
+    expect(d?.snapshots.map((s) => [s.offset, s.views, s.missed])).toEqual([
+      ["1h", 120, false],
+      ["6h", null, true],
+      ["24h", null, true],
+      ["48h", 700, false],
+      ["7d", null, false],
+    ]);
+    expect(d?.nextRefresh).toBe("7d");
   });
 
   it("keeps the full error of a failed post, and no refreshes for waiting posts", () => {

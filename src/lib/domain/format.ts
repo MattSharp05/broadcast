@@ -116,6 +116,11 @@ export function compactCount(n: number): string {
   return String(n);
 }
 
+/** A stat for display: "—" when the platform doesn't report it (null). */
+export function statCount(n: number | null): string {
+  return n === null ? "—" : compactCount(n);
+}
+
 /** A video length: "0:42", "1:05". */
 export function duration(seconds: number): string {
   const s = Math.max(0, Math.round(seconds));

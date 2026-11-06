@@ -9,6 +9,7 @@ import {
   sameLocalDay,
   shortCountdown,
   shortDate,
+  statCount,
   whenLabel,
 } from "./format";
 
@@ -52,6 +53,12 @@ describe("format", () => {
     expect(compactCount(1_300_000)).toBe("1.3M");
     expect(duration(42)).toBe("0:42");
     expect(duration(65.4)).toBe("1:05");
+  });
+
+  it("shows a stat Instagram doesn't report as a dash", () => {
+    expect(statCount(null)).toBe("—");
+    expect(statCount(0)).toBe("0");
+    expect(statCount(1240)).toBe("1.2K");
   });
 
   it("says how long ago, and short dates", () => {

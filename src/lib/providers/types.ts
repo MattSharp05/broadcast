@@ -65,13 +65,17 @@ export interface PublishHint {
   containerCreatedAt: Date | null;
 }
 
+/**
+ * A post's lifetime numbers as they are now. null: the platform doesn't report that metric for
+ * this post (e.g. a media type without it); the dashboard shows "—".
+ */
 export interface MediaInsights {
-  views: number;
-  reach: number;
-  likes: number;
-  comments: number;
-  shares: number;
-  saves: number;
+  views: number | null;
+  reach: number | null;
+  likes: number | null;
+  comments: number | null;
+  shares: number | null;
+  saves: number | null;
 }
 
 export interface SocialProvider {

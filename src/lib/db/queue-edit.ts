@@ -11,6 +11,7 @@ import {
 } from "@/lib/domain/queue-edit";
 import { newPostStatus } from "@/lib/domain/content";
 import {
+  BACK,
   MOVE_MESSAGES,
   backlogOrder,
   moveProblem,
@@ -309,7 +310,7 @@ export async function movePost(
 
   const { placement } = target;
   let pinAt: Date | null = null;
-  let after: string | null | "back" = "back";
+  let after: string | null | typeof BACK = BACK;
   if (placement.kind === "pinned") pinAt = placement.at;
   else if (placement.kind === "queue") after = placement.after;
   else if (placement.kind === "slot") {

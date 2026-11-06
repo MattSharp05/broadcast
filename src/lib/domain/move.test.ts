@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  BACK,
   backlogOrder,
   mediaRules,
   moveProblem,
@@ -100,7 +101,7 @@ describe("reorder", () => {
     expect(reorder(backlog, "a", "b")).toEqual(["b", "a", "c"]);
     expect(reorder(backlog, "a", "c")).toEqual(["b", "c", "a"]);
     expect(reorder(backlog, "c", null)).toEqual(["c", "a", "b"]);
-    expect(reorder(backlog, "a", "back")).toEqual(["b", "c", "a"]);
+    expect(reorder(backlog, "a", BACK)).toEqual(["b", "c", "a"]);
   });
   it("inserts a post from elsewhere", () => {
     expect(reorder(backlog, "z", "a")).toEqual(["a", "z", "b", "c"]);

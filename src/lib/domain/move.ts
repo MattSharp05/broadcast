@@ -108,17 +108,20 @@ export function backlogOrder(rows: readonly QueueRow[]): QueueRow[] {
     .map(({ row }) => row);
 }
 
+/** `reorder`'s "the back of the backlog". */
+export const BACK: unique symbol = Symbol("back");
+
 /**
- * The backlog's new order with `movedId` placed after `after` (null: first; "back": last).
+ * The backlog's new order with `movedId` placed after `after` (null: first; BACK: last).
  * Null when `after` isn't in the backlog any more.
  */
 export function reorder(
   backlog: readonly { id: string }[],
   movedId: string,
-  after: string | null | "back",
+  after: string | null | typeof BACK,
 ): string[] | null {
   const ids = backlog.map((p) => p.id).filter((id) => id !== movedId);
-  if (after === "back") return [...ids, movedId];
+  if (after === BACK) return [...ids, movedId];
   if (after === null) return [movedId, ...ids];
   const i = ids.indexOf(after);
   if (i < 0) return null;

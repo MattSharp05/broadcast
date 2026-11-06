@@ -44,8 +44,19 @@ export function decideAccess(input: {
   return isAllowedEmail(input.userEmail, input.allowedEmail) ? "allow" : "private";
 }
 
-/** Only same-site paths are allowed as a post-sign-in destination (no open redirects). */
+/**
+ * Only same-site paths are allowed as a post-sign-in destination (no open redirects). Parsed the
+ * way the redirect will be, so tricks like "/\t/evil.com" (the URL parser drops tabs) fall back.
+ */
 export function safeNextPath(next: string | null | undefined, fallback = "/workflow"): string {
-  if (!next?.startsWith("/") || next.startsWith("//") || next.startsWith("/\\")) return fallback;
-  return next;
+  if (!next?.startsWith("/")) return fallback;
+  const base = "http://same.invalid";
+  let url: URL;
+  try {
+    url = new URL(next, base);
+  } catch {
+    return fallback;
+  }
+  if (url.origin !== base) return fallback;
+  return url.pathname + url.search + url.hash;
 }

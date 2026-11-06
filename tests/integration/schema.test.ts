@@ -50,14 +50,16 @@ describe("schema (after pnpm db:reset)", () => {
       .single();
     const brandId = brand.data?.id ?? "";
 
-    const bad = await admin.from("social_accounts").insert({
-      workspace_id: WORKSPACE_IDS.sandbox,
-      brand_id: brandId,
-      platform: "fake",
-      handle: "bad-slots",
-      slots: ["9:00"],
-    });
-    expect(bad.error?.code).toBe("23514"); // check_violation
+    for (const slots of [["9:00"], ["09:00,10:00"], ["24:00"]]) {
+      const bad = await admin.from("social_accounts").insert({
+        workspace_id: WORKSPACE_IDS.sandbox,
+        brand_id: brandId,
+        platform: "fake",
+        handle: "bad-slots",
+        slots,
+      });
+      expect(bad.error?.code, slots.join()).toBe("23514"); // check_violation
+    }
 
     const good = await admin
       .from("social_accounts")

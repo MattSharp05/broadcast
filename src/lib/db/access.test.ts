@@ -62,10 +62,16 @@ describe("safeNextPath", () => {
     expect(safeNextPath("/accounts?x=1")).toBe("/accounts?x=1");
   });
 
-  it.each([null, undefined, "", "https://evil.example", "//evil.example", "/\\evil.example"])(
-    "falls back for %s",
-    (n) => {
-      expect(safeNextPath(n)).toBe("/workflow");
-    },
-  );
+  it.each([
+    null,
+    undefined,
+    "",
+    "https://evil.example",
+    "//evil.example",
+    "/\\evil.example",
+    "/\t/evil.example",
+    "/\n/evil.example",
+  ])("falls back for %s", (n) => {
+    expect(safeNextPath(n)).toBe("/workflow");
+  });
 });

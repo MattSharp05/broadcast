@@ -50,10 +50,15 @@ export async function requestMagicLink(_prev: LoginState, formData: FormData): P
   return { status: "sent", email };
 }
 
-/** APP_URL when set (production), else the origin the request came from (local, CI). */
+/**
+ * Where the magic link points: APP_URL, else Vercel's production domain. Only local and CI runs
+ * (neither set) fall back to the request's own origin.
+ */
 async function appOrigin(): Promise<string> {
   const configured = process.env.APP_URL?.replace(/\/+$/, "");
   if (configured) return configured;
+  const vercel = process.env.VERCEL_PROJECT_PRODUCTION_URL;
+  if (vercel) return `https://${vercel}`;
   const h = await headers();
   const origin = h.get("origin");
   if (origin) return origin;

@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { decideAccess } from "@/lib/db/access";
+import { decideAccess, isPublicPath } from "@/lib/db/access";
 import { readPublicSupabaseEnv } from "@/lib/db/env";
 import type { Database } from "@/lib/db/types";
 
@@ -14,11 +14,9 @@ export async function middleware(request: NextRequest) {
   const env = readPublicSupabaseEnv();
   const allowedEmail = process.env.ALLOWED_EMAIL;
 
-  if (!env) {
-    return decideAccess({ pathname, userEmail: null, allowedEmail }) === "allow"
-      ? NextResponse.next()
-      : redirectTo(request, "/login");
-  }
+  // Sign-in pages and the API (its own auth) need no session check: skip the Auth round trip.
+  if (isPublicPath(pathname)) return NextResponse.next();
+  if (!env) return redirectTo(request, "/login");
 
   let response = NextResponse.next({ request });
   const supabase = createServerClient<Database>(env.url, env.anonKey, {

@@ -21,6 +21,16 @@ begin
 end;
 $$;
 
+-- Every element is a 'HH:MM' time (no nulls).
+create function public.valid_slots(slots text[]) returns boolean
+language sql
+immutable
+set search_path = ''
+as $$
+  select coalesce(bool_and(s is not null and s ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'), true)
+  from unnest(slots) as s;
+$$;
+
 -- ───────────────────────────── enums ─────────────────────────────
 
 create type public.workspace_kind as enum ('live', 'sandbox');
@@ -117,7 +127,7 @@ create table public.social_accounts (
   tags text[] not null default '{}',
   -- Daily posting times, 'HH:MM' in the workspace timezone.
   slots text[] not null default '{}'
-    check (array_to_string(slots, ',') ~ '^(([01][0-9]|2[0-3]):[0-5][0-9](,|$))*$'),
+    check (public.valid_slots(slots)),
   status public.account_status not null default 'not_connected',
   status_reason text,
   -- Link to the password-manager item. Passwords themselves are never stored.
@@ -270,11 +280,16 @@ create table public.job_log (
   id bigint generated always as identity primary key,
   workspace_id uuid not null references public.workspaces (id) on delete cascade,
   kind text not null,
-  post_id uuid references public.posts (id) on delete set null,
-  account_id uuid references public.social_accounts (id) on delete set null,
+  post_id uuid,
+  account_id uuid,
   ok boolean not null,
   message text,
-  at timestamptz not null default now()
+  at timestamptz not null default now(),
+  -- Deleting the post/account keeps the log line and clears only the reference.
+  foreign key (post_id, workspace_id)
+    references public.posts (id, workspace_id) on delete set null (post_id),
+  foreign key (account_id, workspace_id)
+    references public.social_accounts (id, workspace_id) on delete set null (account_id)
 );
 
 create index job_log_workspace_at_idx on public.job_log (workspace_id, at desc);

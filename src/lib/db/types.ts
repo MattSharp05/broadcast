@@ -171,18 +171,18 @@ export type Database = {
         };
         Relationships: [
           {
-            foreignKeyName: "job_log_account_id_fkey";
-            columns: ["account_id"];
+            foreignKeyName: "job_log_account_id_workspace_id_fkey";
+            columns: ["account_id", "workspace_id"];
             isOneToOne: false;
             referencedRelation: "social_accounts";
-            referencedColumns: ["id"];
+            referencedColumns: ["id", "workspace_id"];
           },
           {
-            foreignKeyName: "job_log_post_id_fkey";
-            columns: ["post_id"];
+            foreignKeyName: "job_log_post_id_workspace_id_fkey";
+            columns: ["post_id", "workspace_id"];
             isOneToOne: false;
             referencedRelation: "posts";
-            referencedColumns: ["id"];
+            referencedColumns: ["id", "workspace_id"];
           },
           {
             foreignKeyName: "job_log_workspace_id_fkey";
@@ -623,6 +623,7 @@ export type Database = {
     };
     Functions: {
       is_allowed_user: { Args: Record<PropertyKey, never>; Returns: boolean };
+      valid_slots: { Args: { slots: string[] }; Returns: boolean };
     };
     Enums: {
       account_status: "ready" | "needs_attention" | "not_connected";

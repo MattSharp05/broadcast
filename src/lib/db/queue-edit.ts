@@ -66,7 +66,7 @@ async function loadPost(db: Db, ctx: QueueContext, postId: string): Promise<Stor
 }
 
 /** `claimed_until` is real time (the lease), never the Sandbox clock. */
-function unclaimed(realNow: Date): string {
+export function unclaimed(realNow: Date): string {
   return `claimed_until.is.null,claimed_until.lt.${realNow.toISOString()}`;
 }
 

@@ -10,8 +10,8 @@ import type { PostStatus } from "./queue";
  * Never twice (CLAUDE.md → Rules): a failed post can keep its container when the last error came
  * after the upload (e.g. the answer to "publish" was lost, so it may be live already). Retry then
  * hands that container back to the scheduler, which checks it before anything else and recovers
- * the post if Instagram already published it. Replacing the video would drop that container, so
- * it is refused until a retry has settled it.
+ * the post if Instagram already published it. Replacing the video would drop that container and
+ * removing the post would lose a live post, so both are refused until a retry has settled it.
  */
 
 export type FailedProblem = "not_failed" | "account_paused" | "quota_full" | "container_kept";
@@ -23,7 +23,7 @@ export const FAILED_MESSAGES: Record<FailedProblem, string> = {
     "This account needs attention, so it can't post now. Reconnect it on the Accounts tab first.",
   quota_full: `This account has used all ${DAILY_POST_LIMIT} of its Instagram posts in the last 24 hours. Try again later.`,
   container_kept:
-    "Instagram may already have this video. Retry now first: it checks the upload before posting anything.",
+    "Instagram may already have this video, so it can't be replaced or removed yet. Retry now first: it checks the upload before posting anything.",
 };
 
 export interface FailedPostState {
@@ -35,9 +35,15 @@ export interface FailedPostState {
   postsUsed24h: number;
 }
 
-/** Why "Retry now" can't run, or null when it can. */
+/**
+ * Why "Retry now" can't run, or null when it can. A kept container is always worth checking: that
+ * posts nothing new (the scheduler checks the quota before it publishes a finished container, and
+ * may check one on an account that needs attention), and it is how a post that is live already is
+ * recovered.
+ */
 export function retryProblem(post: FailedPostState): FailedProblem | null {
   if (post.status !== "failed") return "not_failed";
+  if (post.containerId) return null;
   if (post.accountStatus !== "ready") return "account_paused";
   if (post.postsUsed24h >= DAILY_POST_LIMIT) return "quota_full";
   return null;
@@ -49,6 +55,13 @@ export function replaceProblem(post: FailedPostState): FailedProblem | null {
   if (post.containerId) return "container_kept";
   if (post.accountStatus !== "ready") return "account_paused";
   if (post.postsUsed24h >= DAILY_POST_LIMIT) return "quota_full";
+  return null;
+}
+
+/** Why "Remove" can't run: a kept container may be live already, so Retry settles it first. */
+export function removeProblem(post: FailedPostState): FailedProblem | null {
+  if (post.status !== "failed") return "not_failed";
+  if (post.containerId) return "container_kept";
   return null;
 }
 

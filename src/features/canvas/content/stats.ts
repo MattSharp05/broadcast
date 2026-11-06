@@ -24,13 +24,19 @@ export function workflowStats(stats: CanvasStats, now: Date, onFailed?: () => vo
   ];
 }
 
-/** Where the first failed card sits (its id and centre), or null when the layout has none. */
+/**
+ * Where the newest failed card sits (its id and centre), or null when the layout has none. Newest:
+ * the most recent failure is the one most likely to need attention.
+ */
 export function firstFailedCard(layout: CanvasLayout): { id: string; x: number; y: number } | null {
+  let best: { id: string; x: number; y: number; at: number } | null = null;
   for (const col of layout.columns) {
     for (const { item, rect } of col.posted) {
       if (item.kind !== "failed") continue;
-      return { id: item.id, x: (rect.x0 + rect.x1) / 2, y: (rect.y0 + rect.y1) / 2 };
+      const at = item.at.getTime();
+      if (best && best.at >= at) continue;
+      best = { id: item.id, x: (rect.x0 + rect.x1) / 2, y: (rect.y0 + rect.y1) / 2, at };
     }
   }
-  return null;
+  return best && { id: best.id, x: best.x, y: best.y };
 }

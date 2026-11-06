@@ -226,9 +226,9 @@ export function FailedPost({ card, account, detail, clock, actions, onChanged }:
               e.target.value = "";
             }}
           />
-          <span title={blocked ?? undefined}>
+          <span title={kept ? undefined : (blocked ?? undefined)}>
             <Button
-              disabled={busy || !ready || !actions.retryPost}
+              disabled={busy || (!ready && !kept) || !actions.retryPost}
               onClick={() => {
                 if (actions.retryPost) run(actions.retryPost.bind(null, card.id));
               }}
@@ -237,15 +237,17 @@ export function FailedPost({ card, account, detail, clock, actions, onChanged }:
               Retry now
             </Button>
           </span>
-          <Button
-            variant="danger"
-            disabled={busy || !actions.removeFailed}
-            onClick={() => {
-              setConfirming(true);
-            }}
-          >
-            Remove
-          </Button>
+          <span title={kept ? FAILED_MESSAGES.container_kept : undefined}>
+            <Button
+              variant="danger"
+              disabled={busy || kept || !actions.removeFailed}
+              onClick={() => {
+                setConfirming(true);
+              }}
+            >
+              Remove
+            </Button>
+          </span>
         </div>
       )}
     </>

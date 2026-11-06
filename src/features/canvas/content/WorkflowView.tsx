@@ -314,7 +314,7 @@ export function WorkflowView({
     canvasRef.current?.fitAll();
   }, [activeTag]);
 
-  // "N failed" in the top bar (BC-20): pan to the first failed card and flash it. A tag filter
+  // "N failed" in the top bar (BC-20): pan to the newest failed card and flash it. A tag filter
   // that hides every failed card is cleared first.
   const failedPan = useRef(false);
   const panToFailed = useCallback(() => {
@@ -330,9 +330,12 @@ export function WorkflowView({
     const el = pageRef.current?.querySelector<HTMLElement>(
       `[data-post="${CSS.escape(target.id)}"]`,
     );
-    el?.removeAttribute("data-fresh");
-    // Restart the highlight on the next frame (removing and re-adding the attribute replays it).
-    requestAnimationFrame(() => el?.setAttribute("data-fresh", ""));
+    if (el) {
+      // Replay the highlight: remove it, force a style flush, add it again.
+      el.removeAttribute("data-fresh");
+      el.getBoundingClientRect();
+      el.setAttribute("data-fresh", "");
+    }
   }, [layout, activeTag]);
   useEffect(() => {
     if (!failedPan.current) return;

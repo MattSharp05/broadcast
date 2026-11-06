@@ -352,7 +352,11 @@ export function createFakeProvider({ store, now }: FakeProviderDeps): SocialProv
       const state = await guard(ctx);
       const c = await container(containerId, ctx.accountId);
       if (c.mediaId) return { state: "published" };
-      if (!(await isVertical(c.videoUrl)) && (await fails(state, ["aspect_ratio"]))) {
+      if (
+        state.failureMode === "aspect_ratio" &&
+        !(await isVertical(c.videoUrl)) &&
+        (await fails(state, ["aspect_ratio"]))
+      ) {
         return { state: "error", error: errorFor("aspect_ratio") };
       }
       c.statusChecks += 1;

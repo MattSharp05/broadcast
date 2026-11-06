@@ -6,6 +6,7 @@ import {
   RETRY_LOG,
   attemptResult,
   attemptRows,
+  removeProblem,
   removedFailedMessage,
   replaceProblem,
   retryPatch,
@@ -39,6 +40,12 @@ describe("retryProblem", () => {
     expect(retryProblem({ ...failed, accountStatus: "needs_attention" })).toBe("account_paused");
     expect(retryProblem({ ...failed, postsUsed24h: DAILY_POST_LIMIT })).toBe("quota_full");
   });
+
+  it("always allows checking a kept container (it posts nothing new)", () => {
+    const kept = { ...failed, containerId: "c1" };
+    expect(retryProblem({ ...kept, accountStatus: "needs_attention" })).toBeNull();
+    expect(retryProblem({ ...kept, postsUsed24h: DAILY_POST_LIMIT })).toBeNull();
+  });
 });
 
 describe("replaceProblem", () => {
@@ -54,6 +61,14 @@ describe("replaceProblem", () => {
     expect(replaceProblem({ ...failed, status: "queued" })).toBe("not_failed");
     expect(replaceProblem({ ...failed, accountStatus: "not_connected" })).toBe("account_paused");
     expect(replaceProblem({ ...failed, postsUsed24h: DAILY_POST_LIMIT })).toBe("quota_full");
+  });
+});
+
+describe("removeProblem", () => {
+  it("allows a failed post without a container; refuses a kept one (it may be live)", () => {
+    expect(removeProblem(failed)).toBeNull();
+    expect(removeProblem({ ...failed, containerId: "c1" })).toBe("container_kept");
+    expect(removeProblem({ ...failed, status: "removed" })).toBe("not_failed");
   });
 });
 

@@ -3,14 +3,15 @@ import {
   FAILED_MESSAGES,
   REPLACE_LOG,
   RETRY_LOG,
+  removeProblem,
   replaceProblem,
   retryPatch,
   retryProblem,
   type FailedProblem,
   type FailedPostState,
 } from "@/lib/domain/failed-posts";
-import { replanAccount, type NewMedia, type QueueContext } from "./posts";
-import { postsUsed24h } from "./queue-edit";
+import { insertMedia, replanAccount, type NewMedia, type QueueContext } from "./posts";
+import { postsUsed24h, unclaimed } from "./queue-edit";
 import type { Database } from "./types";
 import { deletePublishedVideo } from "./videos";
 
@@ -50,6 +51,7 @@ async function loadFailed(
   db: Db,
   ctx: QueueContext,
   postId: string,
+  withQuota = true,
 ): Promise<{ post: StoredFailedPost; state: FailedPostState }> {
   const res = await db
     .from("posts")
@@ -68,7 +70,7 @@ async function loadFailed(
       status: post.status,
       containerId: post.container_id,
       accountStatus: post.social_accounts.status,
-      postsUsed24h: await postsUsed24h(db, ctx, post.account_id),
+      postsUsed24h: withQuota ? await postsUsed24h(db, ctx, post.account_id) : 0,
     },
   };
 }
@@ -80,18 +82,27 @@ async function updateFailed(
   postId: string,
   patch: Database["public"]["Tables"]["posts"]["Update"],
 ): Promise<void> {
-  // `claimed_until` is real time (the lease), never the Sandbox clock.
-  const realNow = new Date().toISOString();
   const res = await db
     .from("posts")
     .update(patch)
     .eq("workspace_id", ctx.workspaceId)
     .eq("id", postId)
     .eq("status", "failed")
-    .or(`claimed_until.is.null,claimed_until.lt.${realNow}`)
+    .or(unclaimed(new Date()))
     .select("id");
   if (res.error) fail("saving the post", res.error);
   if (res.data.length !== 1) throw new FailedPostError("not_failed");
+}
+
+/**
+ * What follows a saved change (re-timing the queue, deleting an unused video, the log line). The
+ * change itself is already saved, so a failure here is logged, not reported as a failed action.
+ */
+async function afterwards(what: string, steps: readonly Promise<unknown>[]): Promise<void> {
+  const results = await Promise.allSettled(steps);
+  for (const r of results) {
+    if (r.status === "rejected") console.error(`After ${what}:`, r.reason);
+  }
 }
 
 /** A line in the post's history (the drawer's attempts list). Best effort. */
@@ -117,7 +128,10 @@ export async function retryFailedPost(db: Db, ctx: QueueContext, postId: string)
   const problem = retryProblem(state);
   if (problem) throw new FailedPostError(problem);
   await updateFailed(db, ctx, postId, retryPatch(post.container_id, ctx.now));
-  await Promise.all([logLine(db, ctx, post, RETRY_LOG), replanAccount(db, ctx, post.account_id)]);
+  await afterwards("a retry", [
+    logLine(db, ctx, post, RETRY_LOG),
+    replanAccount(db, ctx, post.account_id),
+  ]);
 }
 
 /**
@@ -135,21 +149,7 @@ export async function replaceFailedVideo(
   const problem = replaceProblem(state);
   if (problem) throw new FailedPostError(problem);
 
-  const inserted = await db
-    .from("media_assets")
-    .insert({
-      workspace_id: ctx.workspaceId,
-      storage_path: media.storagePath,
-      thumbnail_path: media.thumbnailPath,
-      duration_s: media.durationS,
-      width: media.width,
-      height: media.height,
-      bytes: media.bytes,
-    })
-    .select("id")
-    .single();
-  if (inserted.error) fail("saving the video", inserted.error);
-  const mediaId = inserted.data.id;
+  const mediaId = await insertMedia(db, ctx.workspaceId, media);
 
   try {
     await updateFailed(db, ctx, postId, {
@@ -163,7 +163,7 @@ export async function replaceFailedVideo(
     await db.from("media_assets").delete().eq("workspace_id", ctx.workspaceId).eq("id", mediaId);
     throw err;
   }
-  await Promise.all([
+  await afterwards("replacing a video", [
     logLine(db, ctx, post, REPLACE_LOG),
     replanAccount(db, ctx, post.account_id),
     deletePublishedVideo(db, {
@@ -177,16 +177,19 @@ export async function replaceFailedVideo(
 
 /**
  * "Remove": marks the failed post `removed` (its log lines keep pointing at it) and deletes the
- * video when no other waiting post uses it. Returns the account's handle for the toast.
+ * video when no other waiting post uses it. Refused while the post keeps a container (it may be
+ * live; Retry settles that first). Returns the account's handle for the toast.
  */
 export async function removeFailedPost(
   db: Db,
   ctx: QueueContext,
   postId: string,
 ): Promise<{ handle: string }> {
-  const { post } = await loadFailed(db, ctx, postId);
+  const { post, state } = await loadFailed(db, ctx, postId, false);
+  const problem = removeProblem(state);
+  if (problem) throw new FailedPostError(problem);
   await updateFailed(db, ctx, postId, { status: "removed", next_attempt_at: null });
-  await Promise.all([
+  await afterwards("removing a post", [
     replanAccount(db, ctx, post.account_id),
     deletePublishedVideo(db, {
       workspaceId: ctx.workspaceId,

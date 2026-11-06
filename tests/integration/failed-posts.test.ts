@@ -135,9 +135,11 @@ describe("Retry now", () => {
     expect(await refusal(retryFailedPost(owner, ctx, NEXT))).toBe("not_failed");
   });
 
-  it("is refused while the account needs attention", async () => {
+  it("is refused while the account needs attention, unless a container is kept", async () => {
     await admin.from("social_accounts").update({ status: "needs_attention" }).eq("id", ACCOUNT);
     expect(await refusal(retryFailedPost(owner, ctx, REJECTED))).toBe("account_paused");
+    await retryFailedPost(owner, ctx, LOST);
+    expect((await post(LOST)).status).toBe("publishing");
   });
 });
 
@@ -189,5 +191,10 @@ describe("Remove", () => {
     expect(removed.handle).toBe("failed.posts");
     expect((await post(REJECTED)).status).toBe("removed");
     expect(await refusal(removeFailedPost(owner, ctx, REJECTED))).toBe("not_failed");
+  });
+
+  it("is refused while the post keeps a container (it may be live already)", async () => {
+    expect(await refusal(removeFailedPost(owner, ctx, LOST))).toBe("container_kept");
+    expect((await post(LOST)).status).toBe("failed");
   });
 });

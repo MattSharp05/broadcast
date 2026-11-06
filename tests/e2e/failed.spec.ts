@@ -151,9 +151,13 @@ test("clicking “1 failed” pans the canvas to the failed card", async ({ page
   expect(inView(await centre())).toBe(false);
 
   await page.getByRole("button", { name: "1 failed" }).click();
-  await expect.poll(async () => inView(await centre())).toBe(true);
-  const c = await centre();
-  expect(Math.abs((c?.x ?? 0) - (s.x + s.width / 2))).toBeLessThan(40);
+  // The pan animates: wait until the card sits at the stage's horizontal centre.
+  await expect
+    .poll(async () => {
+      const c = await centre();
+      return inView(c) && Math.abs((c?.x ?? 0) - (s.x + s.width / 2)) < 40;
+    })
+    .toBe(true);
 });
 
 test("post-failed: Retry now recovers a post whose answer was lost, without posting it again", async ({
@@ -170,6 +174,7 @@ test("post-failed: Retry now recovers a post whose answer was lost, without post
   const d = drawer(page);
   await expect(d.getByTestId("container-kept")).toBeVisible();
   await expect(d.getByRole("button", { name: "Replace video" })).toBeDisabled();
+  await expect(d.getByRole("button", { name: "Remove", exact: true })).toBeDisabled();
   await expect(d.locator('[data-section="attempts"]')).toContainText("Error, retry in 4 min");
 
   await d.getByRole("button", { name: "Retry now" }).click();

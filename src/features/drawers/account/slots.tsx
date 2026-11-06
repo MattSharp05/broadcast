@@ -28,16 +28,10 @@ export function SlotsEditor({ account, actions, onChanged }: SlotsEditorProps) {
 
   function save(next: string[]) {
     setError(null);
-    const before = slots;
     startTransition(async () => {
       setOptimistic(next);
       try {
-        const result = await actions.saveSlots({
-          accountId: account.id,
-          handle: account.handle,
-          before,
-          slots: next,
-        });
+        const result = await actions.saveSlots({ accountId: account.id, slots: next });
         if (result.ok) onChanged(result.value.message);
         else setError(result.error);
       } catch {

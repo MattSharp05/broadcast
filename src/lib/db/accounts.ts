@@ -111,18 +111,26 @@ export function saveAccountDescription(
 
 /**
  * Replaces the account's daily posting slots (cleaned: valid, unique, earliest first) and re-times
- * its queue (BC-18). Returns the slots as saved.
+ * its queue (BC-18). Returns the handle and the slots before and after, for the toast.
  */
 export async function saveAccountSlots(
   db: Db,
   ctx: QueueContext,
   accountId: string,
   slots: readonly string[],
-): Promise<string[]> {
+): Promise<{ handle: string; before: string[]; slots: string[] }> {
+  const current = await db
+    .from("social_accounts")
+    .select("handle, slots")
+    .eq("workspace_id", ctx.workspaceId)
+    .eq("id", accountId)
+    .maybeSingle();
+  if (current.error) throw new Error(`Reading the account failed: ${current.error.message}`);
+  if (!current.data) throw new NotFoundError("That account no longer exists.");
   const clean = cleanSlots(slots);
   await updateAccount(db, ctx.workspaceId, accountId, { slots: clean });
   await replanAccount(db, ctx, accountId);
-  return clean;
+  return { handle: current.data.handle, before: current.data.slots, slots: clean };
 }
 
 export async function createBrand(db: Db, workspaceId: string, name: string): Promise<BrandRef> {

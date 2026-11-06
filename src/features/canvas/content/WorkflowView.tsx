@@ -254,8 +254,10 @@ export function WorkflowView({
     },
     [close],
   );
-  // The open drawer follows the refreshed data (and closes when its post is gone).
-  const openTarget = open ? (targets.get(open.key) ?? null) : null;
+  // The open drawer follows the refreshed data. A post that moved off the canvas (pinned next
+  // week, back of a long backlog) keeps its last data rather than closing mid-edit; Remove closes
+  // the drawer itself.
+  const openTarget = open ? (targets.get(open.key) ?? open.target) : null;
 
   // The new cards get a brief highlight once the refreshed canvas shows them.
   useEffect(() => {

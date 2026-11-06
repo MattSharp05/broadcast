@@ -16,6 +16,7 @@ import styles from "../drawers.module.css";
 import edit from "../edit.module.css";
 import type { OnQueueChanged, QueueActions } from "../edit-types";
 import type { DetailClock } from "../types";
+import { EDIT_MESSAGES } from "@/lib/domain/queue-edit";
 
 const HOUR_MS = 3_600_000;
 const QUARTER_MS = 15 * 60_000;
@@ -72,7 +73,8 @@ export function PostEditor({ card, account, detail, clock, actions, onChanged }:
     caption.trim() !== savedCaption ||
     timing !== savedTiming ||
     (timing === "pinned" && pinLocal !== savedPin);
-  const canPostNow = account.status === "ready";
+  // The scheduler only publishes queued posts of ready accounts.
+  const canPostNow = account.status === "ready" && card.kind !== "paused";
 
   function run(
     action: () => Promise<{ ok: true; value: { message: string } } | { ok: false; error: string }>,
@@ -218,7 +220,15 @@ export function PostEditor({ card, account, detail, clock, actions, onChanged }:
           >
             Save changes
           </Button>
-          <span title={canPostNow ? undefined : connectionNote(account)}>
+          <span
+            title={
+              canPostNow
+                ? undefined
+                : account.status === "ready"
+                  ? EDIT_MESSAGES.post_paused
+                  : connectionNote(account)
+            }
+          >
             <Button
               disabled={busy || !canPostNow}
               onClick={() => {

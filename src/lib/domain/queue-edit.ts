@@ -26,6 +26,7 @@ export type EditProblem =
   | "pinned_invalid"
   | "not_editable"
   | "account_paused"
+  | "post_paused"
   | "quota_full";
 
 export const EDIT_MESSAGES: Record<EditProblem, string> = {
@@ -36,6 +37,8 @@ export const EDIT_MESSAGES: Record<EditProblem, string> = {
     "This post is being published (or is no longer in the queue), so it can't be changed. Reload to see where it is.",
   account_paused:
     "This account needs attention, so it can't post now. Reconnect it on the Accounts tab first.",
+  post_paused:
+    "This post is paused, so it can't post now. It resumes when its account is ready again.",
   quota_full: `This account has used all ${DAILY_POST_LIMIT} of its Instagram posts in the last 24 hours. Try again later.`,
 };
 
@@ -79,10 +82,13 @@ export function timingPatch(
 export function postNowProblem(input: {
   status: PostStatus;
   accountStatus: string;
+  /** Published in the last 24 hours, plus any being published now. */
   postsUsed24h: number;
 }): EditProblem | null {
   if (!isEditable(input.status)) return "not_editable";
   if (input.accountStatus !== "ready") return "account_paused";
+  // The scheduler only claims queued posts: a paused one would sit there "due" forever.
+  if (input.status === "paused") return "post_paused";
   if (input.postsUsed24h >= DAILY_POST_LIMIT) return "quota_full";
   return null;
 }

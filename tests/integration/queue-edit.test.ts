@@ -42,19 +42,31 @@ beforeEach(async () => {
 });
 
 describe("removePost", () => {
-  it("removes the first queued post; the second moves into its slot; the media goes", async () => {
+  it("removes the first queued post; the second moves into its slot; the video goes", async () => {
     const first = await post(id("post", "cj", "q", "0"));
     await expect(removePost(owner, ctx, id("post", "cj", "q", "0"))).resolves.toEqual({
       handle: "codingjourney",
       timing: "queue",
     });
-    expect(await post(id("post", "cj", "q", "0"))).toBeNull();
+    expect((await post(id("post", "cj", "q", "0")))?.status).toBe("removed");
     expect((await post(id("post", "cj", "q", "1")))?.scheduled_at).toBe(first?.scheduled_at);
     const media = await admin
       .from("media_assets")
-      .select("id")
-      .eq("id", id("media", id("post", "cj", "q", "0")));
-    expect(media.data).toEqual([]);
+      .select("deleted_at")
+      .eq("id", id("media", id("post", "cj", "q", "0")))
+      .single();
+    expect(media.data?.deleted_at).not.toBeNull();
+  });
+
+  it("never moves a post that is due or claimed by a tick", async () => {
+    // q0 is due (its slot passed a moment ago, the tick hasn't run yet).
+    const due = "2026-11-05T22:13:00+00:00";
+    await admin
+      .from("posts")
+      .update({ scheduled_at: due })
+      .eq("id", id("post", "cj", "q", "0"));
+    await removePost(owner, ctx, id("post", "cj", "q", "3"));
+    expect((await post(id("post", "cj", "q", "0")))?.scheduled_at).toBe(due);
   });
 
   it("refuses a post a tick has claimed", async () => {
@@ -63,11 +75,14 @@ describe("removePost", () => {
       .from("posts")
       .update({ claimed_until: new Date(Date.now() + 60_000).toISOString() })
       .eq("id", postId);
+    const before = await post(postId);
     await expect(removePost(owner, ctx, postId)).rejects.toBeInstanceOf(QueueEditError);
     await expect(
       editPost(owner, ctx, postId, { caption: "x", timing: { kind: "queue" } }),
     ).rejects.toBeInstanceOf(QueueEditError);
-    expect(await post(postId)).not.toBeNull();
+    // Nor does re-timing the queue (another post's edit) move it.
+    await removePost(owner, ctx, id("post", "cj", "q", "4"));
+    expect(await post(postId)).toEqual(before);
   });
 
   it("refuses a published post", async () => {
@@ -134,7 +149,11 @@ describe("saveAccountSlots", () => {
     const ctx10 = { ...ctx, now: new Date("2026-11-05T10:00:00Z") };
     await expect(
       saveAccountSlots(owner, ctx10, TRIP, ["21:00", "12:00", "18:30"]),
-    ).resolves.toEqual(["12:00", "18:30", "21:00"]);
+    ).resolves.toEqual({
+      handle: "trip.app",
+      before: ["12:00", "18:30"],
+      slots: ["12:00", "18:30", "21:00"],
+    });
     // Removing every slot leaves the queue without times.
     await saveAccountSlots(owner, ctx, CJ, []);
     expect((await post(id("post", "cj", "q", "0")))?.scheduled_at).toBeNull();

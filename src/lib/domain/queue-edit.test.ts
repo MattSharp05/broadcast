@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_CAPTION_LENGTH } from "./content";
+import { MAX_CAPTION_LENGTH, holdDue } from "./content";
 import { planQueue, type PlannerPost } from "./queue";
 import {
   editProblem,
@@ -95,6 +95,9 @@ describe("postNowProblem", () => {
     expect(
       postNowProblem({ status: "paused", accountStatus: "needs_attention", postsUsed24h: 0 }),
     ).toBe("account_paused");
+    expect(postNowProblem({ status: "paused", accountStatus: "ready", postsUsed24h: 0 })).toBe(
+      "post_paused",
+    );
     expect(postNowProblem({ status: "queued", accountStatus: "ready", postsUsed24h: 100 })).toBe(
       "quota_full",
     );
@@ -151,5 +154,33 @@ describe("toasts", () => {
       "Removed the 21:00 slot from @trip.app.",
     );
     expect(slotsMessage("trip.app", ["12:00"], ["13:00"])).toBe("Saved @trip.app's posting slots.");
+  });
+});
+
+describe("holdDue", () => {
+  it("fixes queue posts that are due or claimed; leaves the rest to the planner", () => {
+    const at = (iso: string) => new Date(iso);
+    const held = holdDue(
+      [
+        { id: "due", timing: "queue", status: "queued", scheduledAt: at("2026-11-05T22:00:00Z") },
+        {
+          id: "claimed",
+          timing: "queue",
+          status: "queued",
+          scheduledAt: at("2026-11-06T09:00:00Z"),
+          claimed: true,
+        },
+        { id: "later", timing: "queue", status: "queued", scheduledAt: at("2026-11-06T13:00:00Z") },
+        {
+          id: "paused",
+          timing: "queue",
+          status: "paused",
+          scheduledAt: at("2026-11-05T22:00:00Z"),
+        },
+      ],
+      NOW,
+    );
+    expect(held.map((p) => p.timing)).toEqual(["pinned", "pinned", "queue", "queue"]);
+    expect(held.every((p) => !("claimed" in p))).toBe(true);
   });
 });

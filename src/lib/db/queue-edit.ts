@@ -12,7 +12,7 @@ import {
 import type { PostTiming } from "@/lib/domain/queue";
 import { replanAccount, type QueueContext } from "./posts";
 import type { Database } from "./types";
-import { removeUnusedMedia } from "./videos";
+import { deletePublishedVideo } from "./videos";
 
 /**
  * Editing a waiting post from the post drawer (BC-18): caption and timing, "Post now" and
@@ -48,13 +48,14 @@ interface StoredPost {
   scheduled_at: string | null;
   status: Database["public"]["Enums"]["post_status"];
   social_accounts: { handle: string; status: string };
+  media_assets: { storage_path: string };
 }
 
 async function loadPost(db: Db, ctx: QueueContext, postId: string): Promise<StoredPost> {
   const res = await db
     .from("posts")
     .select(
-      "id, account_id, media_id, timing, queue_position, scheduled_at, status, social_accounts(handle, status)",
+      "id, account_id, media_id, timing, queue_position, scheduled_at, status, social_accounts(handle, status), media_assets(storage_path)",
     )
     .eq("workspace_id", ctx.workspaceId)
     .eq("id", postId)
@@ -130,14 +131,20 @@ export async function editPost(
     edit.timing,
     positions,
   );
+  const retimed = edit.timing.kind === "pinned" || post.timing !== "queue";
   await updateWaiting(db, ctx, postId, {
     caption: edit.caption,
     timing: next.timing,
     queue_position: next.queuePosition,
     scheduled_at: next.scheduledAt?.toISOString() ?? null,
+    // A new time the user chose wins over an earlier retry or quota wait.
+    ...(retimed ? { next_attempt_at: null } : {}),
   });
   const times = await replanAccount(db, ctx, post.account_id);
-  return { timing: next.timing, scheduledAt: times.get(postId) ?? next.scheduledAt };
+  return {
+    timing: next.timing,
+    scheduledAt: times.has(postId) ? (times.get(postId) ?? null) : next.scheduledAt,
+  };
 }
 
 /**
@@ -146,13 +153,13 @@ export async function editPost(
  */
 export async function postNow(db: Db, ctx: QueueContext, postId: string): Promise<void> {
   const post = await loadPost(db, ctx, postId);
+  const since = new Date(ctx.now.getTime() - DAY_MS).toISOString();
   const used = await db
     .from("posts")
     .select("id", { count: "exact", head: true })
     .eq("workspace_id", ctx.workspaceId)
     .eq("account_id", post.account_id)
-    .eq("status", "published")
-    .gt("published_at", new Date(ctx.now.getTime() - DAY_MS).toISOString());
+    .or(`status.eq.publishing,and(status.eq.published,published_at.gt.${since})`);
   if (used.error) fail("reading the quota", used.error);
   const problem = postNowProblem({
     status: post.status,
@@ -175,23 +182,21 @@ export interface RemovedPost {
 }
 
 /**
- * "Remove from queue": deletes the post, re-times the account's queue (later posts move up) and
- * deletes the video when no other waiting post uses it.
+ * "Remove from queue": marks the post `removed` (its log lines keep pointing at it), re-times the
+ * account's queue (later posts move up) and deletes the video when no other waiting post uses it
+ * (the thumbnail stays, like after publishing).
  */
 export async function removePost(db: Db, ctx: QueueContext, postId: string): Promise<RemovedPost> {
   const post = await loadPost(db, ctx, postId);
-  const res = await db
-    .from("posts")
-    .delete()
-    .eq("workspace_id", ctx.workspaceId)
-    .eq("id", postId)
-    .in("status", [...EDITABLE_STATUSES])
-    .or(unclaimed(new Date()))
-    .select("id");
-  if (res.error) fail("removing the post", res.error);
-  if (res.data.length !== 1) throw new QueueEditError("not_editable");
-
-  await replanAccount(db, ctx, post.account_id);
-  await removeUnusedMedia(db, { workspaceId: ctx.workspaceId, mediaId: post.media_id });
+  await updateWaiting(db, ctx, postId, { status: "removed", next_attempt_at: null });
+  await Promise.all([
+    replanAccount(db, ctx, post.account_id),
+    deletePublishedVideo(db, {
+      workspaceId: ctx.workspaceId,
+      mediaId: post.media_id,
+      postId,
+      storagePath: post.media_assets.storage_path,
+    }),
+  ]);
   return { handle: post.social_accounts.handle, timing: post.timing };
 }

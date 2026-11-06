@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   MAX_CAPTION_LENGTH,
+  holdDue,
   newPostStatus,
   nextQueuePosition,
   timeChanges,
@@ -125,18 +126,24 @@ async function replan(
 ): Promise<Map<string, Date | null>> {
   const res = await db
     .from("posts")
-    .select("id, timing, queue_position, scheduled_at, status")
+    .select("id, timing, queue_position, scheduled_at, status, claimed_until")
     .eq("workspace_id", input.workspaceId)
     .eq("account_id", account.id)
     .in("status", ["queued", "paused", "publishing"]);
   if (res.error) fail("reading the queue", res.error);
-  const posts: ExistingPost[] = res.data.map((p) => ({
-    id: p.id,
-    timing: p.timing,
-    queuePosition: p.queue_position,
-    scheduledAt: p.scheduled_at ? new Date(p.scheduled_at) : null,
-    status: p.status,
-  }));
+  // Leases are real time, never the Sandbox clock.
+  const realNow = new Date();
+  const posts: ExistingPost[] = holdDue(
+    res.data.map((p) => ({
+      id: p.id,
+      timing: p.timing,
+      queuePosition: p.queue_position,
+      scheduledAt: p.scheduled_at ? new Date(p.scheduled_at) : null,
+      status: p.status,
+      claimed: p.claimed_until !== null && new Date(p.claimed_until) > realNow,
+    })),
+    input.now,
+  );
   const changes = timeChanges({
     slots: account.slots,
     timezone: input.timezone,
@@ -149,7 +156,10 @@ async function replan(
         .from("posts")
         .update({ scheduled_at: change.scheduledAt?.toISOString() ?? null })
         .eq("workspace_id", input.workspaceId)
-        .eq("id", change.id),
+        .eq("id", change.id)
+        // Never under a tick that claimed it meanwhile.
+        .in("status", ["queued", "paused"])
+        .or(`claimed_until.is.null,claimed_until.lt.${realNow.toISOString()}`),
     ),
   );
   for (const up of saved) if (up.error) fail("saving the queue times", up.error);

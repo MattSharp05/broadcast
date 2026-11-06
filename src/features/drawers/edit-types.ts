@@ -11,9 +11,6 @@ export interface SavePostInput {
 
 export interface SaveSlotsInput {
   accountId: string;
-  handle: string;
-  /** The slots before this change (for the toast). */
-  before: string[];
   slots: string[];
 }
 

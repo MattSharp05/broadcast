@@ -24,8 +24,8 @@ export async function signVideoUrl(db: Db, storagePath: string): Promise<string>
 const NEEDS_VIDEO = ["queued", "publishing", "paused", "failed"] as const;
 
 /**
- * After publishing: deletes the video file from Storage and marks the media `deleted_at`; the
- * thumbnail stays. Skipped while another post of the same media still waits to go out. Best
+ * After publishing (or removing a post from the queue, BC-18): deletes the video file from Storage
+ * and marks the media `deleted_at`; the thumbnail stays. Skipped while another post of the same media still waits to go out. Best
  * effort: a Storage error leaves the file and the
  * row as they are, and says why.
  */
@@ -62,67 +62,6 @@ export async function deletePublishedVideo(
     .eq("workspace_id", input.workspaceId)
     .eq("id", input.mediaId);
   if (marked.error) console.error(`Marking the video deleted failed: ${marked.error.message}`);
-  return "deleted";
-}
-
-/**
- * After a post left the queue (BC-18's "Remove from queue"): deletes its video when no other
- * waiting post uses it. With no post left at all, the media row and the thumbnail go too;
- * otherwise (a published post still shows the thumbnail) the row is marked `deleted_at`. Best
- * effort, like deletePublishedVideo.
- */
-export async function removeUnusedMedia(
-  db: Db,
-  input: { workspaceId: string; mediaId: string },
-): Promise<"deleted" | "in_use" | "skipped"> {
-  const media = await db
-    .from("media_assets")
-    .select("storage_path, thumbnail_path, deleted_at")
-    .eq("workspace_id", input.workspaceId)
-    .eq("id", input.mediaId)
-    .maybeSingle();
-  if (media.error || !media.data) return "skipped";
-  const users = await db
-    .from("posts")
-    .select("status")
-    .eq("workspace_id", input.workspaceId)
-    .eq("media_id", input.mediaId);
-  if (users.error) {
-    console.error(`Checking the video's other posts failed: ${users.error.message}`);
-    return "skipped";
-  }
-  const waiting = users.data.some((p) => (NEEDS_VIDEO as readonly string[]).includes(p.status));
-  if (waiting) return "in_use";
-
-  const unused = users.data.length === 0;
-  const files = [
-    ...(media.data.deleted_at ? [] : [media.data.storage_path]),
-    ...(unused && media.data.thumbnail_path ? [media.data.thumbnail_path] : []),
-  ];
-  try {
-    if (files.length > 0) {
-      const removed = await db.storage.from(VIDEOS_BUCKET).remove(files);
-      if (removed.error) {
-        console.error(`Deleting the removed post's video failed: ${removed.error.message}`);
-        return "skipped";
-      }
-    }
-  } catch (err) {
-    console.error("Deleting the removed post's video failed:", err);
-    return "skipped";
-  }
-  const done = unused
-    ? await db
-        .from("media_assets")
-        .delete()
-        .eq("workspace_id", input.workspaceId)
-        .eq("id", input.mediaId)
-    : await db
-        .from("media_assets")
-        .update({ deleted_at: new Date().toISOString() })
-        .eq("workspace_id", input.workspaceId)
-        .eq("id", input.mediaId);
-  if (done.error) console.error(`Tidying the removed post's video failed: ${done.error.message}`);
   return "deleted";
 }
 

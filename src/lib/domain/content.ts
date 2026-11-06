@@ -50,6 +50,25 @@ export function timeChanges(input: {
   );
 }
 
+/**
+ * Queue posts that are due (their time has come) or held by a tick keep their time when the queue
+ * is re-timed: they're handed to the planner as fixed, like a pin, so an edit never pushes a post
+ * the scheduler is about to publish to a later slot.
+ */
+export function holdDue(
+  posts: readonly (ExistingPost & { claimed?: boolean })[],
+  now: Date,
+): ExistingPost[] {
+  return posts.map(({ claimed, ...p }) =>
+    p.timing === "queue" &&
+    p.status === "queued" &&
+    p.scheduledAt &&
+    (claimed || p.scheduledAt.getTime() <= now.getTime())
+      ? { ...p, timing: "pinned" }
+      : p,
+  );
+}
+
 export type TimingProblem = "pinned_past" | "pinned_invalid";
 
 /** A pinned time must be a real instant after now. */

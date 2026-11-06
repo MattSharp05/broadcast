@@ -249,18 +249,16 @@ export async function saveSlots(input: SaveSlotsInput): Promise<ActionResult<Que
     !raw ||
     typeof raw.accountId !== "string" ||
     !UUID.test(raw.accountId) ||
-    typeof raw.handle !== "string" ||
-    !Array.isArray(raw.before) ||
     !Array.isArray(raw.slots) ||
     raw.slots.length > SLOTS_MAX ||
-    [...(raw.before as unknown[]), ...(raw.slots as unknown[])].some((s) => typeof s !== "string")
+    (raw.slots as unknown[]).some((s) => typeof s !== "string")
   ) {
     return invalid("Those slots can't be saved. Reload the page and try again.");
   }
   try {
     const { db, ctx } = await queueContext();
     const saved = await saveAccountSlots(db, ctx, input.accountId, input.slots);
-    return refreshed({ message: slotsMessage(input.handle, input.before, saved) });
+    return refreshed({ message: slotsMessage(saved.handle, saved.before, saved.slots) });
   } catch (err) {
     return editFailed(err);
   }

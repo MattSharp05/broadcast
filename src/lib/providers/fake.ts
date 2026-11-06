@@ -110,8 +110,11 @@ function errorFor(mode: FakeFailureMode): ProviderError {
   }
 }
 
+/** MediaInsights with every metric reported (the fake reports them all). */
+export type FakeInsights = { [K in keyof MediaInsights]: number };
+
 /** Views etc. for a post `hours` after publishing; seeded by the media id. */
-export function fakeInsights(mediaId: string, followers: number, hours: number): MediaInsights {
+export function fakeInsights(mediaId: string, followers: number, hours: number): FakeInsights {
   const r = createRng(hash32(mediaId));
   const base = Math.max(followers, 50) * (0.6 + r() * 3.2);
   const curve = 1 - Math.exp(-Math.max(hours, 0) / 20);

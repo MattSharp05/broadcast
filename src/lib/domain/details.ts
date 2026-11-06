@@ -41,21 +41,26 @@ export interface PostMetricRow {
   comments: number | null;
   shares: number | null;
   saves: number | null;
+  /** Came due while the scheduler was down and was never taken (no numbers). */
+  missed: boolean;
 }
 
+/** A refresh's numbers; null: the platform doesn't report that metric for this post ("—"). */
 export interface PostStats {
-  views: number;
-  reach: number;
-  likes: number;
-  comments: number;
-  shares: number;
-  saves: number;
+  views: number | null;
+  reach: number | null;
+  likes: number | null;
+  comments: number | null;
+  shares: number | null;
+  saves: number | null;
 }
 
 export interface StatSnapshot {
   offset: StatOffset;
-  /** null: this refresh hasn't happened yet. */
+  /** null: this refresh hasn't happened yet, was missed, or reported no views. */
   views: number | null;
+  /** The refresh came due while the scheduler was down and was skipped. */
+  missed: boolean;
 }
 
 export interface PostDetail {
@@ -90,19 +95,24 @@ export interface PostDetailInput {
 
 function statsOf(row: PostMetricRow): PostStats {
   return {
-    views: row.views ?? 0,
-    reach: row.reach ?? 0,
-    likes: row.likes ?? 0,
-    comments: row.comments ?? 0,
-    shares: row.shares ?? 0,
-    saves: row.saves ?? 0,
+    views: row.views,
+    reach: row.reach,
+    likes: row.likes,
+    comments: row.comments,
+    shares: row.shares,
+    saves: row.saves,
   };
 }
 
 /** A post's drawer data from its row and its stats rows (any order). */
 export function postDetail(post: PostDetailInput, rows: readonly PostMetricRow[]): PostDetail {
   const taken = new Map<StatOffset, PostMetricRow>();
-  for (const r of rows) if (r.postId === post.id && r.takenAt) taken.set(r.offset, r);
+  const missed = new Set<StatOffset>();
+  for (const r of rows) {
+    if (r.postId !== post.id || !r.takenAt) continue;
+    if (r.missed) missed.add(r.offset);
+    else taken.set(r.offset, r);
+  }
   const latest = [...taken.values()].sort(
     (a, b) => (b.takenAt?.getTime() ?? 0) - (a.takenAt?.getTime() ?? 0),
   )[0];
@@ -119,9 +129,12 @@ export function postDetail(post: PostDetailInput, rows: readonly PostMetricRow[]
     refreshedAt: latest?.takenAt ?? null,
     snapshots: STAT_OFFSETS.map((offset) => ({
       offset,
-      views: taken.has(offset) ? (taken.get(offset)?.views ?? 0) : null,
+      views: taken.get(offset)?.views ?? null,
+      missed: missed.has(offset),
     })),
-    nextRefresh: published ? (STAT_OFFSETS.find((o) => !taken.has(o)) ?? null) : null,
+    nextRefresh: published
+      ? (STAT_OFFSETS.find((o) => !taken.has(o) && !missed.has(o)) ?? null)
+      : null,
   };
 }
 

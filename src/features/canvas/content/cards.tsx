@@ -14,7 +14,7 @@ import { Avatar } from "@/components/Avatar";
 import { platformName } from "@/components/PlatformGlyph";
 import type { Rect } from "@/features/canvas/engine";
 import type { CanvasColumn, PostedCard, UpcomingCard } from "@/lib/domain/canvas";
-import { compactCount, duration, whenLabel } from "@/lib/domain/format";
+import { compactCount, duration, statCount, whenLabel } from "@/lib/domain/format";
 import styles from "./content.module.css";
 
 /** Absolute position and size of a world rectangle. */
@@ -307,15 +307,15 @@ export function PostedPostCard({
         <span className={styles.metrics}>
           <span title="Views">
             <Eye aria-hidden="true" />
-            {compactCount(card.views)}
+            {statCount(card.views)}
           </span>
           <span title="Likes">
             <Heart aria-hidden="true" />
-            {compactCount(card.likes)}
+            {statCount(card.likes)}
           </span>
           <span title="Comments">
             <MessageSquare aria-hidden="true" />
-            {compactCount(card.comments)}
+            {statCount(card.comments)}
           </span>
         </span>
       }

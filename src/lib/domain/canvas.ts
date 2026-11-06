@@ -74,7 +74,14 @@ export type UpcomingCard =
   | { kind: "open"; id: string; at: Date };
 
 export type PostedCard =
-  | (CardBase & { kind: "posted"; at: Date; views: number; likes: number; comments: number })
+  | (CardBase & {
+      kind: "posted";
+      at: Date;
+      /** The latest refresh's numbers: 0 before the first; null when not reported ("—"). */
+      views: number | null;
+      likes: number | null;
+      comments: number | null;
+    })
   | (CardBase & { kind: "failed"; at: Date; reason: string });
 
 /** The chip on the now line: the countdown (`at` may be past: due now), or why there is none. */
@@ -231,9 +238,9 @@ function buildColumn(
       return {
         ...base,
         kind: "posted",
-        views: m?.views ?? 0,
-        likes: m?.likes ?? 0,
-        comments: m?.comments ?? 0,
+        views: m ? m.views : 0,
+        likes: m ? m.likes : 0,
+        comments: m ? m.comments : 0,
       };
     });
 

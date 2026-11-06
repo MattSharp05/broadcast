@@ -91,6 +91,7 @@ export async function loadAccountDetails(
       .eq("workspace_id", workspaceId)
       .in("post_id", publishedIds)
       .not("taken_at", "is", null)
+      .eq("missed", false)
       .order("taken_at", { ascending: false });
     if (res.error) fail("stats", res.error);
     for (const m of res.data) if (!views.has(m.post_id)) views.set(m.post_id, m.views);

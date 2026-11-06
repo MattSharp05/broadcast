@@ -4,6 +4,7 @@ import { empty } from "./empty";
 import { noAccounts } from "./no-accounts";
 import { publishDueNow } from "./publish-due-now";
 import { publishContainerError, publishQuotaExhausted } from "./publish-failures";
+import { statsDue } from "./stats-due";
 import type { Scenario } from "./types";
 
 export type { Scenario, SandboxSeed } from "./types";
@@ -17,6 +18,7 @@ export const SCENARIOS: readonly Scenario[] = [
   noAccounts,
   publishQuotaExhausted,
   publishContainerError,
+  statsDue,
 ];
 
 export function getScenario(name: string): Scenario | undefined {

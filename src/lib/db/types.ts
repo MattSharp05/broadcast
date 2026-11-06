@@ -453,6 +453,7 @@ export type Database = {
           due_at: string;
           id: string;
           likes: number | null;
+          missed: boolean;
           post_id: string;
           reach: number | null;
           saves: number | null;
@@ -469,6 +470,7 @@ export type Database = {
           due_at: string;
           id?: string;
           likes?: number | null;
+          missed?: boolean;
           post_id: string;
           reach?: number | null;
           saves?: number | null;
@@ -484,6 +486,7 @@ export type Database = {
           due_at?: string;
           id?: string;
           likes?: number | null;
+          missed?: boolean;
           post_id?: string;
           reach?: number | null;
           saves?: number | null;

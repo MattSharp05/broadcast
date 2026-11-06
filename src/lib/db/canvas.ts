@@ -106,14 +106,16 @@ export async function loadWorkflow(): Promise<WorkflowData> {
   if (publishedIds.length > 0) {
     const res = await db
       .from("post_metrics")
-      .select("post_id, stat_offset, views, reach, likes, comments, shares, saves, taken_at")
+      .select(
+        "post_id, stat_offset, views, reach, likes, comments, shares, saves, taken_at, missed",
+      )
       .eq("workspace_id", workspace.id)
       .in("post_id", publishedIds)
       .not("taken_at", "is", null)
       .order("taken_at", { ascending: false });
     if (res.error) fail("stats", res.error);
     for (const m of res.data) {
-      if (!metrics.has(m.post_id)) metrics.set(m.post_id, m);
+      if (!m.missed && !metrics.has(m.post_id)) metrics.set(m.post_id, m);
       metricRows.push({
         postId: m.post_id,
         offset: m.stat_offset,
@@ -124,6 +126,7 @@ export async function loadWorkflow(): Promise<WorkflowData> {
         comments: m.comments,
         shares: m.shares,
         saves: m.saves,
+        missed: m.missed,
       });
     }
   }

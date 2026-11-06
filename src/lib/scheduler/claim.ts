@@ -4,8 +4,11 @@ import type { Database } from "@/lib/db/types";
 type Db = SupabaseClient<Database>;
 type Platform = Database["public"]["Enums"]["platform"];
 
-/** The kinds of work a tick claims. Stats (BC-21) and token refresh (BC-19) add theirs. */
-export type WorkKind = "publish";
+/**
+ * The kinds of work a tick claims: due posts to publish, and published posts with a stats
+ * snapshot due (BC-21). Token refresh (BC-19) adds its own.
+ */
+export type WorkKind = "publish" | "stats";
 
 export interface Claim {
   postId: string;
@@ -49,7 +52,7 @@ export async function claim(
   }));
 }
 
-/** Gives a claimed post back untouched (the tick ran out of time before reaching it). */
+/** Gives a claimed post back (done, or the tick ran out of time before reaching it). */
 export async function release(db: Db, c: Claim): Promise<void> {
   const { error } = await db
     .from("posts")

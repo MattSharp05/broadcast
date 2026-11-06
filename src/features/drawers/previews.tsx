@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { platformName } from "@/components/PlatformGlyph";
 import { DAILY_POST_LIMIT, connectionNote, type PostStats } from "@/lib/domain/details";
-import { ago, compactCount, inFrom, whenLabel } from "@/lib/domain/format";
+import { ago, compactCount, inFrom, statCount, whenLabel } from "@/lib/domain/format";
 import styles from "./drawers.module.css";
 import type { DetailClock, DetailTarget } from "./types";
 
@@ -113,7 +113,7 @@ export function Preview({ target, clock }: { target: DetailTarget; clock: Detail
         <Numbers
           items={STAT_ORDER.map(({ key, label }) => ({
             label,
-            value: stats ? compactCount(stats[key]) : "–",
+            value: stats ? statCount(stats[key]) : "–",
           }))}
         />
         <p className={styles.hint}>

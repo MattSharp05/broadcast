@@ -41,7 +41,7 @@ export default async function ApiKeysPage() {
     <main className={devStyles.page}>
       <header className={devStyles.head}>
         <h1>API keys</h1>
-        <p>
+        <p className={devStyles.help}>
           Keys let a video-editor session queue videos with <code>POST /api/content</code> (see{" "}
           <code>docs/content-api.md</code>). A key only queues to its own workspace; it never
           publishes. Sandbox keys are deleted when a scenario loads.{" "}

@@ -17,10 +17,9 @@ import {
 import { loadAccountDetails } from "./details";
 import { createServerSupabase } from "./server";
 import type { Database } from "./types";
+import { VIDEOS_BUCKET } from "./videos";
 import { currentWorkspace, type Workspace } from "./workspace";
 
-/** Bucket holding uploaded videos and their thumbnails (ADR 0005). */
-const VIDEOS_BUCKET = "videos";
 const THUMBNAIL_TTL_S = 60 * 60;
 const DAY_MS = 86_400_000;
 

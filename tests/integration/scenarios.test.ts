@@ -206,7 +206,7 @@ describe("scenarios", () => {
     expect(await provider.publishContainer(ctx, containerId)).toEqual(media);
     expect((await provider.getPublishingQuota(ctx)).used).toBe(1);
     now = new Date(NOW.getTime() + 6 * 3_600_000);
-    expect((await provider.getMediaInsights(ctx, media.mediaId)).views).toBeGreaterThan(0);
+    expect((await provider.getMediaInsights(ctx, media.mediaId ?? "")).views).toBeGreaterThan(0);
   });
 
   it("reset_sandbox is not callable by browser roles", async () => {

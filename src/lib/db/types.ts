@@ -517,6 +517,7 @@ export type Database = {
           caption: string;
           claim_token: string | null;
           claimed_until: string | null;
+          container_created_at: string | null;
           container_id: string | null;
           created_at: string;
           id: string;
@@ -540,6 +541,7 @@ export type Database = {
           caption?: string;
           claim_token?: string | null;
           claimed_until?: string | null;
+          container_created_at?: string | null;
           container_id?: string | null;
           created_at?: string;
           id?: string;
@@ -562,6 +564,7 @@ export type Database = {
           caption?: string;
           claim_token?: string | null;
           claimed_until?: string | null;
+          container_created_at?: string | null;
           container_id?: string | null;
           created_at?: string;
           id?: string;

@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   MAX_CAPTION_LENGTH,
+  holdDue,
   newPostStatus,
   nextQueuePosition,
   timeChanges,
@@ -34,11 +35,15 @@ export interface NewMedia {
   bytes: number;
 }
 
-export interface NewContent {
+/** The workspace a queue change happens in, and its clock. */
+export interface QueueContext {
   workspaceId: string;
   /** Workspace timezone for slot maths. */
   timezone: string;
   now: Date;
+}
+
+export interface NewContent extends QueueContext {
   media: NewMedia;
   caption: string;
   accountIds: readonly string[];
@@ -116,23 +121,29 @@ function validate(input: NewContent): string[] {
  */
 async function replan(
   db: Db,
-  input: NewContent,
-  account: { id: string; slots: string[] },
+  input: QueueContext,
+  account: { id: string; slots: readonly string[] },
 ): Promise<Map<string, Date | null>> {
   const res = await db
     .from("posts")
-    .select("id, timing, queue_position, scheduled_at, status")
+    .select("id, timing, queue_position, scheduled_at, status, claimed_until")
     .eq("workspace_id", input.workspaceId)
     .eq("account_id", account.id)
     .in("status", ["queued", "paused", "publishing"]);
   if (res.error) fail("reading the queue", res.error);
-  const posts: ExistingPost[] = res.data.map((p) => ({
-    id: p.id,
-    timing: p.timing,
-    queuePosition: p.queue_position,
-    scheduledAt: p.scheduled_at ? new Date(p.scheduled_at) : null,
-    status: p.status,
-  }));
+  // Leases are real time, never the Sandbox clock.
+  const realNow = new Date();
+  const posts: ExistingPost[] = holdDue(
+    res.data.map((p) => ({
+      id: p.id,
+      timing: p.timing,
+      queuePosition: p.queue_position,
+      scheduledAt: p.scheduled_at ? new Date(p.scheduled_at) : null,
+      status: p.status,
+      claimed: p.claimed_until !== null && new Date(p.claimed_until) > realNow,
+    })),
+    input.now,
+  );
   const changes = timeChanges({
     slots: account.slots,
     timezone: input.timezone,
@@ -145,13 +156,36 @@ async function replan(
         .from("posts")
         .update({ scheduled_at: change.scheduledAt?.toISOString() ?? null })
         .eq("workspace_id", input.workspaceId)
-        .eq("id", change.id),
+        .eq("id", change.id)
+        // Never under a tick that claimed it meanwhile.
+        .in("status", ["queued", "paused"])
+        .or(`claimed_until.is.null,claimed_until.lt.${realNow.toISOString()}`),
     ),
   );
   for (const up of saved) if (up.error) fail("saving the queue times", up.error);
   const times = new Map(posts.map((p) => [p.id, p.scheduledAt]));
   for (const change of changes) times.set(change.id, change.scheduledAt);
   return times;
+}
+
+/**
+ * Re-times one account's queue from its stored slots (after an edit, a removal or new slots) and
+ * saves what changed. Returns every waiting post's time.
+ */
+export async function replanAccount(
+  db: Db,
+  ctx: QueueContext,
+  accountId: string,
+): Promise<Map<string, Date | null>> {
+  const account = await db
+    .from("social_accounts")
+    .select("id, slots")
+    .eq("workspace_id", ctx.workspaceId)
+    .eq("id", accountId)
+    .maybeSingle();
+  if (account.error) fail("reading the account", account.error);
+  if (!account.data) return new Map();
+  return replan(db, ctx, account.data);
 }
 
 export async function queueContent(db: Db, input: NewContent): Promise<QueuedContent> {

@@ -34,6 +34,8 @@ export interface Preview {
 }
 
 export interface OpenDetail {
+  /** The `data-detail` key, to find the target again after the data refreshes. */
+  key: string;
   target: DetailTarget;
   /** The card that opened it: focus goes back there. */
   returnFocus: HTMLElement;
@@ -68,8 +70,9 @@ export function useDetailInteractions(resolve: (key: string) => DetailTarget | n
   const openFor = useCallback(
     (el: HTMLElement) => {
       hide();
-      const target = resolveRef.current(el.dataset.detail ?? "");
-      if (target) setOpen({ target, returnFocus: el });
+      const key = el.dataset.detail ?? "";
+      const target = resolveRef.current(key);
+      if (target) setOpen({ key, target, returnFocus: el });
     },
     [hide],
   );

@@ -9,6 +9,20 @@ import {
   timingPatch,
   type EditProblem,
 } from "@/lib/domain/queue-edit";
+import { newPostStatus } from "@/lib/domain/content";
+import {
+  BACK,
+  MOVE_MESSAGES,
+  backlogOrder,
+  moveProblem,
+  positionChanges,
+  reorder,
+  slotPlacement,
+  undoPlacement,
+  type MoveProblem,
+  type MoveTarget,
+  type QueueRow,
+} from "@/lib/domain/move";
 import type { PostTiming } from "@/lib/domain/queue";
 import { replanAccount, type QueueContext } from "./posts";
 import type { Database } from "./types";
@@ -199,4 +213,165 @@ export async function removePost(db: Db, ctx: QueueContext, postId: string): Pro
     }),
   ]);
   return { handle: post.social_accounts.handle, timing: post.timing };
+}
+
+// ── Moving a post (BC-22) ──────────────────────────────────────────────────────────────────────
+
+/** A refused move, with a message for the person who made it. */
+export class MoveError extends Error {
+  constructor(readonly code: MoveProblem) {
+    super(MOVE_MESSAGES[code]);
+    this.name = "MoveError";
+  }
+}
+
+export interface MovedPost {
+  handle: string;
+  /** The post's time after both queues were re-timed (null: it waits in the backlog). */
+  scheduledAt: Date | null;
+  /** Moves the post back where it was. */
+  undo: MoveTarget;
+}
+
+async function queueRows(db: Db, ctx: QueueContext, accountId: string): Promise<QueueRow[]> {
+  const res = await db
+    .from("posts")
+    .select("id, timing, queue_position, scheduled_at, status, claimed_until")
+    .eq("workspace_id", ctx.workspaceId)
+    .eq("account_id", accountId)
+    .in("status", ["queued", "paused", "publishing"]);
+  if (res.error) fail("reading the queue", res.error);
+  const realNow = new Date();
+  return res.data.map((p) => ({
+    id: p.id,
+    timing: p.timing,
+    queuePosition: p.queue_position,
+    scheduledAt: p.scheduled_at ? new Date(p.scheduled_at) : null,
+    status: p.status,
+    claimed: p.claimed_until !== null && new Date(p.claimed_until) > realNow,
+  }));
+}
+
+/**
+ * Moves a waiting post to a place in a queue: the same account (a new place in its backlog, or a
+ * slot's time) or another account (same video and caption). The post's own change is one guarded
+ * UPDATE (still waiting, not claimed by a tick); other backlog posts are renumbered only when the
+ * moved post doesn't fit between its neighbours. Both accounts' queues are re-timed afterwards.
+ */
+export async function movePost(
+  db: Db,
+  ctx: QueueContext,
+  postId: string,
+  target: MoveTarget,
+): Promise<MovedPost> {
+  const res = await db
+    .from("posts")
+    .select(
+      "id, account_id, timing, queue_position, scheduled_at, status, social_accounts(platform)",
+    )
+    .eq("workspace_id", ctx.workspaceId)
+    .eq("id", postId)
+    .maybeSingle();
+  if (res.error) fail("reading the post", res.error);
+  const post = res.data;
+  if (!post || !isEditable(post.status)) throw new MoveError("not_editable");
+
+  const acc = await db
+    .from("social_accounts")
+    .select("id, handle, status, slots, platform")
+    .eq("workspace_id", ctx.workspaceId)
+    .eq("id", target.accountId)
+    .maybeSingle();
+  if (acc.error) fail("reading the account", acc.error);
+  const account = acc.data;
+  const problem = moveProblem({
+    status: post.status,
+    sourcePlatform: post.social_accounts.platform,
+    target: account,
+    placement: target.placement,
+    now: ctx.now,
+  });
+  if (problem || !account) throw new MoveError(problem ?? "unknown_account");
+
+  const sameAccount = post.account_id === account.id;
+  const targetRows = await queueRows(db, ctx, account.id);
+  const sourceRows = sameAccount ? targetRows : await queueRows(db, ctx, post.account_id);
+  const undo: MoveTarget = {
+    accountId: post.account_id,
+    placement: undoPlacement(
+      {
+        id: post.id,
+        timing: post.timing,
+        scheduledAt: post.scheduled_at ? new Date(post.scheduled_at) : null,
+      },
+      backlogOrder(sourceRows),
+    ),
+  };
+
+  const { placement } = target;
+  let pinAt: Date | null = null;
+  let after: string | null | typeof BACK = BACK;
+  if (placement.kind === "pinned") pinAt = placement.at;
+  else if (placement.kind === "queue") after = placement.after;
+  else if (placement.kind === "slot") {
+    const lands = slotPlacement({
+      rows: targetRows,
+      movedId: post.id,
+      at: placement.at,
+      slots: account.slots,
+      timezone: ctx.timezone,
+      now: ctx.now,
+    });
+    if (lands === "pinned") pinAt = placement.at;
+  }
+
+  let renumber: { id: string; queuePosition: number }[] = [];
+  let queuePosition: number | null = sameAccount ? post.queue_position : null;
+  if (!pinAt) {
+    const backlog = backlogOrder(targetRows);
+    const order = reorder(backlog, post.id, after);
+    if (!order) throw new MoveError("unknown_position");
+    const current = new Map(backlog.map((p) => [p.id, p.queuePosition]));
+    const changes = positionChanges(order, current, post.id);
+    queuePosition = changes.find((c) => c.id === post.id)?.queuePosition ?? queuePosition;
+    renumber = changes.filter((c) => c.id !== post.id);
+  }
+
+  try {
+    await updateWaiting(db, ctx, postId, {
+      account_id: account.id,
+      status: newPostStatus(account.status),
+      timing: pinAt ? "pinned" : "queue",
+      queue_position: queuePosition,
+      scheduled_at: pinAt?.toISOString() ?? null,
+      next_attempt_at: null,
+    });
+  } catch (err) {
+    // Claimed by a tick (or published) since it was read.
+    if (err instanceof QueueEditError) throw new MoveError("not_editable");
+    throw err;
+  }
+  const realNow = new Date();
+  const saved = await Promise.all(
+    renumber.map((c) =>
+      db
+        .from("posts")
+        .update({ queue_position: c.queuePosition })
+        .eq("workspace_id", ctx.workspaceId)
+        .eq("id", c.id)
+        .in("status", [...EDITABLE_STATUSES])
+        .or(unclaimed(realNow)),
+    ),
+  );
+  for (const up of saved) if (up.error) fail("saving the queue order", up.error);
+
+  const [times] = await Promise.all([
+    replanAccount(db, ctx, account.id),
+    sameAccount ? null : replanAccount(db, ctx, post.account_id),
+  ]);
+  return {
+    handle: account.handle,
+    scheduledAt: times.has(postId) ? (times.get(postId) ?? null) : pinAt,
+    undo,
+  };
 }

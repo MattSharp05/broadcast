@@ -8,37 +8,54 @@ export type ConnectPlatform = "instagram" | "fake";
 export interface Permission {
   /** What the permission is for, in the user's words. */
   key: "profile" | "publishing" | "insights";
-  scopes: Record<ConnectPlatform, string>;
+  /** Every scope the permission needs, per platform. */
+  scopes: Record<ConnectPlatform, readonly string[]>;
   /** Shown as the account's status reason when the permission is missing. */
   missingMessage: string;
 }
 
-/** In order of importance: the first missing one is the reason shown. */
+/**
+ * In order of importance: the first missing one is the reason shown. Instagram's are the
+ * "Instagram API with Facebook Login" permissions (ADR 0006): publishing and insights also need
+ * pages_read_engagement on the Page the Instagram account is linked to.
+ */
 export const REQUIRED_PERMISSIONS: readonly Permission[] = [
   {
     key: "publishing",
-    scopes: { instagram: "instagram_business_content_publish", fake: "fake_content_publish" },
+    scopes: {
+      instagram: ["instagram_content_publish", "pages_read_engagement"],
+      fake: ["fake_content_publish"],
+    },
     missingMessage: "Publishing permission wasn't granted. Reconnect and allow publishing.",
   },
   {
     key: "profile",
-    scopes: { instagram: "instagram_business_basic", fake: "fake_basic" },
+    scopes: { instagram: ["instagram_basic"], fake: ["fake_basic"] },
     missingMessage: "Profile access wasn't granted. Reconnect and allow access to the profile.",
   },
   {
     key: "insights",
-    scopes: { instagram: "instagram_business_manage_insights", fake: "fake_insights" },
+    scopes: { instagram: ["instagram_manage_insights"], fake: ["fake_insights"] },
     missingMessage:
       "Insights permission wasn't granted, so stats can't be collected. Reconnect and allow insights.",
   },
 ];
 
-/** Every scope Broadcast asks for on a platform. */
+/** Every scope Broadcast needs on a platform. */
 export function requiredScopes(platform: ConnectPlatform): string[] {
-  return REQUIRED_PERMISSIONS.map((p) => p.scopes[platform]);
+  return [...new Set(REQUIRED_PERMISSIONS.flatMap((p) => p.scopes[platform]))];
 }
 
-/** Instagram Login works only for professional accounts. */
+/** True when every scope the permission needs on the platform was granted. */
+export function hasPermission(
+  permission: Permission,
+  platform: ConnectPlatform,
+  granted: ReadonlySet<string>,
+): boolean {
+  return permission.scopes[platform].every((s) => granted.has(s));
+}
+
+/** Only professional accounts can publish through the API (Facebook Login only returns those). */
 const PROFESSIONAL_ACCOUNT_TYPES = new Set(["BUSINESS", "MEDIA_CREATOR", "CREATOR"]);
 
 export const PERSONAL_ACCOUNT_MESSAGE =
@@ -57,7 +74,7 @@ export function connectionStatus(input: {
   accountType?: string | null;
 }): ConnectionStatus {
   const granted = new Set(input.grantedScopes.map((s) => s.trim()).filter(Boolean));
-  const missing = REQUIRED_PERMISSIONS.find((p) => !granted.has(p.scopes[input.platform]));
+  const missing = REQUIRED_PERMISSIONS.find((p) => !hasPermission(p, input.platform, granted));
   if (missing) return { status: "needs_attention", reason: missing.missingMessage };
   if (
     input.platform === "instagram" &&
@@ -77,7 +94,7 @@ export const CONNECT_ERRORS = {
   expired: "Connecting took longer than 10 minutes. Start connecting again from Accounts.",
   brand: "That brand doesn't exist in this workspace. Pick a brand in Accounts and try again.",
   not_configured:
-    "Instagram isn't set up on this server yet: IG_APP_ID and IG_APP_SECRET are missing. Add them in the Vercel project settings, or use a Sandbox account for now.",
+    "Instagram isn't set up on this server yet: IG_APP_ID, IG_APP_SECRET or IG_LOGIN_CONFIG_ID is missing. Add them in the Vercel project settings, or use a Sandbox account for now.",
   no_key:
     "Broadcast can't store Instagram access yet: TOKEN_ENC_KEY is missing on the server. Add it in the Vercel project settings (openssl rand -base64 32).",
   provider: "Instagram didn't accept the sign-in. Try connecting again.",
@@ -88,7 +105,11 @@ export const CONNECT_ERRORS = {
   account:
     "That account isn't in this workspace any more. Open Accounts and pick the account to reconnect.",
   wrong_account:
-    "You signed in as a different Instagram account from the one you're reconnecting. Switch to that account in Instagram, then reconnect again.",
+    "The Instagram account you shared isn't the one you're reconnecting. Reconnect again and, in the Facebook window, choose that account.",
+  no_instagram:
+    "Facebook didn't share an Instagram account. Connect again and, in the Facebook window, choose your Instagram account. It must be a business or creator account linked to a Facebook Page you manage.",
+  several_accounts:
+    "You shared several Instagram accounts that aren't in Broadcast yet, so Broadcast can't tell which one to add. Connect again and, in the Facebook window, choose only the account you want to add.",
   failed:
     "Connecting failed on Broadcast's side. Try again; if it keeps failing, check the server logs.",
 } as const;
@@ -97,4 +118,40 @@ export type ConnectErrorCode = keyof typeof CONNECT_ERRORS;
 
 export function isConnectErrorCode(value: string | null | undefined): value is ConnectErrorCode {
   return typeof value === "string" && Object.hasOwn(CONNECT_ERRORS, value);
+}
+
+/**
+ * Which shared Instagram account a connect attempt is for. One Facebook login can share several
+ * accounts (they all come back on one token):
+ * - Reconnect: the account being reconnected, which must be among them (else wrong_account).
+ * - New: the only one shared, or else the only one not in the workspace yet. Anything else is
+ *   ambiguous, and guessing could post a brand's videos to another brand's account.
+ */
+export function chooseAccount(input: {
+  shared: readonly string[];
+  /** The account being reconnected (its platform user id), if any. */
+  reconnecting: string | null;
+  /** Platform user ids already connected in the workspace. */
+  connected: ReadonlySet<string>;
+  /**
+   * Reconnecting an account whose platform user id isn't known: the chosen one must not belong to
+   * another account already (that one would be overwritten instead).
+   */
+  mustBeNew?: boolean;
+}): { platformUserId: string } | { error: "no_instagram" | "wrong_account" | "several_accounts" } {
+  const shared = [...new Set(input.shared.filter(Boolean))];
+  if (shared.length === 0) return { error: "no_instagram" };
+  if (input.reconnecting) {
+    return shared.includes(input.reconnecting)
+      ? { platformUserId: input.reconnecting }
+      : { error: "wrong_account" };
+  }
+  const fresh = shared.filter((id) => !input.connected.has(id));
+  if (input.mustBeNew) {
+    return fresh.length === 1
+      ? { platformUserId: fresh[0] ?? "" }
+      : { error: fresh.length === 0 ? "wrong_account" : "several_accounts" };
+  }
+  if (shared.length === 1) return { platformUserId: shared[0] ?? "" };
+  return fresh.length === 1 ? { platformUserId: fresh[0] ?? "" } : { error: "several_accounts" };
 }

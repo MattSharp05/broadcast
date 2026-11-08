@@ -1,0 +1,43 @@
+{
+  "data": {
+    "app_id": "1234567890",
+    "type": "USER",
+    "application": "Broadcast",
+    "data_access_expires_at": 1801735200,
+    "expires_at": 1799143144,
+    "is_valid": true,
+    "issued_at": 1793959200,
+    "scopes": [
+      "instagram_basic",
+      "instagram_content_publish",
+      "instagram_manage_insights",
+      "pages_show_list",
+      "pages_read_engagement",
+      "business_management",
+      "public_profile"
+    ],
+    "granular_scopes": [
+      {
+        "scope": "instagram_basic",
+        "target_ids": ["17841400000000001"]
+      },
+      {
+        "scope": "instagram_content_publish",
+        "target_ids": ["17841400000000001"]
+      },
+      {
+        "scope": "instagram_manage_insights",
+        "target_ids": ["17841400000000001"]
+      },
+      {
+        "scope": "pages_show_list",
+        "target_ids": ["104000000000001"]
+      },
+      {
+        "scope": "pages_read_engagement",
+        "target_ids": ["104000000000001"]
+      }
+    ],
+    "user_id": "10160000000000001"
+  }
+}

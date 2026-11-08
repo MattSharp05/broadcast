@@ -1,6 +1,8 @@
-import { CONNECT_ERRORS, requiredScopes } from "@/lib/domain/connect";
+import { createHmac } from "node:crypto";
+import { CONNECT_ERRORS } from "@/lib/domain/connect";
 import {
   ProviderError,
+  type SharedAccount,
   type ContainerStatus,
   type MediaInsights,
   type Profile,
@@ -13,25 +15,30 @@ import {
 } from "./types";
 
 /**
- * The Instagram SocialProvider: "Instagram API with Instagram Login" (no Facebook Page needed).
- * The only module that talks to Instagram (CLAUDE.md → Conventions).
+ * The Instagram SocialProvider: "Instagram API with Facebook Login", signed in through Facebook
+ * Login for Business with a saved configuration (Meta's "API setup with Unified login"; ADR 0006).
+ * The only module that talks to Meta (CLAUDE.md → Conventions).
  *
- * BC-9 implements the connection: authorize URL, code → short-lived → long-lived token, token
- * refresh and the profile. BC-16 adds publishing Reels: the publishing quota, the container
- * (upload), its status, and media_publish. BC-21 adds stats: a post's lifetime insights and the
- * follower count (from the profile).
+ * Connection (BC-9, BC-23): the login dialog with `config_id`, code → short-lived user token →
+ * long-lived (60-day) user token, then `debug_token` for the granted permissions, the expiry and
+ * the Instagram accounts the person shared, plus `/me/accounts` (Pages → instagram_business_account)
+ * as a second source. Facebook doesn't renew long-lived user tokens for a server, so
+ * `refreshToken` says `not_renewable` and the scheduler asks for a reconnect before expiry.
+ * Publishing (BC-16) and stats (BC-21) use the same endpoints as before, on graph.facebook.com.
  *
- * Tokens travel only between this server and Instagram. Error messages never include a URL or a
- * token (request URLs carry `access_token` as a query parameter, as Instagram's docs do).
+ * Tokens travel only between this server and Meta. Error messages never include a URL or a token
+ * (request URLs carry `access_token` as a query parameter, as Meta's docs do). Every call with a
+ * user token also sends `appsecret_proof`, so the app can require it ("Require app secret").
  */
 
-export const IG_AUTHORIZE_URL = "https://www.instagram.com/oauth/authorize";
-export const IG_TOKEN_URL = "https://api.instagram.com/oauth/access_token";
-export const IG_GRAPH = "https://graph.instagram.com";
-export const IG_GRAPH_VERSION = "v23.0";
-const PROFILE_FIELDS = "user_id,username,account_type,followers_count,profile_picture_url";
-/** Long-lived tokens last 60 days; used when Instagram leaves expires_in out. */
+export const IG_GRAPH_VERSION = "v25.0";
+export const IG_AUTHORIZE_URL = `https://www.facebook.com/${IG_GRAPH_VERSION}/dialog/oauth`;
+export const IG_GRAPH = "https://graph.facebook.com";
+const PROFILE_FIELDS = "id,username,followers_count,profile_picture_url";
+/** Long-lived user tokens last about 60 days; used when Meta leaves the expiry out. */
 const DEFAULT_TOKEN_SECONDS = 60 * 24 * 3600;
+/** The permission whose granted targets are the Instagram accounts the person shared. */
+const ACCOUNT_SCOPE = "instagram_basic";
 const TIMEOUT_MS = 15_000;
 /** Instagram's documented limit of API-published posts per rolling 24 hours, if `config` is missing. */
 export const IG_DEFAULT_QUOTA = 100;
@@ -52,8 +59,12 @@ export const IG_INSIGHT_METRICS = {
 } as const satisfies Record<keyof MediaInsights, string>;
 
 export interface InstagramConfig {
+  /** The Meta app's App ID (App settings → Basic). */
   appId: string;
+  /** The Meta app's App secret. Server only. */
   appSecret: string;
+  /** The Facebook Login for Business configuration's id (IG_LOGIN_CONFIG_ID). */
+  loginConfigId: string;
 }
 
 export interface InstagramProviderDeps {
@@ -65,15 +76,24 @@ export interface InstagramProviderDeps {
   timeoutMs?: number;
 }
 
-/** IG_APP_ID + IG_APP_SECRET from the environment, or null when either is missing. */
+/** IG_APP_ID + IG_APP_SECRET + IG_LOGIN_CONFIG_ID from the environment, or null when one is missing. */
 export function instagramConfigFromEnv(
   env: Record<string, string | undefined> = process.env,
 ): InstagramConfig | null {
   const appId = env.IG_APP_ID?.trim();
   const appSecret = env.IG_APP_SECRET?.trim();
-  if (!appId || !appSecret) return null;
-  return { appId, appSecret };
+  const loginConfigId = env.IG_LOGIN_CONFIG_ID?.trim();
+  if (!appId || !appSecret || !loginConfigId) return null;
+  return { appId, appSecret, loginConfigId };
 }
+
+/** HMAC-SHA256 of the token with the app secret, hex (Meta's `appsecret_proof`). */
+export function appSecretProof(accessToken: string, appSecret: string): string {
+  return createHmac("sha256", appSecret).update(accessToken).digest("hex");
+}
+
+/** refreshToken's answer: Facebook doesn't renew a long-lived user token for a server. */
+export const NOT_RENEWABLE = "Facebook doesn't let Broadcast renew Instagram access on its own.";
 
 export const INSTAGRAM_NOT_CONFIGURED_MESSAGE = CONNECT_ERRORS.not_configured;
 
@@ -119,6 +139,12 @@ const errors = {
       userMessage:
         "Broadcast isn't allowed to publish on this Instagram account. Reconnect it and allow publishing.",
       message: detail,
+    }),
+  notRenewable: () =>
+    new ProviderError({
+      code: "not_renewable",
+      retryable: false,
+      userMessage: `${NOT_RENEWABLE} Reconnect the account to keep posting.`,
     }),
   mediaGone: () =>
     new ProviderError({
@@ -241,7 +267,7 @@ export function graphError(status: number, body: unknown): ProviderError {
       message: detail,
     });
   }
-  // Missing permission (instagram_business_content_publish not granted).
+  // Missing permission (instagram_content_publish or pages_read_engagement not granted).
   if (code === 10 || code === 200) return errors.noPermission(detail);
   const media =
     status < 500
@@ -281,7 +307,70 @@ function parseScopes(value: unknown): string[] {
  * id fields are turned into strings before parsing.
  */
 export function parseGraphJson(text: string): unknown {
-  return JSON.parse(text.replace(/("(?:user_id|id)"\s*:\s*)(-?\d+)(?=\s*[,}\]])/g, '$1"$2"'));
+  return JSON.parse(
+    text
+      .replace(/("(?:user_id|id)"\s*:\s*)(-?\d+)(?=\s*[,}\]])/g, '$1"$2"')
+      // debug_token's granular_scopes list target ids (Pages, Instagram accounts) as numbers.
+      .replace(
+        /("target_ids"\s*:\s*\[)([^\]]*)\]/g,
+        (_m, head: string, inner: string) =>
+          `${head}${inner
+            .split(",")
+            .map((v) => (/^\s*-?\d+\s*$/.test(v) ? `"${v.trim()}"` : v))
+            .join(",")}]`,
+      ),
+  );
+}
+
+interface DebugToken {
+  scopes: string[];
+  granular: { scope: string; targets: string[] | null }[];
+  /** Epoch ms; "never" when Meta says 0; null when it doesn't say. */
+  expiresAt: number | "never" | null;
+  dataAccessExpiresAt: number | null;
+}
+
+/** Reads debug_token's `data` (unix seconds; 0 means "never"). */
+export function parseDebugToken(data: Record<string, unknown>): DebugToken {
+  const seconds = (v: unknown) => (typeof v === "number" && v > 0 ? v * 1000 : null);
+  const expiresAt: DebugToken["expiresAt"] =
+    data.expires_at === 0 ? "never" : seconds(data.expires_at);
+  const granularRaw = Array.isArray(data.granular_scopes) ? data.granular_scopes : [];
+  return {
+    scopes: parseScopes(data.scopes),
+    granular: granularRaw
+      .filter((g): g is Record<string, unknown> => !!g && typeof g === "object")
+      .map((g) => ({
+        scope: typeof g.scope === "string" ? g.scope : "",
+        targets: Array.isArray(g.target_ids)
+          ? g.target_ids.map(asString).filter((t): t is string => t !== null)
+          : null,
+      }))
+      .filter((g) => g.scope),
+    expiresAt,
+    dataAccessExpiresAt: seconds(data.data_access_expires_at),
+  };
+}
+
+/**
+ * The permissions granted for one Instagram account. A permission limited to some targets
+ * (granular scopes) counts only when it covers this account: Instagram permissions by account id,
+ * Pages permissions by the Page the account is linked to (`pageOf`, from /me/accounts; when the
+ * Page isn't known the Pages permission is kept, and a refusal shows at publish time).
+ */
+export function scopesForAccount(
+  debug: DebugToken,
+  igUserId: string,
+  pageOf: ReadonlyMap<string, string> = new Map(),
+): string[] {
+  const page = pageOf.get(igUserId);
+  return debug.scopes.filter((scope) => {
+    const g = debug.granular.find((x) => x.scope === scope);
+    if (!g?.targets || g.targets.length === 0) return true;
+    if (scope.startsWith("instagram_")) return g.targets.includes(igUserId);
+    if (scope.startsWith("pages_") && page) return g.targets.includes(page);
+    return true;
+  });
 }
 
 /** Instagram timestamps look like 2026-11-06T10:00:00+0000. Epoch ms, or null. */
@@ -354,9 +443,17 @@ export function createInstagramProvider(deps: InstagramProviderDeps): SocialProv
     return body as Record<string, unknown>;
   }
 
+  /** Adds appsecret_proof next to a user access token. */
+  function withProof(params: Record<string, string>): Record<string, string> {
+    const token = params.access_token;
+    return token && !token.includes("|")
+      ? { ...params, appsecret_proof: appSecretProof(token, appSecret) }
+      : params;
+  }
+
   function graphUrl(path: string, params: Record<string, string>): URL {
     const url = new URL(path, IG_GRAPH);
-    for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+    for (const [k, v] of Object.entries(withProof(params))) url.searchParams.set(k, v);
     return url;
   }
 
@@ -366,23 +463,33 @@ export function createInstagramProvider(deps: InstagramProviderDeps): SocialProv
     return new Date(deps.now().getTime() + seconds * 1000);
   }
 
+  function userId(account: ProviderAccount): string {
+    if (!account.platformUserId) throw errors.notConnected();
+    return account.platformUserId;
+  }
+
+  /**
+   * The Instagram professional account's profile (GET /{ig-user-id}). Only professional accounts
+   * (business or creator) can be reached through Facebook Login, so there is no account type.
+   */
   async function getProfile(account: ProviderAccount): Promise<Profile> {
+    const id = userId(account);
     const res = await call(
-      graphUrl(`/${IG_GRAPH_VERSION}/me`, {
+      graphUrl(`/${IG_GRAPH_VERSION}/${encodeURIComponent(id)}`, {
         fields: PROFILE_FIELDS,
         access_token: account.accessToken,
       }),
     );
-    const platformUserId = asString(res.user_id) ?? asString(res.id) ?? account.platformUserId;
+    const platformUserId = asString(res.id) ?? id;
     const handle = asString(res.username);
-    if (!platformUserId || !handle) throw errors.rejected("Profile without an id or username.");
+    if (!handle) throw errors.rejected("Profile without a username.");
     const followers = typeof res.followers_count === "number" ? res.followers_count : 0;
     return {
       platformUserId,
       handle,
       profileUrl: `https://www.instagram.com/${encodeURIComponent(handle)}/`,
       followers: Math.max(0, Math.round(followers)),
-      accountType: asString(res.account_type),
+      accountType: null,
       pictureUrl: asString(res.profile_picture_url),
     };
   }
@@ -392,13 +499,55 @@ export function createInstagramProvider(deps: InstagramProviderDeps): SocialProv
     return call(new URL(path, IG_GRAPH), {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams(params),
+      body: new URLSearchParams(withProof(params)),
     });
   }
 
-  function userId(account: ProviderAccount): string {
-    if (!account.platformUserId) throw errors.notConnected();
-    return account.platformUserId;
+  /** GET /oauth/access_token (the code exchange and the long-lived exchange). */
+  async function tokenCall(
+    params: Record<string, string>,
+  ): Promise<{ token: string; expiresIn: unknown }> {
+    const url = new URL(`/${IG_GRAPH_VERSION}/oauth/access_token`, IG_GRAPH);
+    for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+    const res = await call(url);
+    const token = asString(res.access_token);
+    if (!token) throw errors.rejected("Token response without a token.");
+    return { token, expiresIn: res.expires_in };
+  }
+
+  /**
+   * The Instagram accounts linked to the Pages the person shared (needs pages_show_list), as
+   * Instagram account id → Page id.
+   */
+  async function pageAccounts(accessToken: string): Promise<Map<string, string>> {
+    let res: Record<string, unknown>;
+    try {
+      res = await call(
+        graphUrl(`/${IG_GRAPH_VERSION}/me/accounts`, {
+          fields: "id,instagram_business_account{id}",
+          limit: "100",
+          access_token: accessToken,
+        }),
+      );
+    } catch (err) {
+      // A missing Pages permission only means this source is empty: debug_token may still list
+      // the accounts, and the permission check reports what's missing.
+      if (
+        err instanceof ProviderError &&
+        (err.code === "network" || err.code === "quota_exhausted")
+      )
+        throw err;
+      return new Map();
+    }
+    const pages = Array.isArray(res.data) ? (res.data as Record<string, unknown>[]) : [];
+    const linked = new Map<string, string>();
+    for (const p of pages) {
+      const ig = p.instagram_business_account;
+      const igId = ig && typeof ig === "object" ? asString((ig as { id?: unknown }).id) : null;
+      const pageId = asString(p.id);
+      if (igId && pageId && !linked.has(igId)) linked.set(igId, pageId);
+    }
+    return linked;
   }
 
   async function containerStatus(
@@ -526,74 +675,75 @@ export function createInstagramProvider(deps: InstagramProviderDeps): SocialProv
     platform: "instagram",
 
     authorizeUrl({ state, redirectUri }) {
+      // Facebook Login for Business: the configuration (config_id) sets the token type, the assets
+      // and the permissions, so no `scope`. A code comes back (the server swaps it for a token).
       const url = new URL(IG_AUTHORIZE_URL);
       url.searchParams.set("client_id", appId);
       url.searchParams.set("redirect_uri", redirectUri);
+      url.searchParams.set("config_id", deps.config.loginConfigId);
       url.searchParams.set("response_type", "code");
-      url.searchParams.set("scope", requiredScopes("instagram").join(","));
+      url.searchParams.set("override_default_response_type", "true");
       url.searchParams.set("state", state);
-      // Instagram Login only (no "Continue with Facebook").
-      url.searchParams.set("enable_fb_login", "0");
       return url.toString();
     },
 
     async exchangeCode({ code, redirectUri }): Promise<TokenSet> {
-      // Instagram appends "#_" to the code in the redirect; it isn't part of the code.
-      const cleanCode = code.replace(/#_$/, "");
-      const short = await call(IG_TOKEN_URL, {
-        method: "POST",
-        headers: { "content-type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          client_id: appId,
-          client_secret: appSecret,
-          grant_type: "authorization_code",
-          redirect_uri: redirectUri,
-          code: cleanCode,
-        }),
+      const short = await tokenCall({
+        client_id: appId,
+        client_secret: appSecret,
+        redirect_uri: redirectUri,
+        code,
       });
-      // Documented shape: { data: [{ access_token, user_id, permissions }] }; older apps get it flat.
-      const entry =
-        (Array.isArray(short.data)
-          ? (short.data[0] as Record<string, unknown> | undefined)
-          : short) ?? {};
-      const shortToken = asString(entry.access_token);
-      const userId = asString(entry.user_id);
-      if (!shortToken || !userId) throw errors.rejected("Token response without token or user.");
-      // Instagram lists what was granted; if a response ever leaves the field out, assume what was
-      // asked for rather than flag a fully authorised account (a later call would fail clearly).
-      const scopes =
-        entry.permissions === undefined
-          ? requiredScopes("instagram")
-          : parseScopes(entry.permissions);
+      const long = await tokenCall({
+        grant_type: "fb_exchange_token",
+        client_id: appId,
+        client_secret: appSecret,
+        fb_exchange_token: short.token,
+      });
+      const accessToken = long.token;
 
-      const long = await call(
-        graphUrl("/access_token", {
-          grant_type: "ig_exchange_token",
-          client_secret: appSecret,
-          access_token: shortToken,
-        }),
-      );
-      const accessToken = asString(long.access_token);
-      if (!accessToken) throw errors.rejected("Long-lived token response without a token.");
-      return { accessToken, expiresAt: expiry(long.expires_in), platformUserId: userId, scopes };
-    },
+      // What the token can do and for which accounts. The app token (id|secret) stays on the server.
+      const [debugRes, pageOf] = await Promise.all([
+        call(
+          graphUrl(`/${IG_GRAPH_VERSION}/debug_token`, {
+            input_token: accessToken,
+            access_token: `${appId}|${appSecret}`,
+          }),
+        ),
+        pageAccounts(accessToken),
+      ]);
+      const data = (debugRes.data ?? {}) as Record<string, unknown>;
+      if (data.is_valid === false) throw errors.rejected("debug_token says the token isn't valid.");
+      if (asString(data.app_id) && asString(data.app_id) !== appId) {
+        throw errors.rejected("The token belongs to another app.");
+      }
+      const debug = parseDebugToken(data);
 
-    async refreshToken(account: ProviderAccount): Promise<TokenSet> {
-      const res = await call(
-        graphUrl("/refresh_access_token", {
-          grant_type: "ig_refresh_token",
-          access_token: account.accessToken,
-        }),
-      );
-      const accessToken = asString(res.access_token);
-      if (!accessToken) throw errors.rejected("Refresh response without a token.");
+      const fromGrants = debug.granular.find((g) => g.scope === ACCOUNT_SCOPE)?.targets ?? [];
+      const ids = [...new Set([...fromGrants, ...pageOf.keys()])];
+      const accounts: SharedAccount[] = ids.map((platformUserId) => ({
+        platformUserId,
+        scopes: scopesForAccount(debug, platformUserId, pageOf),
+      }));
+
+      // The earliest end: the token's (debug_token, else expires_in, else 60 days; none when Meta
+      // says it never expires) and the app's data access.
+      const tokenEnd =
+        debug.expiresAt === "never" ? null : (debug.expiresAt ?? expiry(long.expiresIn).getTime());
+      const ends = [tokenEnd, debug.dataAccessExpiresAt].filter((t): t is number => t !== null);
+      if (ends.length === 0) ends.push(expiry(undefined).getTime());
       return {
         accessToken,
-        expiresAt: expiry(res.expires_in),
-        platformUserId: account.platformUserId ?? "",
-        // Instagram includes the permissions only sometimes; empty means "unchanged".
-        scopes: parseScopes(res.permissions),
+        expiresAt: new Date(Math.min(...ends)),
+        platformUserId: accounts[0]?.platformUserId ?? "",
+        scopes: accounts[0]?.scopes ?? debug.scopes,
+        accounts,
       };
+    },
+
+    refreshToken(): Promise<TokenSet> {
+      // A long-lived user token can't be renewed by a server: only a new login gives a new one.
+      return Promise.reject(errors.notRenewable());
     },
 
     getProfile,

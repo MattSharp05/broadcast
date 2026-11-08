@@ -18,6 +18,19 @@ export interface TokenSet {
   expiresAt: Date;
   platformUserId: string;
   scopes: readonly string[];
+  /**
+   * Instagram (Facebook Login for Business): every Instagram professional account the person
+   * shared, each with the permissions granted for it. One login can share several accounts, so the
+   * connect callback picks one (src/lib/domain/connect.ts → chooseAccount). Absent for platforms
+   * where one login is one account (`platformUserId` and `scopes` then apply).
+   */
+  accounts?: readonly SharedAccount[];
+}
+
+/** An account a login shared, with the permissions granted for that account. */
+export interface SharedAccount {
+  platformUserId: string;
+  scopes: readonly string[];
 }
 
 export interface Profile {
@@ -83,6 +96,11 @@ export interface SocialProvider {
   /** Where to send the browser to grant access. */
   authorizeUrl(input: { state: string; redirectUri: string }): string;
   exchangeCode(input: { code: string; redirectUri: string }): Promise<TokenSet>;
+  /**
+   * A new token for the account. Throws code `not_renewable` when the platform doesn't renew tokens
+   * on its own (Instagram through Facebook Login): the account then has to be reconnected before
+   * its token expires (src/lib/domain/health.ts → unrenewablePlan).
+   */
   refreshToken(account: ProviderAccount): Promise<TokenSet>;
   getProfile(account: ProviderAccount): Promise<Profile>;
   getPublishingQuota(account: ProviderAccount): Promise<PublishingQuota>;
@@ -112,6 +130,8 @@ export type ProviderErrorCode =
   | "not_ready"
   | "not_found"
   | "unsupported"
+  /** The platform doesn't renew this token; only a reconnect gives a new one. */
+  | "not_renewable"
   | "unknown";
 
 /**

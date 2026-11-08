@@ -1,5 +1,5 @@
 import { http, HttpResponse } from "msw";
-import { FIXTURE_ME, FIXTURE_TOKENS } from "../handlers";
+import { FIXTURE_IG_USER, GRAPH, validUserToken } from "../handlers";
 import containerCreated from "./container-created.json";
 import containerError from "./container-error-aspect-ratio.json";
 import containerErrorUnknown from "./container-error-unknown.json";
@@ -17,7 +17,7 @@ import mediaPublished from "./media-published.json";
 import recentMedia from "./recent-media.json";
 
 /**
- * A small, stateful stand-in for Instagram's content publishing endpoints (MSW), built from the
+ * A small, stateful stand-in for Instagram's content publishing endpoints on graph.facebook.com (MSW), built from the
  * recorded response shapes next to this file. It remembers containers and published posts, so a
  * test can run the scheduler tick after tick and count what really got published.
  *
@@ -43,9 +43,6 @@ export const publishFixtures = {
   mediaPublished,
   recentMedia,
 };
-
-const GRAPH = "https://graph.instagram.com";
-const VALID_TOKENS = new Set([FIXTURE_TOKENS.long, FIXTURE_TOKENS.refreshed]);
 
 export interface FixtureContainer {
   id: string;
@@ -131,8 +128,7 @@ export function createPublishFixture(opts: PublishFixtureOptions = {}): PublishF
   }
 
   function token(request: Request, form?: URLSearchParams): boolean {
-    const t = form?.get("access_token") ?? new URL(request.url).searchParams.get("access_token");
-    return VALID_TOKENS.has(t ?? "");
+    return validUserToken(request, form);
   }
 
   function statusBody(c: FixtureContainer) {
@@ -150,7 +146,7 @@ export function createPublishFixture(opts: PublishFixtureOptions = {}): PublishF
     }
   }
 
-  const user = FIXTURE_ME.user_id;
+  const user = FIXTURE_IG_USER.id;
 
   const handlers = [
     http.get(`${GRAPH}/:version/${user}/content_publishing_limit`, ({ request }) => {

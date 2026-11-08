@@ -23,7 +23,7 @@ import type { Db, Step, StepSummary, TickContext } from "./types";
 /**
  * The publish step: claims due posts and advances each one step through the publish machine
  * (src/lib/domain/publish.ts; the provider calls are in publish-post.ts). Fake-provider posts
- * always; Instagram posts once the app (IG_APP_ID/IG_APP_SECRET) and TOKEN_ENC_KEY are set, so a
+ * always; Instagram posts once the Meta app (IG_APP_ID/IG_APP_SECRET/IG_LOGIN_CONFIG_ID) and TOKEN_ENC_KEY are set, so a
  * deployment without them leaves Instagram posts queued instead of failing them.
  */
 /** Posts claimed per tick. */

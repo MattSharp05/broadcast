@@ -14,7 +14,7 @@ import { runTick } from "@/lib/scheduler/tick";
 import type { Step } from "@/lib/scheduler/types";
 import {
   FIXTURE_APP,
-  FIXTURE_ME,
+  FIXTURE_IG_USER,
   FIXTURE_TOKENS,
   instagramHandlers,
 } from "../fixtures/instagram/handlers";
@@ -196,7 +196,7 @@ describe("Instagram: refresh and connection checks (MSW)", () => {
         workspace_id: LIVE,
         brand_id: ids.brand,
         platform: "instagram",
-        platform_user_id: FIXTURE_ME.user_id,
+        platform_user_id: FIXTURE_IG_USER.id,
         handle: "codingjourney.bc19",
         status: "ready",
       }),
@@ -222,15 +222,27 @@ describe("Instagram: refresh and connection checks (MSW)", () => {
     server.use(...instagramHandlers, ...createPublishFixture({ now: () => new Date() }).handlers);
   });
 
-  it("refreshes a token that is old enough and expiring, and stores the new one encrypted", async () => {
+  it("a token Facebook won't renew waits, logged, until 3 days before it expires", async () => {
     await seed(FIXTURE_TOKENS.long, { expiresIn: 5 * DAY, refreshedAgo: 55 * DAY });
     const summary = await tick(LIVE, step());
-    expect(summary.steps.refreshTokens).toMatchObject({ claimed: 1, refreshed: 1 });
+    expect(summary.steps.refreshTokens).toMatchObject({ claimed: 1, waiting: 1, flagged: 0 });
+    expect((await accountOf(ids.account)).status).toBe("ready");
     const cred = await credentialOf(ids.account);
+    // The stored token is untouched; the next try is when the 3-day notice starts.
     expect(decryptToken(cred.access_token_enc, KEY, credentialContext(ids.account))).toBe(
-      FIXTURE_TOKENS.refreshed,
+      FIXTURE_TOKENS.long,
     );
-    expect(new Date(cred.expires_at ?? 0).getTime()).toBeGreaterThan(Date.now() + 50 * DAY);
+    const retry = new Date(cred.refresh_retry_at ?? 0).getTime();
+    expect(Math.abs(retry - (Date.now() + 2 * DAY))).toBeLessThan(60_000);
+    expect(cred.refresh_claim_token).toBeNull();
+    const log = await admin
+      .from("job_log")
+      .select("message")
+      .eq("account_id", ids.account)
+      .eq("kind", "refresh");
+    expect(log.data?.map((l) => l.message).join("\n")).toMatch(/ask to be reconnected/);
+    // Not claimed again before then.
+    expect((await tick(LIVE, step())).steps.refreshTokens).toMatchObject({ claimed: 0 });
   });
 
   it("leaves a recently refreshed token alone", async () => {
@@ -239,13 +251,15 @@ describe("Instagram: refresh and connection checks (MSW)", () => {
     expect(summary.steps.refreshTokens).toMatchObject({ claimed: 0 });
   });
 
-  it("a refused refresh flags the account Needs attention with the reason", async () => {
-    await seed("revoked-token", { expiresIn: 2 * DAY, refreshedAgo: 58 * DAY });
+  it("within 3 days of expiry the account needs attention, with the date and Reconnect", async () => {
+    await seed(FIXTURE_TOKENS.long, { expiresIn: 2 * DAY, refreshedAgo: 58 * DAY });
     const summary = await tick(LIVE, step());
     expect(summary.steps.refreshTokens).toMatchObject({ claimed: 1, flagged: 1 });
     const account = await accountOf(ids.account);
     expect(account.status).toBe("needs_attention");
-    expect(account.status_reason).toMatch(/Reconnect/);
+    expect(account.status_reason).toMatch(
+      /^Instagram access ends on \d+ \w+ and Facebook doesn't let Broadcast renew it\. Reconnect to keep posting\.$/,
+    );
   });
 
   it("a revoked token is noticed by the connection check", async () => {

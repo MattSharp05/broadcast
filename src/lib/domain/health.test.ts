@@ -6,10 +6,13 @@ import {
   attentionLine,
   connectionCheckDue,
   expiredReason,
+  reconnectLaterLine,
+  reconnectSoonReason,
   reconnectedMessage,
   refreshFailedReason,
   refreshFailure,
   refreshPlan,
+  unrenewablePlan,
 } from "./health";
 
 const NOW = new Date("2026-11-05T22:14:00Z");
@@ -114,5 +117,31 @@ describe("isAuthError", () => {
     expect(isAuthError(err("token_expired"))).toBe(true);
     expect(isAuthError(err("network"))).toBe(false);
     expect(isAuthError(new Error("token_expired"))).toBe(false);
+  });
+});
+
+describe("unrenewablePlan (Facebook Login user tokens)", () => {
+  const expires = new Date("2026-12-20T12:00:00Z");
+
+  it("waits until 3 days before expiry, then flags", () => {
+    expect(unrenewablePlan(expires, new Date("2026-12-14T12:00:00Z"))).toEqual({
+      action: "wait",
+      askAt: new Date("2026-12-17T12:00:00Z"),
+    });
+    expect(unrenewablePlan(expires, new Date("2026-12-17T12:00:00Z"))).toEqual({
+      action: "flag",
+    });
+    expect(unrenewablePlan(expires, new Date("2026-12-19T00:00:00Z"))).toEqual({
+      action: "flag",
+    });
+  });
+
+  it("names the date and the fix", () => {
+    expect(reconnectSoonReason(expires, "Europe/London")).toBe(
+      "Instagram access ends on 20 Dec and Facebook doesn't let Broadcast renew it. Reconnect to keep posting.",
+    );
+    expect(reconnectLaterLine("cj", new Date("2026-12-17T12:00:00Z"), "UTC")).toMatch(
+      /^Facebook doesn't let Broadcast renew access for @cj\. On 17 Dec/,
+    );
   });
 });

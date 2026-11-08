@@ -13,7 +13,7 @@ export interface ProviderDeps {
   fakeStore: FakeStore;
   /** The account's workspace clock (src/lib/clock.ts → nowFor). */
   now: () => Date;
-  /** The Instagram app (instagramConfigFromEnv); null or absent when IG_APP_ID/SECRET aren't set. */
+  /** The Meta app (instagramConfigFromEnv); null or absent when IG_APP_ID/SECRET/IG_LOGIN_CONFIG_ID aren't all set. */
   instagram?: InstagramConfig | null;
   /** Per-request timeout for platform calls (default 15 s); the tick passes what its budget allows. */
   timeoutMs?: number;

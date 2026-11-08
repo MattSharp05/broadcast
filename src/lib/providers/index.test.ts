@@ -12,12 +12,12 @@ describe("providerFor", () => {
   it("picks the Instagram provider when the app is configured", () => {
     const ig = providerFor(
       { platform: "instagram" },
-      { ...deps, instagram: { appId: "1", appSecret: "s" } },
+      { ...deps, instagram: { appId: "1", appSecret: "s", loginConfigId: "c" } },
     );
     expect(ig.platform).toBe("instagram");
   });
 
-  it("fails clearly for Instagram without IG_APP_ID/IG_APP_SECRET", () => {
+  it("fails clearly for Instagram without IG_APP_ID/IG_APP_SECRET/IG_LOGIN_CONFIG_ID", () => {
     expect(() => providerFor({ platform: "instagram" }, deps)).toThrow(ProviderError);
     expect(() => providerFor({ platform: "instagram" }, deps)).toThrow(/IG_APP_ID/);
   });

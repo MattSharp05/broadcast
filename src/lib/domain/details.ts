@@ -1,5 +1,10 @@
 import { UPCOMING_STATUSES, avatarIndex, profileUrl, type AccountState } from "@/lib/domain/canvas";
-import { REQUIRED_PERMISSIONS, type ConnectPlatform, type Permission } from "@/lib/domain/connect";
+import {
+  REQUIRED_PERMISSIONS,
+  hasPermission,
+  type ConnectPlatform,
+  type Permission,
+} from "@/lib/domain/connect";
 import type { JobLogLine } from "@/lib/domain/failed-posts";
 import type { PostStatus } from "@/lib/domain/queue";
 import { addDays, toLocalDate } from "@/lib/domain/time";
@@ -263,7 +268,7 @@ export function grantedPermissions(
   const granted = new Set(scopes);
   const order: Permission["key"][] = ["profile", "publishing", "insights"];
   return order.filter((key) =>
-    REQUIRED_PERMISSIONS.some((perm) => perm.key === key && granted.has(perm.scopes[p])),
+    REQUIRED_PERMISSIONS.some((perm) => perm.key === key && hasPermission(perm, p, granted)),
   );
 }
 

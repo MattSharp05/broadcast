@@ -7,9 +7,12 @@ import {
   REFRESH_WINDOW_MS,
   connectionCheckDue,
   expiredReason,
+  reconnectLaterLine,
+  reconnectSoonReason,
   refreshFailedReason,
   refreshFailure,
   refreshPlan,
+  unrenewablePlan,
 } from "@/lib/domain/health";
 import { createDbFakeStore } from "@/lib/providers/fake-store";
 import { instagramConfigFromEnv, type InstagramConfig } from "@/lib/providers/instagram";
@@ -26,6 +29,8 @@ import type { Db, Step, StepSummary, TickContext } from "./types";
  *    24 h, expiring within 7 days; `claim_refresh`, migration 0008) and asks the platform for a
  *    new one. A token that already expired, or a refresh refused because access is gone, flags the
  *    account Needs attention and pauses its queued posts. One that may pass retries in an hour.
+ *    A token the platform won't renew (Instagram through Facebook Login, ADR 0006) waits until
+ *    3 days before it expires, then flags the account with the date: a Reconnect renews it.
  * 2. Connection check: up to CHECK_BATCH ready Instagram accounts not checked in the last minute
  *    get one cheap read (the publishing quota, which also needs the publish permission). An auth
  *    error flags the account, so revoking Broadcast in Instagram shows within a couple of minutes.
@@ -86,6 +91,8 @@ interface Summary {
   released: number;
   tokenErrors: number;
   checked: number;
+  /** Tokens that can't be renewed and aren't close enough to expiry to ask for a reconnect. */
+  waiting: number;
 }
 
 function remaining(ctx: TickContext): number {
@@ -169,7 +176,7 @@ async function saveTokens(
       ...(sealed ? { access_token_enc: sealed } : {}),
       expires_at: tokens.expiresAt.toISOString(),
       last_refreshed_at: now.toISOString(),
-      // Instagram leaves the permissions out sometimes: empty means unchanged.
+      // A platform may leave the permissions out: empty means unchanged.
       ...(tokens.scopes.length > 0 ? { scopes: [...tokens.scopes] } : {}),
       refresh_retry_at: null,
       refresh_claimed_until: null,
@@ -264,6 +271,27 @@ async function refreshDue(run: Run, summary: Summary): Promise<void> {
         console.error(`refreshTokens: account ${row.account_id}: the token can't be decrypted.`);
         await release(db, row, c.claim_token, new Date(ctx.realNow().getTime() + REFRESH_RETRY_MS));
         summary.tokenErrors += 1;
+        continue;
+      }
+      if (err instanceof ProviderError && err.code === "not_renewable") {
+        const expiresAt = new Date(row.expires_at ?? now);
+        const plan = unrenewablePlan(expiresAt, now);
+        if (plan.action === "flag") {
+          await flag(run, row, reconnectSoonReason(expiresAt, ws.timezone), "refresh");
+          await release(db, row, c.claim_token);
+          summary.flagged += 1;
+        } else {
+          // Ask again when the notice period starts (real time: the lease and retry are real).
+          const waitMs = plan.askAt.getTime() - now.getTime();
+          await log(
+            db,
+            row,
+            true,
+            reconnectLaterLine(row.social_accounts.handle, plan.askAt, ws.timezone),
+          );
+          await release(db, row, c.claim_token, new Date(ctx.realNow().getTime() + waitMs));
+          summary.waiting += 1;
+        }
         continue;
       }
       if (!(err instanceof ProviderError)) console.error(`refreshTokens: ${row.account_id}:`, err);
@@ -373,6 +401,7 @@ export function createRefreshTokens(deps: RefreshDeps = {}): Step {
         released: 0,
         tokenErrors: 0,
         checked: 0,
+        waiting: 0,
       };
       await refreshDue(run, summary);
       await checkConnections(run, summary);

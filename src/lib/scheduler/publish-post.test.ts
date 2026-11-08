@@ -15,7 +15,7 @@ import type { ProviderAccount } from "@/lib/providers";
 import { http, HttpResponse } from "msw";
 import {
   FIXTURE_APP,
-  FIXTURE_ME,
+  FIXTURE_IG_USER,
   FIXTURE_TOKENS,
 } from "../../../tests/fixtures/instagram/handlers";
 import {
@@ -50,7 +50,7 @@ const VIDEO_URL = "https://storage.test/videos/v41.mp4?token=signed";
 
 const igAccount: ProviderAccount = {
   accountId: "acc-1",
-  platformUserId: FIXTURE_ME.user_id,
+  platformUserId: FIXTURE_IG_USER.id,
   accessToken: FIXTURE_TOKENS.long,
 };
 const ready: PublishAccount = { handle: "codingjourney", status: "ready", statusReason: null };
@@ -343,7 +343,7 @@ describe("publishing a Reel to Instagram", () => {
     const { post, tick } = setup();
     server.use(
       http.get(
-        `https://graph.instagram.com/:version/${FIXTURE_ME.user_id}/content_publishing_limit`,
+        `https://graph.facebook.com/:version/${FIXTURE_IG_USER.id}/content_publishing_limit`,
         () =>
           HttpResponse.json(
             {
@@ -367,7 +367,7 @@ describe("publishing a Reel to Instagram", () => {
   it("rate limited: waits a few minutes without using a retry", async () => {
     const { post, tick, now } = setup();
     server.use(
-      http.post(`https://graph.instagram.com/:version/${FIXTURE_ME.user_id}/media`, () =>
+      http.post(`https://graph.facebook.com/:version/${FIXTURE_IG_USER.id}/media`, () =>
         HttpResponse.json(
           {
             error: {
@@ -391,7 +391,7 @@ describe("publishing a Reel to Instagram", () => {
   it("missing publishing permission pauses the post with how to fix it", async () => {
     const { post, tick } = setup();
     server.use(
-      http.post(`https://graph.instagram.com/:version/${FIXTURE_ME.user_id}/media`, () =>
+      http.post(`https://graph.facebook.com/:version/${FIXTURE_IG_USER.id}/media`, () =>
         HttpResponse.json(publishFixtures.errorNoPermission, { status: 403 }),
       ),
     );

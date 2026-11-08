@@ -118,12 +118,19 @@ describe("permissionChecks", () => {
   });
   it("reads Instagram's scope names for Instagram accounts", () => {
     const checks = permissionChecks("instagram", [
-      "instagram_business_basic",
-      "instagram_business_content_publish",
-      "instagram_business_manage_insights",
+      "instagram_basic",
+      "instagram_content_publish",
+      "pages_read_engagement",
+      "instagram_manage_insights",
     ]);
     expect(checks.every((c) => c.granted)).toBe(true);
     expect(permissionChecks("instagram", ["fake_basic"]).some((c) => c.granted)).toBe(false);
+    // Publishing also needs pages_read_engagement on the linked Page.
+    expect(
+      permissionChecks("instagram", ["instagram_basic", "instagram_content_publish"]).find(
+        (c) => c.key === "publishing",
+      )?.granted,
+    ).toBe(false);
   });
 });
 

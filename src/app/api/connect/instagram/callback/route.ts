@@ -3,12 +3,17 @@ import { nowFor } from "@/lib/clock";
 import { TokenKeyError, tokenKeyFromEnv } from "@/lib/crypto/tokens";
 import { createAdminSupabase } from "@/lib/db/admin";
 import { isSignedInOwner } from "@/lib/db/auth";
-import { consumeOAuthState, reconnectTarget, saveConnection } from "@/lib/db/connections";
+import {
+  connectedUserIds,
+  consumeOAuthState,
+  reconnectTarget,
+  saveConnection,
+} from "@/lib/db/connections";
 import { clearFakeTokenFailure, resumeAccount } from "@/lib/db/health";
 import { createServerSupabase } from "@/lib/db/server";
 import { loadWorkspace } from "@/lib/db/workspace";
 import { workspaceKindOf } from "@/lib/db/workspaces";
-import { connectionStatus } from "@/lib/domain/connect";
+import { chooseAccount, connectionStatus } from "@/lib/domain/connect";
 import { ProviderError, providerFor } from "@/lib/providers";
 import { createDbFakeStore } from "@/lib/providers/fake-store";
 import { instagramConfigFromEnv } from "@/lib/providers/instagram";
@@ -19,8 +24,9 @@ export const dynamic = "force-dynamic";
 /**
  * GET /api/connect/instagram/callback?code=…&state=… (or ?error=…&state=…): where the consent
  * screen sends the browser back. Checks the state (cookie + one-time row), swaps the code for a
- * long-lived token, reads the profile, checks the granted permissions, then creates or updates the
- * account and stores the token encrypted. Ends on /connect/done. Tokens never reach the browser.
+ * long-lived token, picks the shared Instagram account (a reconnect: the same one), reads the
+ * profile, checks the granted permissions, then creates or updates the account and stores the
+ * token encrypted. Ends on /connect/done. Tokens never reach the browser.
  */
 export async function GET(request: NextRequest) {
   if (!(await isSignedInOwner())) return toSignIn(request);
@@ -69,12 +75,36 @@ export async function GET(request: NextRequest) {
       { fakeStore: createDbFakeStore(admin), now, instagram },
     );
 
+    const target = attempt.accountId
+      ? await reconnectTarget(admin, attempt.workspaceId, attempt.accountId)
+      : null;
+    if (attempt.accountId && !target) return toDonePage(request, { error: "account" });
+
     let tokens, profile;
     try {
       tokens = await provider.exchangeCode({
         code,
         redirectUri: redirectUriFor(request, attempt.platform),
       });
+      if (tokens.accounts) {
+        // One Facebook login can share several Instagram accounts: pick the one this is for.
+        const shared = tokens.accounts.map((a) => a.platformUserId);
+        const choice = chooseAccount({
+          shared,
+          reconnecting: target?.platformUserId ?? null,
+          connected:
+            shared.length > 1 && !target
+              ? await connectedUserIds(admin, attempt.workspaceId, attempt.platform)
+              : new Set(),
+        });
+        if ("error" in choice) return toDonePage(request, { error: choice.error });
+        const chosen = tokens.accounts.find((a) => a.platformUserId === choice.platformUserId);
+        tokens = {
+          ...tokens,
+          platformUserId: choice.platformUserId,
+          scopes: chosen?.scopes ?? tokens.scopes,
+        };
+      }
       profile = await provider.getProfile({
         accountId: "",
         platformUserId: tokens.platformUserId,
@@ -92,13 +122,9 @@ export async function GET(request: NextRequest) {
       return toDonePage(request, { error });
     }
 
-    if (attempt.accountId) {
-      // Reconnecting a specific account: it must be the same platform user.
-      const target = await reconnectTarget(admin, attempt.workspaceId, attempt.accountId);
-      if (!target) return toDonePage(request, { error: "account" });
-      if (target.platformUserId && target.platformUserId !== profile.platformUserId) {
-        return toDonePage(request, { error: "wrong_account" });
-      }
+    // Reconnecting a specific account: it must be the same platform user.
+    if (target?.platformUserId && target.platformUserId !== profile.platformUserId) {
+      return toDonePage(request, { error: "wrong_account" });
     }
 
     const status = connectionStatus({

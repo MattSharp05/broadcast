@@ -7,7 +7,7 @@ import { WORKSPACE_IDS } from "@/lib/db/workspaces";
 import { createPublishDue } from "@/lib/scheduler/publish-due";
 import { runTick, type TickSummary } from "@/lib/scheduler/tick";
 import type { Step } from "@/lib/scheduler/types";
-import { FIXTURE_APP, FIXTURE_ME, FIXTURE_TOKENS } from "../fixtures/instagram/handlers";
+import { FIXTURE_APP, FIXTURE_IG_USER, FIXTURE_TOKENS } from "../fixtures/instagram/handlers";
 import { createPublishFixture, type PublishFixture } from "../fixtures/instagram/publish/server";
 import { adminClient } from "./helpers";
 
@@ -74,7 +74,7 @@ async function seed(options: { withToken?: boolean } = {}) {
       workspace_id: LIVE,
       brand_id: ids.brand,
       platform: "instagram",
-      platform_user_id: FIXTURE_ME.user_id,
+      platform_user_id: FIXTURE_IG_USER.id,
       handle: "codingjourney.bc16",
       slots: ["09:00", "18:00"],
       status: "ready",
@@ -150,7 +150,7 @@ describe("publishing to Instagram through the tick", () => {
   it("a post can't get two containers, or be published twice, when ticks overlap", async () => {
     // Slow uploads, so the ticks really overlap.
     server.use(
-      http.post(`https://graph.instagram.com/:version/${FIXTURE_ME.user_id}/media`, async () => {
+      http.post(`https://graph.facebook.com/:version/${FIXTURE_IG_USER.id}/media`, async () => {
         await delay(400);
         return undefined;
       }),

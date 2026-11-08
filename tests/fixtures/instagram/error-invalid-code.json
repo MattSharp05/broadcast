@@ -1,5 +1,9 @@
 {
-  "error_type": "OAuthException",
-  "code": 400,
-  "error_message": "Error validating verification code. Please make sure your redirect_uri is identical to the one you used in the OAuth dialog request"
+  "error": {
+    "message": "Error validating verification code. Please make sure your redirect_uri is identical to the one you used in the OAuth dialog request",
+    "type": "OAuthException",
+    "code": 100,
+    "error_subcode": 36008,
+    "fbtrace_id": "AFixtureTraceId"
+  }
 }

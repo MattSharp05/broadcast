@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { PERSONAL_ACCOUNT_MESSAGE, connectionStatus, requiredScopes } from "./connect";
+import {
+  PERSONAL_ACCOUNT_MESSAGE,
+  chooseAccount,
+  connectionStatus,
+  requiredScopes,
+} from "./connect";
 
 const ALL_IG = requiredScopes("instagram");
 
@@ -17,7 +22,12 @@ describe("connectionStatus", () => {
   it("names the missing publishing permission", () => {
     const res = connectionStatus({
       platform: "instagram",
-      grantedScopes: ["instagram_business_basic", "instagram_business_manage_insights"],
+      grantedScopes: [
+        "instagram_basic",
+        "instagram_manage_insights",
+        "pages_show_list",
+        "pages_read_engagement",
+      ],
     });
     expect(res).toEqual({
       status: "needs_attention",
@@ -51,5 +61,70 @@ describe("connectionStatus", () => {
         accountType: "MEDIA_CREATOR",
       }).status,
     ).toBe("ready");
+  });
+});
+
+describe("requiredScopes (Instagram API with Facebook Login)", () => {
+  it("needs basic, content publish, insights and the Page's engagement read", () => {
+    expect(requiredScopes("instagram").sort()).toEqual([
+      "instagram_basic",
+      "instagram_content_publish",
+      "instagram_manage_insights",
+      "pages_read_engagement",
+    ]);
+  });
+
+  it("publishing without pages_read_engagement is missing publishing", () => {
+    expect(
+      connectionStatus({
+        platform: "instagram",
+        grantedScopes: [
+          "instagram_basic",
+          "instagram_content_publish",
+          "instagram_manage_insights",
+        ],
+      }).reason,
+    ).toMatch(/^Publishing permission/);
+  });
+});
+
+describe("chooseAccount", () => {
+  const none = new Set<string>();
+
+  it("takes the only shared account", () => {
+    expect(chooseAccount({ shared: ["ig1"], reconnecting: null, connected: none })).toEqual({
+      platformUserId: "ig1",
+    });
+  });
+
+  it("no shared account is no_instagram", () => {
+    expect(chooseAccount({ shared: [], reconnecting: null, connected: none })).toEqual({
+      error: "no_instagram",
+    });
+  });
+
+  it("a reconnect takes its own account, or is the wrong account", () => {
+    expect(
+      chooseAccount({ shared: ["ig1", "ig2"], reconnecting: "ig2", connected: new Set(["ig2"]) }),
+    ).toEqual({ platformUserId: "ig2" });
+    expect(chooseAccount({ shared: ["ig1"], reconnecting: "ig2", connected: none })).toEqual({
+      error: "wrong_account",
+    });
+  });
+
+  it("several shared: the only new one, else ambiguous", () => {
+    expect(
+      chooseAccount({ shared: ["ig1", "ig2"], reconnecting: null, connected: new Set(["ig1"]) }),
+    ).toEqual({ platformUserId: "ig2" });
+    expect(chooseAccount({ shared: ["ig1", "ig2"], reconnecting: null, connected: none })).toEqual({
+      error: "several_accounts",
+    });
+    expect(
+      chooseAccount({
+        shared: ["ig1", "ig2"],
+        reconnecting: null,
+        connected: new Set(["ig1", "ig2"]),
+      }),
+    ).toEqual({ error: "several_accounts" });
   });
 });

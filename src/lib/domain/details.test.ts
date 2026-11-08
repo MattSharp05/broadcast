@@ -164,7 +164,7 @@ describe("account details", () => {
         {
           accountId: "a1",
           expiresAt: new Date("2026-12-16T22:14:00Z"),
-          scopes: ["instagram_business_basic", "instagram_business_content_publish"],
+          scopes: ["instagram_basic", "instagram_content_publish", "pages_read_engagement"],
         },
       ],
       now: NOW,

@@ -70,6 +70,22 @@ export async function reconnectTarget(
   };
 }
 
+/** The platform user ids already connected in a workspace (to tell which shared account is new). */
+export async function connectedUserIds(
+  db: Db,
+  workspaceId: string,
+  platform: ProviderPlatform,
+): Promise<Set<string>> {
+  const { data, error } = await db
+    .from("social_accounts")
+    .select("platform_user_id")
+    .eq("workspace_id", workspaceId)
+    .eq("platform", platform)
+    .not("platform_user_id", "is", null);
+  if (error) fail("Reading the connected accounts", error);
+  return new Set(data.map((r) => r.platform_user_id).filter((id): id is string => !!id));
+}
+
 /** Stores a new state for a connect attempt, and clears the workspace's expired ones. */
 export async function createOAuthState(
   db: Db,

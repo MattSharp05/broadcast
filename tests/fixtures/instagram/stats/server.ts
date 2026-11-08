@@ -1,7 +1,7 @@
 import { http, HttpResponse } from "msw";
 import errorRateLimited from "../error-rate-limited.json";
 import errorTokenExpired from "../error-token-expired.json";
-import { FIXTURE_TOKENS } from "../handlers";
+import { GRAPH, validUserToken } from "../handlers";
 import mediaInsights from "./media-insights.json";
 import mediaInsightsNoShares from "./media-insights-no-shares.json";
 
@@ -19,9 +19,6 @@ export const FULL_MEDIA = "18034567890123456";
 export const NO_SHARES_MEDIA = "18034567890123457";
 export const RATE_LIMITED_MEDIA = "18034567890123458";
 
-const GRAPH = "https://graph.instagram.com";
-const VALID_TOKENS = new Set([FIXTURE_TOKENS.long, FIXTURE_TOKENS.refreshed]);
-
 /** Media Instagram refuses `shares` for: the whole request fails with #100, as Instagram does. */
 export const SHARES_REFUSED_MEDIA = "18034567890123459";
 
@@ -34,7 +31,7 @@ function only(body: { data: { name: string }[] }, metrics: readonly string[]) {
 export const statsHandlers = [
   http.get(`${GRAPH}/:version/:mediaId/insights`, ({ request, params }) => {
     const q = new URL(request.url).searchParams;
-    if (!VALID_TOKENS.has(q.get("access_token") ?? "")) {
+    if (!validUserToken(request)) {
       return HttpResponse.json(errorTokenExpired, { status: 400 });
     }
     const metrics = (q.get("metric") ?? "").split(",");

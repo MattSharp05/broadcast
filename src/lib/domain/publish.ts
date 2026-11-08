@@ -66,6 +66,8 @@ export type PublishErrorCode =
   | "not_ready"
   | "not_found"
   | "unsupported"
+  /** The platform doesn't renew this token; only a reconnect gives a new one. */
+  | "not_renewable"
   | "unknown";
 
 /** When a post blocked by the publishing quota tries again, and how the log says it. */

@@ -48,7 +48,7 @@ function input(overrides: Partial<SaveConnectionInput> = {}): SaveConnectionInpu
       accountType: "MEDIA_CREATOR",
     },
     tokens: {
-      accessToken: "IGAA-integration-token-1",
+      accessToken: "EAAB-integration-token-1",
       expiresAt: new Date(NOW.getTime() + 60 * 86_400_000),
       platformUserId: "17841400000000001",
       scopes,
@@ -96,9 +96,9 @@ describe("saveConnection", () => {
     });
 
     const creds = await credentials(saved.accountId);
-    expect(creds.access_token_enc).not.toContain("IGAA-integration-token-1");
+    expect(creds.access_token_enc).not.toContain("EAAB-integration-token-1");
     expect(decryptToken(creds.access_token_enc, KEY, credentialContext(saved.accountId))).toBe(
-      "IGAA-integration-token-1",
+      "EAAB-integration-token-1",
     );
     expect(creds.scopes).toEqual(requiredScopes("instagram"));
     expect(new Date(creds.expires_at ?? "").getTime()).toBe(NOW.getTime() + 60 * 86_400_000);
@@ -108,12 +108,12 @@ describe("saveConnection", () => {
     const first = await saveConnection(admin, input());
 
     // Reconnect: new token, new follower count, publishing refused this time.
-    const scopes = ["instagram_business_basic", "instagram_business_manage_insights"];
+    const scopes = ["instagram_basic", "instagram_manage_insights", "pages_read_engagement"];
     const second = await saveConnection(
       admin,
       input({
         profile: { ...input().profile, handle: "codingjourney.new", followers: 1300 },
-        tokens: { ...input().tokens, accessToken: "IGAA-integration-token-2", scopes },
+        tokens: { ...input().tokens, accessToken: "EAAB-integration-token-2", scopes },
         status: connectionStatus({ platform: "instagram", grantedScopes: scopes }),
       }),
     );
@@ -129,7 +129,7 @@ describe("saveConnection", () => {
     });
     const creds = await credentials(first.accountId);
     expect(decryptToken(creds.access_token_enc, KEY, credentialContext(first.accountId))).toBe(
-      "IGAA-integration-token-2",
+      "EAAB-integration-token-2",
     );
     expect(creds.scopes).toEqual(scopes);
   });

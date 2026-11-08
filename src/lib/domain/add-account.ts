@@ -1,4 +1,4 @@
-import { REQUIRED_PERMISSIONS, type ConnectPlatform } from "./connect";
+import { REQUIRED_PERMISSIONS, hasPermission, type ConnectPlatform } from "./connect";
 import { formatSlotTime, parseSlotTime } from "./slot-time";
 
 /**
@@ -153,7 +153,7 @@ export function permissionChecks(
     return {
       key,
       label: PERMISSION_LABELS[key],
-      granted: p ? granted.has(p.scopes[platform]) : false,
+      granted: p ? hasPermission(p, platform, granted) : false,
     };
   });
 }

@@ -1,13 +1,14 @@
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { connectionStatus, requiredScopes } from "@/lib/domain/connect";
+import { connectionStatus } from "@/lib/domain/connect";
 import {
   FIXTURE_APP,
   FIXTURE_CODE,
-  FIXTURE_ME,
+  FIXTURE_IG_USER,
   FIXTURE_REDIRECT_URI,
   FIXTURE_TOKENS,
+  GRAPH,
   fixtures,
   instagramHandlers,
 } from "../../../tests/fixtures/instagram/handlers";
@@ -22,6 +23,7 @@ import {
 import {
   IG_DEFAULT_QUOTA,
   IG_GRAPH_VERSION,
+  appSecretProof,
   createInstagramProvider,
   graphError,
   mediaProblem,
@@ -46,7 +48,7 @@ const NOW = new Date("2026-11-06T10:00:00Z");
 const provider = createInstagramProvider({ config: FIXTURE_APP, now: () => NOW });
 const account: ProviderAccount = {
   accountId: "acc-1",
-  platformUserId: FIXTURE_ME.user_id,
+  platformUserId: FIXTURE_IG_USER.id,
   accessToken: FIXTURE_TOKENS.long,
 };
 
@@ -61,79 +63,150 @@ async function rejection(promise: Promise<unknown>): Promise<ProviderError> {
 }
 
 describe("instagram: authorizeUrl", () => {
-  it("asks Instagram Login for the three business scopes, with the state and redirect", () => {
+  it("opens Facebook Login for Business with the configuration, state and redirect", () => {
     const url = new URL(
       provider.authorizeUrl({ state: "state-123", redirectUri: FIXTURE_REDIRECT_URI }),
     );
-    expect(url.origin + url.pathname).toBe("https://www.instagram.com/oauth/authorize");
+    expect(url.origin + url.pathname).toBe(
+      `https://www.facebook.com/${IG_GRAPH_VERSION}/dialog/oauth`,
+    );
     expect(url.searchParams.get("client_id")).toBe(FIXTURE_APP.appId);
+    expect(url.searchParams.get("config_id")).toBe(FIXTURE_APP.loginConfigId);
     expect(url.searchParams.get("redirect_uri")).toBe(FIXTURE_REDIRECT_URI);
     expect(url.searchParams.get("response_type")).toBe("code");
     expect(url.searchParams.get("state")).toBe("state-123");
-    expect(url.searchParams.get("scope")?.split(",")).toEqual([
-      "instagram_business_content_publish",
-      "instagram_business_basic",
-      "instagram_business_manage_insights",
-    ]);
+    // The configuration sets the permissions; `scope` isn't used with config_id.
+    expect(url.searchParams.has("scope")).toBe(false);
     // The app secret never goes to the browser.
     expect(url.toString()).not.toContain(FIXTURE_APP.appSecret);
   });
 });
 
 describe("instagram: exchangeCode", () => {
-  it("swaps the code for a short-lived token, then a 60-day long-lived one", async () => {
-    const tokens = await provider.exchangeCode({
-      code: `${FIXTURE_CODE}#_`,
-      redirectUri: FIXTURE_REDIRECT_URI,
-    });
+  const exchange = () =>
+    provider.exchangeCode({ code: FIXTURE_CODE, redirectUri: FIXTURE_REDIRECT_URI });
+
+  it("swaps the code for a short-lived, then a 60-day user token, and finds the account", async () => {
+    const tokens = await exchange();
     expect(tokens.accessToken).toBe(FIXTURE_TOKENS.long);
-    expect(tokens.platformUserId).toBe(FIXTURE_ME.user_id);
-    expect(tokens.scopes).toEqual(requiredScopes("instagram").slice().sort());
+    expect(tokens.platformUserId).toBe(FIXTURE_IG_USER.id);
+    expect(tokens.accounts).toEqual([
+      { platformUserId: FIXTURE_IG_USER.id, scopes: fixtures.debugToken.data.scopes },
+    ]);
+    expect(connectionStatus({ platform: "instagram", grantedScopes: tokens.scopes })).toEqual({
+      status: "ready",
+      reason: null,
+    });
+    // debug_token's expires_at (60 days), which is before data access expires (90 days).
+    expect(tokens.expiresAt.getTime()).toBe(fixtures.debugToken.data.expires_at * 1000);
     expect(tokens.expiresAt.getTime() - NOW.getTime()).toBe(
       fixtures.longLivedToken.expires_in * 1000,
     );
   });
 
-  it("accepts the older flat response with a permissions array", async () => {
+  it("uses the earlier of the token's and the data access expiry", async () => {
     server.use(
-      http.post("https://api.instagram.com/oauth/access_token", () =>
-        // Raw text: user_id is a bare number above 2^53, as Instagram sends it.
+      http.get(`${GRAPH}/:version/debug_token`, () =>
+        HttpResponse.json({
+          data: {
+            ...fixtures.debugToken.data,
+            expires_at: 0,
+            data_access_expires_at: NOW.getTime() / 1000 + 86_400,
+          },
+        }),
+      ),
+    );
+    expect((await exchange()).expiresAt.getTime()).toBe(NOW.getTime() + 86_400_000);
+  });
+
+  it("finds accounts from the shared Pages when the grants name none", async () => {
+    server.use(
+      http.get(`${GRAPH}/:version/debug_token`, () =>
+        HttpResponse.json({ data: { ...fixtures.debugToken.data, granular_scopes: [] } }),
+      ),
+    );
+    const tokens = await exchange();
+    expect(tokens.accounts?.map((a) => a.platformUserId)).toEqual([FIXTURE_IG_USER.id]);
+  });
+
+  it("lists every shared account once, ids exact even as bare numbers", async () => {
+    server.use(
+      http.get(`${GRAPH}/:version/debug_token`, () =>
         HttpResponse.text(
-          `{"access_token":"${FIXTURE_TOKENS.short}","user_id":17841400000000001,"permissions":["instagram_business_basic"]}`,
+          JSON.stringify({ data: { ...fixtures.debugToken.data, granular_scopes: [] } }).replace(
+            '"granular_scopes":[]',
+            '"granular_scopes":[{"scope":"instagram_basic","target_ids":[17841400000000001,17841400000000002]},{"scope":"instagram_content_publish","target_ids":[17841400000000002]}]',
+          ),
           { headers: { "content-type": "application/json" } },
         ),
       ),
     );
-    const tokens = await provider.exchangeCode({
-      code: FIXTURE_CODE,
-      redirectUri: FIXTURE_REDIRECT_URI,
-    });
-    expect(tokens.platformUserId).toBe("17841400000000001");
-    expect(tokens.scopes).toEqual(["instagram_business_basic"]);
+    const tokens = await exchange();
+    expect(tokens.accounts?.map((a) => a.platformUserId)).toEqual([
+      "17841400000000001",
+      "17841400000000002",
+    ]);
+    // Publishing was granted for the second account only.
+    const first = tokens.accounts?.[0]?.scopes ?? [];
+    expect(first).not.toContain("instagram_content_publish");
+    expect(tokens.accounts?.[1]?.scopes).toContain("instagram_content_publish");
+  });
+
+  it("no Instagram account shared: an empty list, for the callback to explain", async () => {
+    server.use(
+      http.get(`${GRAPH}/:version/debug_token`, () =>
+        HttpResponse.json({ data: { ...fixtures.debugToken.data, granular_scopes: [] } }),
+      ),
+      http.get(`${GRAPH}/:version/me/accounts`, () => HttpResponse.json({ data: [] })),
+    );
+    const tokens = await exchange();
+    expect(tokens.accounts).toEqual([]);
+    expect(tokens.platformUserId).toBe("");
+  });
+
+  it("a missing Pages permission doesn't stop the grants from naming the account", async () => {
+    server.use(
+      http.get(`${GRAPH}/:version/me/accounts`, () =>
+        HttpResponse.json(
+          { error: { message: "(#200) Missing permission", type: "OAuthException", code: 200 } },
+          { status: 403 },
+        ),
+      ),
+    );
+    expect((await exchange()).platformUserId).toBe(FIXTURE_IG_USER.id);
   });
 
   it("keeps the granted permissions, so a refused one is noticed", async () => {
     server.use(
-      http.post("https://api.instagram.com/oauth/access_token", () =>
+      http.get(`${GRAPH}/:version/debug_token`, () =>
         HttpResponse.json({
-          data: [
-            {
-              access_token: FIXTURE_TOKENS.short,
-              user_id: FIXTURE_ME.user_id,
-              permissions: "instagram_business_basic,instagram_business_manage_insights",
-            },
-          ],
+          data: {
+            ...fixtures.debugToken.data,
+            scopes: ["instagram_basic", "instagram_manage_insights", "pages_show_list"],
+          },
         }),
       ),
     );
-    const tokens = await provider.exchangeCode({
-      code: FIXTURE_CODE,
-      redirectUri: FIXTURE_REDIRECT_URI,
-    });
+    const tokens = await exchange();
     expect(connectionStatus({ platform: "instagram", grantedScopes: tokens.scopes })).toEqual({
       status: "needs_attention",
       reason: "Publishing permission wasn't granted. Reconnect and allow publishing.",
     });
+  });
+
+  it("refuses a token Meta says isn't valid, or one for another app", async () => {
+    server.use(
+      http.get(`${GRAPH}/:version/debug_token`, () =>
+        HttpResponse.json({ data: { ...fixtures.debugToken.data, is_valid: false } }),
+      ),
+    );
+    expect((await rejection(exchange())).code).toBe("unknown");
+    server.use(
+      http.get(`${GRAPH}/:version/debug_token`, () =>
+        HttpResponse.json({ data: { ...fixtures.debugToken.data, app_id: "999" } }),
+      ),
+    );
+    expect((await rejection(exchange())).code).toBe("unknown");
   });
 
   it("fails with a clear message for a bad code, without leaking the secret", async () => {
@@ -147,80 +220,70 @@ describe("instagram: exchangeCode", () => {
   });
 
   it("reports a network failure as retryable", async () => {
-    server.use(
-      http.post("https://api.instagram.com/oauth/access_token", () => HttpResponse.error()),
-    );
-    const err = await rejection(
-      provider.exchangeCode({ code: FIXTURE_CODE, redirectUri: FIXTURE_REDIRECT_URI }),
-    );
+    server.use(http.get(`${GRAPH}/:version/oauth/access_token`, () => HttpResponse.error()));
+    const err = await rejection(exchange());
     expect(err.code).toBe("network");
     expect(err.retryable).toBe(true);
-  });
-
-  it("assumes the requested scopes when the response has no permissions field", async () => {
-    server.use(
-      http.post("https://api.instagram.com/oauth/access_token", () =>
-        HttpResponse.json({ data: [{ access_token: FIXTURE_TOKENS.short, user_id: "1" }] }),
-      ),
-    );
-    const tokens = await provider.exchangeCode({
-      code: FIXTURE_CODE,
-      redirectUri: FIXTURE_REDIRECT_URI,
-    });
-    expect(tokens.scopes).toEqual(requiredScopes("instagram"));
   });
 });
 
 describe("instagram: refreshToken", () => {
-  it("returns the refreshed token with a new expiry", async () => {
-    const tokens = await provider.refreshToken(account);
-    expect(tokens.accessToken).toBe(FIXTURE_TOKENS.refreshed);
-    expect(tokens.platformUserId).toBe(FIXTURE_ME.user_id);
-    expect(tokens.expiresAt.getTime()).toBeGreaterThan(NOW.getTime());
-  });
-
-  it("maps an expired token (code 190) to token_expired", async () => {
-    const err = await rejection(provider.refreshToken({ ...account, accessToken: "old" }));
-    expect(err.code).toBe("token_expired");
+  it("says the token can't be renewed (Facebook Login user tokens), without calling Meta", async () => {
+    const err = await rejection(provider.refreshToken(account));
+    expect(err.code).toBe("not_renewable");
+    expect(err.retryable).toBe(false);
     expect(err.userMessage).toMatch(/Reconnect/);
   });
 });
 
 describe("instagram: getProfile", () => {
-  it("reads id, username, account type, followers and picture", async () => {
+  it("reads the Instagram account's id, username, followers and picture", async () => {
     expect(await provider.getProfile(account)).toEqual({
-      platformUserId: FIXTURE_ME.user_id,
+      platformUserId: FIXTURE_IG_USER.id,
       handle: "codingjourney",
       profileUrl: "https://www.instagram.com/codingjourney/",
       followers: 1240,
-      accountType: "MEDIA_CREATOR",
-      pictureUrl: FIXTURE_ME.profile_picture_url,
+      accountType: null,
+      pictureUrl: FIXTURE_IG_USER.profile_picture_url,
     });
     expect(await provider.getFollowerCount(account)).toBe(1240);
   });
 
-  it("asks for the profile fields on the versioned /me endpoint", async () => {
+  it("asks GET /{ig-user-id} for the profile fields, with appsecret_proof", async () => {
     let seen: URL | null = null;
     server.use(
-      http.get(`https://graph.instagram.com/${IG_GRAPH_VERSION}/me`, ({ request }) => {
+      http.get(`${GRAPH}/${IG_GRAPH_VERSION}/${FIXTURE_IG_USER.id}`, ({ request }) => {
         seen = new URL(request.url);
-        return HttpResponse.json(FIXTURE_ME);
+        return HttpResponse.json(FIXTURE_IG_USER);
       }),
     );
     await provider.getProfile(account);
     const url = seen as URL | null;
     expect(url?.searchParams.get("fields")?.split(",").sort()).toEqual([
-      "account_type",
       "followers_count",
+      "id",
       "profile_picture_url",
-      "user_id",
       "username",
     ]);
+    expect(url?.searchParams.get("appsecret_proof")).toBe(
+      appSecretProof(FIXTURE_TOKENS.long, FIXTURE_APP.appSecret),
+    );
+  });
+
+  it("needs the account's Instagram user id", async () => {
+    const err = await rejection(provider.getProfile({ ...account, platformUserId: null }));
+    expect(err.code).toBe("token_expired");
+  });
+
+  it("maps an expired token (code 190) to token_expired", async () => {
+    const err = await rejection(provider.getProfile({ ...account, accessToken: "old" }));
+    expect(err.code).toBe("token_expired");
+    expect(err.userMessage).toMatch(/Reconnect/);
   });
 
   it("maps rate limiting (code 4) to a retryable error", async () => {
     server.use(
-      http.get("https://graph.instagram.com/:version/me", () =>
+      http.get(`${GRAPH}/:version/:id`, () =>
         HttpResponse.json(fixtures.errorRateLimited, { status: 400 }),
       ),
     );
@@ -230,11 +293,7 @@ describe("instagram: getProfile", () => {
   });
 
   it("maps a 5xx to a retryable network error", async () => {
-    server.use(
-      http.get("https://graph.instagram.com/:version/me", () =>
-        HttpResponse.json({}, { status: 503 }),
-      ),
-    );
+    server.use(http.get(`${GRAPH}/:version/:id`, () => HttpResponse.json({}, { status: 503 })));
     const err = await rejection(provider.getProfile(account));
     expect(err.code).toBe("network");
     expect(err.retryable).toBe(true);
@@ -242,12 +301,12 @@ describe("instagram: getProfile", () => {
 });
 
 describe("instagram: publishing", () => {
-  const PUBLISH = "https://graph.instagram.com/:version/:user/content_publishing_limit";
+  const PUBLISH = "https://graph.facebook.com/:version/:user/content_publishing_limit";
 
   it("reads the publishing quota (usage, total, window)", async () => {
     server.use(
       http.get(PUBLISH, ({ params }) => {
-        expect(params.user).toBe(FIXTURE_ME.user_id);
+        expect(params.user).toBe(FIXTURE_IG_USER.id);
         return HttpResponse.json(publishFixtures.contentPublishingLimit);
       }),
     );
@@ -280,7 +339,7 @@ describe("instagram: publishing", () => {
       c: publishFixtures.containerPublished,
     };
     server.use(
-      http.get("https://graph.instagram.com/:version/:id", ({ params }) =>
+      http.get("https://graph.facebook.com/:version/:id", ({ params }) =>
         HttpResponse.json(bodies[String(params.id)] ?? publishFixtures.containerExpired),
       ),
     );
@@ -388,15 +447,21 @@ describe("parseGraphJson", () => {
       ),
     ).toEqual({ user_id: "17841405822304914", id: "9007199254740993", expires_in: 5183944 });
   });
+
+  it("keeps debug_token's numeric target ids exact", () => {
+    expect(
+      parseGraphJson('{"granular_scopes":[{"scope":"x","target_ids":[17841400000000001, "2"]}]}'),
+    ).toEqual({ granular_scopes: [{ scope: "x", target_ids: ["17841400000000001", "2"] }] });
+  });
 });
 
 describe("instagramConfigFromEnv", () => {
-  it("needs both the app id and secret", () => {
+  it("needs the app id, the secret and the login configuration id", () => {
     expect(instagramConfigFromEnv({})).toBeNull();
     expect(instagramConfigFromEnv({ IG_APP_ID: "1" })).toBeNull();
-    expect(instagramConfigFromEnv({ IG_APP_ID: "1", IG_APP_SECRET: "s" })).toEqual({
-      appId: "1",
-      appSecret: "s",
-    });
+    expect(instagramConfigFromEnv({ IG_APP_ID: "1", IG_APP_SECRET: "s" })).toBeNull();
+    expect(
+      instagramConfigFromEnv({ IG_APP_ID: "1", IG_APP_SECRET: "s", IG_LOGIN_CONFIG_ID: " 42 " }),
+    ).toEqual({ appId: "1", appSecret: "s", loginConfigId: "42" });
   });
 });

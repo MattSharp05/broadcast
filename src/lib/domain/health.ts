@@ -2,9 +2,12 @@
  * Connection health (BC-19; PRD → User flow 5). Pure: the scheduler's refreshTokens step and the
  * connect callback make the calls and writes.
  *
- * - Tokens: Instagram long-lived tokens last 60 days. One is refreshed when it was last refreshed
+ * - Tokens: long-lived tokens last about 60 days. One is refreshed when it was last refreshed
  *   at least 24 h ago and expires within 7 days (docs/TDD.md → Tokens). A token that has already
  *   expired can't be refreshed: its account needs reconnecting.
+ * - Instagram through Facebook Login (ADR 0006): Facebook doesn't renew a long-lived user token for
+ *   a server. The account waits until RECONNECT_NOTICE_MS before expiry, then goes Needs
+ *   attention with the date, so a Reconnect gives it a new 60-day token before posting stops.
  * - A refresh that fails because access is gone (expired, revoked, permission removed) or that
  *   retrying can't fix flags the account Needs attention. One that may pass (network, Instagram
  *   having a problem, rate limits) tries again an hour later.
@@ -24,6 +27,8 @@ export const REFRESH_MIN_AGE_MS = DAY_MS;
 export const REFRESH_WINDOW_MS = 7 * DAY_MS;
 /** A refresh that failed in a way that may pass tries again after this. */
 export const REFRESH_RETRY_MS = HOUR_MS;
+/** A token that can't be renewed asks for a reconnect this long before it expires. */
+export const RECONNECT_NOTICE_MS = 3 * DAY_MS;
 /** How often a ready Instagram account's token is checked (each tick, at most). */
 export const CONNECTION_CHECK_MS = 55_000;
 
@@ -58,6 +63,28 @@ export function refreshPlan(token: TokenTimes, now: Date): RefreshPlan {
 export function refreshFailure(err: { code: string; retryable: boolean }): "flag" | "retry" {
   if (err.code === "token_expired") return "flag";
   return err.retryable ? "retry" : "flag";
+}
+
+/**
+ * What to do with a token the platform won't renew (refreshToken said `unsupported`), at `now`
+ * (the workspace clock): wait until the notice period, or flag the account now.
+ */
+export function unrenewablePlan(
+  expiresAt: Date,
+  now: Date,
+): { action: "wait"; askAt: Date } | { action: "flag" } {
+  const askAt = expiresAt.getTime() - RECONNECT_NOTICE_MS;
+  return askAt > now.getTime() ? { action: "wait", askAt: new Date(askAt) } : { action: "flag" };
+}
+
+/** The Needs attention reason when a token that can't be renewed is about to expire. */
+export function reconnectSoonReason(expiresAt: Date, timezone: string): string {
+  return `Instagram access ends on ${day(expiresAt, timezone)} and Facebook doesn't let Broadcast renew it. Reconnect to keep posting.`;
+}
+
+/** The job log line while such a token waits for its notice period. */
+export function reconnectLaterLine(handle: string, askAt: Date, timezone: string): string {
+  return `Facebook doesn't let Broadcast renew access for @${handle}. On ${day(askAt, timezone)} the account will ask to be reconnected.`;
 }
 
 /** True when the account's connection is due a check (never checked, or not for a while). */

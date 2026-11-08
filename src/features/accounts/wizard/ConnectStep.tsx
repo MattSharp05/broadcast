@@ -84,8 +84,9 @@ export function ConnectStep({
           </p>
         ) : (
           <p className={styles.lead}>
-            Instagram opens in a pop-up. Log in as <b>@{typed ?? "your new account"}</b> and allow
-            Broadcast to publish and read insights. You&rsquo;ll come straight back here.
+            Facebook opens in a pop-up. Log in, choose <b>@{typed ?? "your new account"}</b> and its
+            Facebook Page, and allow Broadcast to publish and read insights. You&rsquo;ll come
+            straight back here.
           </p>
         )}
         {error}

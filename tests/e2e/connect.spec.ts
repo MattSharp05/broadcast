@@ -125,7 +125,9 @@ test("Live without an Instagram app: a clear message, nothing connected", async 
   await context.addCookies([{ name: "bc-workspace", value: "live", url: baseURL ?? "" }]);
   await page.goto(`/api/connect/instagram/start?brand=${EMPTY_BRAND}`);
   await expect(done(page).getByRole("heading")).toHaveText("Couldn’t connect the account");
-  await expect(done(page)).toContainText("IG_APP_ID and IG_APP_SECRET are missing");
+  await expect(done(page)).toContainText(
+    "IG_APP_ID, IG_APP_SECRET or IG_LOGIN_CONFIG_ID is missing",
+  );
 });
 
 test("another website can't start a connect", async ({ page, loadScenario }) => {

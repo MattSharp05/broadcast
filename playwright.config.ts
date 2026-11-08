@@ -55,6 +55,7 @@ export default defineConfig({
       // No Instagram app in e2e: Live connects fail with "not set up"; the Sandbox uses the fake.
       IG_APP_ID: "",
       IG_APP_SECRET: "",
+      IG_LOGIN_CONFIG_ID: "",
       NEXT_TELEMETRY_DISABLED: "1",
     },
   },

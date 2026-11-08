@@ -248,6 +248,10 @@ export async function saveConnection(
       expires_at: input.tokens.expiresAt.toISOString(),
       scopes: [...input.tokens.scopes],
       last_refreshed_at: input.now.toISOString(),
+      // A new token starts the refresh schedule afresh (no wait or lease left from the old one).
+      refresh_retry_at: null,
+      refresh_claimed_until: null,
+      refresh_claim_token: null,
     },
     { onConflict: "account_id" },
   );

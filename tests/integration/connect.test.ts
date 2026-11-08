@@ -106,6 +106,12 @@ describe("saveConnection", () => {
 
   it("reconnecting the same Instagram user updates the existing account", async () => {
     const first = await saveConnection(admin, input());
+    // A wait left by the refresh step (a token Facebook won't renew) is cleared by the new token.
+    const wait = await admin
+      .from("oauth_credentials")
+      .update({ refresh_retry_at: new Date(NOW.getTime() + 2 * 86_400_000).toISOString() })
+      .eq("account_id", first.accountId);
+    if (wait.error) throw wait.error;
 
     // Reconnect: new token, new follower count, publishing refused this time.
     const scopes = ["instagram_basic", "instagram_manage_insights", "pages_read_engagement"];
@@ -132,6 +138,7 @@ describe("saveConnection", () => {
       "EAAB-integration-token-2",
     );
     expect(creds.scopes).toEqual(scopes);
+    expect(creds.refresh_retry_at).toBeNull();
   });
 
   it("a fake (Sandbox) connection also gets the fake provider's settings row", async () => {

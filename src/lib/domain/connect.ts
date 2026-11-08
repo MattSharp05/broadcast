@@ -55,7 +55,7 @@ export function hasPermission(
   return permission.scopes[platform].every((s) => granted.has(s));
 }
 
-/** Instagram Login works only for professional accounts. */
+/** Only professional accounts can publish through the API (Facebook Login only returns those). */
 const PROFESSIONAL_ACCOUNT_TYPES = new Set(["BUSINESS", "MEDIA_CREATOR", "CREATOR"]);
 
 export const PERSONAL_ACCOUNT_MESSAGE =
@@ -133,6 +133,11 @@ export function chooseAccount(input: {
   reconnecting: string | null;
   /** Platform user ids already connected in the workspace. */
   connected: ReadonlySet<string>;
+  /**
+   * Reconnecting an account whose platform user id isn't known: the chosen one must not belong to
+   * another account already (that one would be overwritten instead).
+   */
+  mustBeNew?: boolean;
 }): { platformUserId: string } | { error: "no_instagram" | "wrong_account" | "several_accounts" } {
   const shared = [...new Set(input.shared.filter(Boolean))];
   if (shared.length === 0) return { error: "no_instagram" };
@@ -141,7 +146,12 @@ export function chooseAccount(input: {
       ? { platformUserId: input.reconnecting }
       : { error: "wrong_account" };
   }
-  if (shared.length === 1) return { platformUserId: shared[0] ?? "" };
   const fresh = shared.filter((id) => !input.connected.has(id));
+  if (input.mustBeNew) {
+    return fresh.length === 1
+      ? { platformUserId: fresh[0] ?? "" }
+      : { error: fresh.length === 0 ? "wrong_account" : "several_accounts" };
+  }
+  if (shared.length === 1) return { platformUserId: shared[0] ?? "" };
   return fresh.length === 1 ? { platformUserId: fresh[0] ?? "" } : { error: "several_accounts" };
 }

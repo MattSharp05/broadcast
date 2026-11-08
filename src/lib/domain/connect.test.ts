@@ -112,6 +112,25 @@ describe("chooseAccount", () => {
     });
   });
 
+  it("a reconnect of an account without a known id only takes an account not yet connected", () => {
+    expect(
+      chooseAccount({
+        shared: ["ig1"],
+        reconnecting: null,
+        connected: new Set(["ig1"]),
+        mustBeNew: true,
+      }),
+    ).toEqual({ error: "wrong_account" });
+    expect(
+      chooseAccount({
+        shared: ["ig1", "ig2"],
+        reconnecting: null,
+        connected: new Set(["ig1"]),
+        mustBeNew: true,
+      }),
+    ).toEqual({ platformUserId: "ig2" });
+  });
+
   it("several shared: the only new one, else ambiguous", () => {
     expect(
       chooseAccount({ shared: ["ig1", "ig2"], reconnecting: null, connected: new Set(["ig1"]) }),

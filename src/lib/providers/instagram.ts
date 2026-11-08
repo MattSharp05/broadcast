@@ -23,7 +23,7 @@ import {
  * long-lived (60-day) user token, then `debug_token` for the granted permissions, the expiry and
  * the Instagram accounts the person shared, plus `/me/accounts` (Pages → instagram_business_account)
  * as a second source. Facebook doesn't renew long-lived user tokens for a server, so
- * `refreshToken` says `unsupported` and the scheduler asks for a reconnect before expiry.
+ * `refreshToken` says `not_renewable` and the scheduler asks for a reconnect before expiry.
  * Publishing (BC-16) and stats (BC-21) use the same endpoints as before, on graph.facebook.com.
  *
  * Tokens travel only between this server and Meta. Error messages never include a URL or a token
@@ -325,13 +325,16 @@ export function parseGraphJson(text: string): unknown {
 interface DebugToken {
   scopes: string[];
   granular: { scope: string; targets: string[] | null }[];
-  expiresAt: number | null;
+  /** Epoch ms; "never" when Meta says 0; null when it doesn't say. */
+  expiresAt: number | "never" | null;
   dataAccessExpiresAt: number | null;
 }
 
 /** Reads debug_token's `data` (unix seconds; 0 means "never"). */
 export function parseDebugToken(data: Record<string, unknown>): DebugToken {
   const seconds = (v: unknown) => (typeof v === "number" && v > 0 ? v * 1000 : null);
+  const expiresAt: DebugToken["expiresAt"] =
+    data.expires_at === 0 ? "never" : seconds(data.expires_at);
   const granularRaw = Array.isArray(data.granular_scopes) ? data.granular_scopes : [];
   return {
     scopes: parseScopes(data.scopes),
@@ -344,20 +347,29 @@ export function parseDebugToken(data: Record<string, unknown>): DebugToken {
           : null,
       }))
       .filter((g) => g.scope),
-    expiresAt: seconds(data.expires_at),
+    expiresAt,
     dataAccessExpiresAt: seconds(data.data_access_expires_at),
   };
 }
 
 /**
- * The permissions granted for one Instagram account: an Instagram permission limited to other
- * accounts (granular targets) doesn't count for this one. Pages and other permissions are kept.
+ * The permissions granted for one Instagram account. A permission limited to some targets
+ * (granular scopes) counts only when it covers this account: Instagram permissions by account id,
+ * Pages permissions by the Page the account is linked to (`pageOf`, from /me/accounts; when the
+ * Page isn't known the Pages permission is kept, and a refusal shows at publish time).
  */
-export function scopesForAccount(debug: DebugToken, igUserId: string): string[] {
+export function scopesForAccount(
+  debug: DebugToken,
+  igUserId: string,
+  pageOf: ReadonlyMap<string, string> = new Map(),
+): string[] {
+  const page = pageOf.get(igUserId);
   return debug.scopes.filter((scope) => {
-    if (!scope.startsWith("instagram_")) return true;
     const g = debug.granular.find((x) => x.scope === scope);
-    return !g?.targets || g.targets.length === 0 || g.targets.includes(igUserId);
+    if (!g?.targets || g.targets.length === 0) return true;
+    if (scope.startsWith("instagram_")) return g.targets.includes(igUserId);
+    if (scope.startsWith("pages_") && page) return g.targets.includes(page);
+    return true;
   });
 }
 
@@ -503,8 +515,11 @@ export function createInstagramProvider(deps: InstagramProviderDeps): SocialProv
     return { token, expiresIn: res.expires_in };
   }
 
-  /** The Instagram accounts linked to the Pages the person shared (needs pages_show_list). */
-  async function pageAccounts(accessToken: string): Promise<string[]> {
+  /**
+   * The Instagram accounts linked to the Pages the person shared (needs pages_show_list), as
+   * Instagram account id → Page id.
+   */
+  async function pageAccounts(accessToken: string): Promise<Map<string, string>> {
     let res: Record<string, unknown>;
     try {
       res = await call(
@@ -522,15 +537,17 @@ export function createInstagramProvider(deps: InstagramProviderDeps): SocialProv
         (err.code === "network" || err.code === "quota_exhausted")
       )
         throw err;
-      return [];
+      return new Map();
     }
     const pages = Array.isArray(res.data) ? (res.data as Record<string, unknown>[]) : [];
-    return pages
-      .map((p) => {
-        const ig = p.instagram_business_account;
-        return ig && typeof ig === "object" ? asString((ig as { id?: unknown }).id) : null;
-      })
-      .filter((id): id is string => id !== null);
+    const linked = new Map<string, string>();
+    for (const p of pages) {
+      const ig = p.instagram_business_account;
+      const igId = ig && typeof ig === "object" ? asString((ig as { id?: unknown }).id) : null;
+      const pageId = asString(p.id);
+      if (igId && pageId && !linked.has(igId)) linked.set(igId, pageId);
+    }
+    return linked;
   }
 
   async function containerStatus(
@@ -686,12 +703,15 @@ export function createInstagramProvider(deps: InstagramProviderDeps): SocialProv
       const accessToken = long.token;
 
       // What the token can do and for which accounts. The app token (id|secret) stays on the server.
-      const debugRes = await call(
-        graphUrl(`/${IG_GRAPH_VERSION}/debug_token`, {
-          input_token: accessToken,
-          access_token: `${appId}|${appSecret}`,
-        }),
-      );
+      const [debugRes, pageOf] = await Promise.all([
+        call(
+          graphUrl(`/${IG_GRAPH_VERSION}/debug_token`, {
+            input_token: accessToken,
+            access_token: `${appId}|${appSecret}`,
+          }),
+        ),
+        pageAccounts(accessToken),
+      ]);
       const data = (debugRes.data ?? {}) as Record<string, unknown>;
       if (data.is_valid === false) throw errors.rejected("debug_token says the token isn't valid.");
       if (asString(data.app_id) && asString(data.app_id) !== appId) {
@@ -700,17 +720,18 @@ export function createInstagramProvider(deps: InstagramProviderDeps): SocialProv
       const debug = parseDebugToken(data);
 
       const fromGrants = debug.granular.find((g) => g.scope === ACCOUNT_SCOPE)?.targets ?? [];
-      const ids = [...new Set([...fromGrants, ...(await pageAccounts(accessToken))])];
+      const ids = [...new Set([...fromGrants, ...pageOf.keys()])];
       const accounts: SharedAccount[] = ids.map((platformUserId) => ({
         platformUserId,
-        scopes: scopesForAccount(debug, platformUserId),
+        scopes: scopesForAccount(debug, platformUserId, pageOf),
       }));
 
-      const ends = [
-        debug.expiresAt,
-        debug.dataAccessExpiresAt,
-        expiry(long.expiresIn).getTime(),
-      ].filter((t): t is number => t !== null);
+      // The earliest end: the token's (debug_token, else expires_in, else 60 days; none when Meta
+      // says it never expires) and the app's data access.
+      const tokenEnd =
+        debug.expiresAt === "never" ? null : (debug.expiresAt ?? expiry(long.expiresIn).getTime());
+      const ends = [tokenEnd, debug.dataAccessExpiresAt].filter((t): t is number => t !== null);
+      if (ends.length === 0) ends.push(expiry(undefined).getTime());
       return {
         accessToken,
         expiresAt: new Date(Math.min(...ends)),

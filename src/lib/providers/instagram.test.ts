@@ -119,6 +119,37 @@ describe("instagram: exchangeCode", () => {
     expect((await exchange()).expiresAt.getTime()).toBe(NOW.getTime() + 86_400_000);
   });
 
+  it("a token Meta says never expires ends when data access does", async () => {
+    server.use(
+      http.get(`${GRAPH}/:version/debug_token`, () =>
+        HttpResponse.json({ data: { ...fixtures.debugToken.data, expires_at: 0 } }),
+      ),
+    );
+    expect((await exchange()).expiresAt.getTime()).toBe(
+      fixtures.debugToken.data.data_access_expires_at * 1000,
+    );
+  });
+
+  it("a Pages permission granted on another Page doesn't count for this account", async () => {
+    server.use(
+      http.get(`${GRAPH}/:version/debug_token`, () =>
+        HttpResponse.json({
+          data: {
+            ...fixtures.debugToken.data,
+            granular_scopes: fixtures.debugToken.data.granular_scopes.map((g) =>
+              g.scope === "pages_read_engagement" ? { ...g, target_ids: ["555"] } : g,
+            ),
+          },
+        }),
+      ),
+    );
+    const tokens = await exchange();
+    expect(tokens.scopes).not.toContain("pages_read_engagement");
+    expect(
+      connectionStatus({ platform: "instagram", grantedScopes: tokens.scopes }).reason,
+    ).toMatch(/^Publishing permission/);
+  });
+
   it("finds accounts from the shared Pages when the grants name none", async () => {
     server.use(
       http.get(`${GRAPH}/:version/debug_token`, () =>
@@ -168,7 +199,7 @@ describe("instagram: exchangeCode", () => {
     server.use(
       http.get(`${GRAPH}/:version/me/accounts`, () =>
         HttpResponse.json(
-          { error: { message: "(#200) Missing permission", type: "OAuthException", code: 200 } },
+          { error: { message: "Missing permission (200)", type: "OAuthException", code: 200 } },
           { status: 403 },
         ),
       ),

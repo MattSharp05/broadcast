@@ -89,13 +89,15 @@ export async function GET(request: NextRequest) {
       if (tokens.accounts) {
         // One Facebook login can share several Instagram accounts: pick the one this is for.
         const shared = tokens.accounts.map((a) => a.platformUserId);
+        const mustBeNew = target !== null && !target.platformUserId;
         const choice = chooseAccount({
           shared,
           reconnecting: target?.platformUserId ?? null,
           connected:
-            shared.length > 1 && !target
+            mustBeNew || (shared.length > 1 && !target)
               ? await connectedUserIds(admin, attempt.workspaceId, attempt.platform)
               : new Set(),
+          mustBeNew,
         });
         if ("error" in choice) return toDonePage(request, { error: choice.error });
         const chosen = tokens.accounts.find((a) => a.platformUserId === choice.platformUserId);

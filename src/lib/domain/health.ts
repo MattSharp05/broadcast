@@ -7,7 +7,8 @@
  *   expired can't be refreshed: its account needs reconnecting.
  * - Instagram through Facebook Login (ADR 0006): Facebook doesn't renew a long-lived user token for
  *   a server. The account waits until RECONNECT_NOTICE_MS before expiry, then goes Needs
- *   attention with the date, so a Reconnect gives it a new 60-day token before posting stops.
+ *   attention with the date (its queued posts pause, as for any Needs attention, until a Reconnect
+ *   gives it a new 60-day token and puts them back in the queue).
  * - A refresh that fails because access is gone (expired, revoked, permission removed) or that
  *   retrying can't fix flags the account Needs attention. One that may pass (network, Instagram
  *   having a problem, rate limits) tries again an hour later.

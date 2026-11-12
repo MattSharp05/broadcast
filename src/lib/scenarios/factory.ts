@@ -534,6 +534,7 @@ function heroSeed(name: string, now: Date, state: "waiting" | "compare" | "histo
       "The Sphere is on screen for 4 s in a slow push-in; the three.js version reads as a plain ball.",
     why_generate: "A generated model keeps the LED panel seams and the venue base.",
     on_screen: "4 s, close-up",
+    score: "focal=1 secs=4 frame=close real=1 detail=1 deforms=0",
     input: { mode: "image", prompt: "The Las Vegas Sphere at dusk", image: still(3) },
     suggested_model: "tripo-v2.5",
     estimate_usd: 0.3,

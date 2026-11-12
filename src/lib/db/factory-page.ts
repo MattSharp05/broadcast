@@ -232,6 +232,7 @@ export interface HeroView {
   reason: string;
   whyGenerate: string;
   onScreen: string;
+  score: string;
   input: { mode: string; prompt: string | null; image: string | null };
   suggestedModel: string | null;
   estimateUsd: number;
@@ -585,6 +586,7 @@ async function loadHeroes(
         reason: p.reason,
         whyGenerate: p.why_generate,
         onScreen: p.on_screen,
+        score: p.score,
         input: {
           mode: input.mode ?? "image",
           prompt: input.prompt ?? null,

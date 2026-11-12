@@ -233,6 +233,7 @@ test("hero 3D asset: Matthew picks a model (paid, priced) with a reason, then co
   await page.getByRole("link", { name: "How the Las Vegas Sphere works" }).click();
   const card = page.locator('[data-hero="vegas-sphere-1"]');
   await expect(card).toContainText("Waiting for you");
+  await expect(card.getByTestId("hero-score")).toContainText("focal=1 secs=4 frame=close");
   await expect(card.getByRole("group", { name: "three.js version" }).locator("img")).toHaveCount(2);
   const generate = card.getByRole("button", {
     name: /^Generate with Tripo v2.5 \(fal\), paid \$0\.30/,

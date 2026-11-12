@@ -60,7 +60,7 @@ Playwright · MSW. Details and reasons: `docs/TDD.md`, ADRs in `docs/decisions/`
   video through the content API (`BROADCAST_URL` + `BROADCAST_API_KEY` from `/dev/api-keys`);
   see `docs/content-api.md`.
 - Content Factory sessions: `docs/factory-api.md` (factory API + `/api/gen/*` proxy, factory tokens);
-  the face model registry is mirrored from video-editor with `node scripts/sync-face-models.mjs`.
+  the face and 3D model registries are mirrored from video-editor with `node scripts/sync-face-models.mjs` and `node scripts/sync-mesh-models.mjs` (video-editor is the source of truth; sync after any price or status change there).
 - Scenarios: `/workflow?scenario=<name>[&now=ISO]` (signed in) resets the Sandbox and loads one;
   `/dev` lists them. Register new ones in `src/lib/scenarios/index.ts`.
 

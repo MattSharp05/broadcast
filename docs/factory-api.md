@@ -121,7 +121,7 @@ GET  {BROADCAST_URL}/api/gen/models  -> {"default","fallback","models":[enabled 
 ## Hero 3D assets (BC-30)
 For a film's focal object (a landmark, a product), a session can propose an AI-generated 3D model
 instead of the three.js one. Contract agreed with video-editor's `hero-assets` skill
-(`references/broadcast-contract.md`); registry mirrored in `src/lib/factory/mesh-models.json`.
+(`references/broadcast-contract.md`); registry mirrored in `src/lib/factory/mesh-models.json` with `node scripts/sync-mesh-models.mjs` (video-editor is the source of truth).
 
 ```
 POST /api/factory/hero-proposals

@@ -41,6 +41,8 @@ export interface FactorySeed {
   steps: Insert<"production_steps">[];
   reworks: Insert<"production_reworks">[];
   genJobs: (Insert<"gen_jobs"> & { created_at?: string })[];
+  heroProposals: Insert<"hero_proposals">[];
+  heroDecisions: Insert<"hero_decisions">[];
 }
 
 export function emptyFactory(): FactorySeed {
@@ -52,6 +54,8 @@ export function emptyFactory(): FactorySeed {
     steps: [],
     reworks: [],
     genJobs: [],
+    heroProposals: [],
+    heroDecisions: [],
   };
 }
 

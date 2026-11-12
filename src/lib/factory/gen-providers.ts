@@ -190,3 +190,56 @@ export type KeyProvider = (typeof KEY_PROVIDERS)[number]["key"];
 export function isKeyProvider(v: unknown): v is KeyProvider {
   return typeof v === "string" && KEY_PROVIDERS.some((p) => p.key === v);
 }
+
+/**
+ * fal's queue for any endpoint (mesh jobs): submit the registry-built input, poll, read the
+ * result. Failures come back as COMPLETED with an `error` field, or an error status on the result.
+ */
+export const falQueue = {
+  async submit(endpoint: string, input: Record<string, unknown>, key: string): Promise<Submitted> {
+    const res = await fetch(`${FAL_QUEUE}/${endpoint}`, {
+      method: "POST",
+      headers: { Authorization: `Key ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    const data = await json(res);
+    if (!res.ok || typeof data.request_id !== "string") {
+      throw new GenProviderError(
+        `fal refused the job (${res.status}): ${JSON.stringify(data).slice(0, 300)}`,
+      );
+    }
+    return {
+      requestId: data.request_id,
+      statusUrl: typeof data.status_url === "string" ? data.status_url : null,
+      responseUrl: typeof data.response_url === "string" ? data.response_url : null,
+    };
+  },
+
+  async poll(
+    job: Submitted,
+    output: string,
+    key: string,
+  ): Promise<
+    | { status: "queued" | "running" }
+    | { status: "completed"; outputUrl: string; result: Record<string, unknown> }
+    | { status: "failed"; error: string }
+  > {
+    if (!job.statusUrl || !job.responseUrl)
+      return { status: "failed", error: "No status URL from fal." };
+    const headers = { Authorization: `Key ${key}` };
+    const res = await fetch(job.statusUrl, { headers });
+    const data = await json(res);
+    if (data.status === "IN_QUEUE") return { status: "queued" };
+    if (data.status === "IN_PROGRESS") return { status: "running" };
+    if (data.status !== "COMPLETED") return { status: "failed", error: `fal status ${res.status}` };
+    if (typeof data.error === "string" && data.error)
+      return { status: "failed", error: `fal: ${data.error}` };
+    const out = await fetch(job.responseUrl, { headers });
+    const result = await json(out);
+    const url = dig(result, output);
+    if (!out.ok || typeof url !== "string") {
+      return { status: "failed", error: `fal finished without ${output} (${out.status}).` };
+    }
+    return { status: "completed", outputUrl: url, result };
+  },
+};

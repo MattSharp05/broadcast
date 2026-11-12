@@ -7,6 +7,7 @@ import {
   saveCaps,
   saveDefaultModes,
   saveKey,
+  saveMeshModels,
   saveModels,
   testKey,
 } from "@/app/(app)/factory/settings/actions";
@@ -63,6 +64,10 @@ export function SettingsView(props: {
   modes: StepModes;
   monthUsd: number;
   routineReady: boolean;
+  meshModels: ModelRow[];
+  meshEnabled: string[];
+  meshDefault: string;
+  meshFallback: string | null;
 }) {
   const { pending, run, toastEl } = useFactoryAction();
   const ok = (m: string) => m;
@@ -107,6 +112,17 @@ export function SettingsView(props: {
           </section>
 
           <ModelsSection {...props} pending={pending} run={run} ok={ok} />
+
+          <ModelsSection
+            kind="mesh"
+            models={props.meshModels}
+            enabled={props.meshEnabled}
+            defaultModel={props.meshDefault}
+            fallbackModel={props.meshFallback}
+            pending={pending}
+            run={run}
+            ok={ok}
+          />
 
           <CapsSection caps={props.caps} pending={pending} run={run} ok={ok} />
 
@@ -236,22 +252,28 @@ function ModelsSection(props: {
   pending: boolean;
   run: Run;
   ok: (m: string) => string;
+  kind?: "face" | "mesh";
 }) {
+  const mesh = props.kind === "mesh";
   const [enabled, setEnabled] = useState(new Set(props.enabled));
   const [def, setDef] = useState(props.defaultModel);
   const [fb, setFb] = useState(props.fallbackModel ?? "");
   const on = props.models.filter((m) => enabled.has(m.key) || m.free);
   return (
-    <section className={styles.section} aria-labelledby="models-h">
+    <section className={styles.section} aria-labelledby={mesh ? "mesh-h" : "models-h"}>
       <div className={styles.sectionHead}>
-        <h2 id="models-h">Face models</h2>
+        <h2 id={mesh ? "mesh-h" : "models-h"}>{mesh ? "3D models" : "Face models"}</h2>
       </div>
       <p className={styles.help}>
-        From video-editor&apos;s registry (face_models.json). Enable models whose provider has a
-        key. Planned models are listed but can&apos;t be picked. An avatar can set its own default,
-        and a video can override both.
+        {mesh
+          ? "Image or text to 3D (.glb) for hero assets, from video-editor's registry (mesh_models.json). Prices include the default options. Each proposal still asks you which model to use."
+          : "From video-editor's registry (face_models.json). Enable models whose provider has a key. Planned models are listed but can't be picked. An avatar can set its own default, and a video can override both."}
       </p>
-      <div className={styles.list} style={{ maxHeight: "none" }} data-testid="settings-models">
+      <div
+        className={styles.list}
+        style={{ maxHeight: "none" }}
+        data-testid={mesh ? "settings-mesh-models" : "settings-models"}
+      >
         {props.models.map((m) => {
           const can = m.selectable && m.hasKey && !m.free;
           return (
@@ -275,7 +297,8 @@ function ModelsSection(props: {
               <span className={styles.itemBody}>
                 <span className={styles.itemTitle}>{m.label}</span>
                 <span className={styles.meta}>
-                  {m.free ? "Free" : `${usd(m.pricePerS)}/s`}, up to {m.maxS} s, {m.status}
+                  {m.free ? "Free" : mesh ? usd(m.pricePerS) : `${usd(m.pricePerS)}/s`}
+                  {mesh ? "" : `, up to ${m.maxS} s`}, {m.status}
                   {!m.selectable
                     ? " (no adapter yet)"
                     : !m.hasKey
@@ -302,7 +325,7 @@ function ModelsSection(props: {
             onChange={(e) => {
               setDef(e.target.value);
             }}
-            aria-label="Default model"
+            aria-label={mesh ? "Default 3D model" : "Default model"}
           >
             {on.map((m) => (
               <option key={m.key} value={m.key}>
@@ -319,7 +342,7 @@ function ModelsSection(props: {
             onChange={(e) => {
               setFb(e.target.value);
             }}
-            aria-label="Fallback model"
+            aria-label={mesh ? "Fallback 3D model" : "Fallback model"}
           >
             <option value="">None</option>
             {on.map((m) => (
@@ -337,12 +360,16 @@ function ModelsSection(props: {
           onClick={() => {
             props.run(
               () =>
-                saveModels({ enabled: [...enabled], defaultModel: def, fallbackModel: fb || null }),
+                (mesh ? saveMeshModels : saveModels)({
+                  enabled: [...enabled],
+                  defaultModel: def,
+                  fallbackModel: fb || null,
+                }),
               props.ok,
             );
           }}
         >
-          Save face models
+          {mesh ? "Save 3D models" : "Save face models"}
         </Button>
       </div>
     </section>

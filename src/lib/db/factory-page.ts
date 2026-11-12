@@ -15,7 +15,8 @@ import {
 } from "@/lib/domain/factory/steps";
 import { ago, whenLabel } from "@/lib/domain/format";
 import { planQueue } from "@/lib/domain/queue";
-import { signOutputUrls } from "@/lib/factory/assets";
+import { signOutputUrls, signedUrlFor } from "@/lib/factory/assets";
+import { MESH_MODELS, isMeshSelectable, meshOptions, meshPrice } from "@/lib/domain/factory/mesh";
 import { routineConfigured } from "@/lib/factory/runner";
 import { createAdminSupabase } from "./admin";
 import {
@@ -220,6 +221,45 @@ export interface ProductionPage {
     status: string;
     createdAt: string;
   }[];
+  heroes: HeroView[];
+}
+
+export interface HeroView {
+  id: string;
+  proposalId: string;
+  object: string;
+  scene: string;
+  reason: string;
+  whyGenerate: string;
+  onScreen: string;
+  input: { mode: string; prompt: string | null; image: string | null };
+  suggestedModel: string | null;
+  estimateUsd: number;
+  stills: { label: string; url: string }[];
+  comparisonStills: { label: string; url: string }[];
+  stage: "proposal" | "comparison";
+  status: "pending" | "decided";
+  decisions: {
+    stage: string;
+    choice: string;
+    model: string | null;
+    budgetUsd: number | null;
+    notes: string;
+    reason: string;
+    decidedAt: string;
+  }[];
+  jobs: { model: string; status: string; costUsd: number | null; quoteUsd: number }[];
+}
+
+export interface MeshOptionView {
+  key: string;
+  label: string;
+  priceUsd: number;
+  status: string;
+  licence: string;
+  credit: string | null;
+  text: boolean;
+  pickable: boolean;
 }
 
 export interface FactoryOptions {
@@ -229,6 +269,8 @@ export interface FactoryOptions {
   avatars: AvatarOption[];
   models: ModelOption[];
   defaultFaceModel: string;
+  meshModels: MeshOptionView[];
+  defaultMeshModel: string;
   workspaceModes: StepModes;
   sandbox: boolean;
   routineReady: boolean;
@@ -241,6 +283,11 @@ export async function loadFactoryOptions(workspace?: Workspace): Promise<Factory
   const ws = w.id;
   const now = nowFor(w);
   const timezone = w.timezone ?? "UTC";
+  const mesh = await db
+    .from("factory_settings")
+    .select("enabled_mesh_models, default_mesh_model")
+    .eq("workspace_id", ws)
+    .maybeSingle();
   const [voices, music, accounts, avatars, settings, keys] = await Promise.all([
     db.from("factory_voices").select("*").order("sort"),
     db.from("factory_music").select("*").order("sort"),
@@ -318,6 +365,21 @@ export async function loadFactoryOptions(workspace?: Workspace): Promise<Factory
       free: isFree(m),
     })),
     defaultFaceModel: settings.defaultFaceModel,
+    meshModels: MESH_MODELS.map((m) => ({
+      key: m.key,
+      label: m.label,
+      priceUsd: meshPrice(m, meshOptions(m, null)),
+      status: m.status,
+      licence: m.licence.summary,
+      credit: m.licence.credit ?? null,
+      text: m.text,
+      pickable:
+        isMeshSelectable(m) &&
+        (m.priceUsd === 0 ||
+          w.kind === "sandbox" ||
+          (mesh.data?.enabled_mesh_models ?? []).includes(m.key)),
+    })),
+    defaultMeshModel: mesh.data?.default_mesh_model ?? "placeholder",
     workspaceModes: settings.stepModes,
     sandbox: w.kind === "sandbox",
     routineReady: w.kind === "sandbox" || routineConfigured(),
@@ -474,5 +536,86 @@ export async function loadProductionPage(id: string): Promise<ProductionPage | n
       status: r.status,
       createdAt: r.created_at,
     })),
+    heroes: await loadHeroes(db, ws, id),
   };
+}
+
+async function loadHeroes(
+  db: Awaited<ReturnType<typeof createServerSupabase>>,
+  ws: string,
+  productionId: string,
+): Promise<HeroView[]> {
+  const [proposals, decisions, jobs] = await Promise.all([
+    db
+      .from("hero_proposals")
+      .select("*")
+      .eq("workspace_id", ws)
+      .eq("production_id", productionId)
+      .order("created_at"),
+    db.from("hero_decisions").select("*").eq("workspace_id", ws).order("decided_at"),
+    db
+      .from("gen_jobs")
+      .select("slot, model, status, cost_usd, quote_usd")
+      .eq("workspace_id", ws)
+      .eq("production_id", productionId)
+      .eq("kind", "mesh"),
+  ]);
+  for (const r of [proposals, decisions, jobs])
+    if (r.error) fail("reading the hero proposals", r.error);
+  const admin = createAdminSupabase();
+  const sign = (items: unknown) =>
+    Promise.all(
+      (Array.isArray(items) ? (items as { label: string; url: string }[]) : []).map(async (s) => ({
+        label: s.label,
+        url: await signedUrlFor(admin, s.url, ws),
+      })),
+    );
+  return Promise.all(
+    (proposals.data ?? []).map(async (p) => {
+      const input = p.input as {
+        mode?: string;
+        prompt?: string | null;
+        image?: string | null;
+      };
+      return {
+        id: p.id,
+        proposalId: p.proposal_id,
+        object: p.object,
+        scene: p.scene,
+        reason: p.reason,
+        whyGenerate: p.why_generate,
+        onScreen: p.on_screen,
+        input: {
+          mode: input.mode ?? "image",
+          prompt: input.prompt ?? null,
+          image: input.image ? await signedUrlFor(admin, input.image, ws) : null,
+        },
+        suggestedModel: p.suggested_model,
+        estimateUsd: p.estimate_usd,
+        stills: await sign(p.stills),
+        comparisonStills: await sign(p.comparison_stills),
+        stage: p.stage === "comparison" ? "comparison" : "proposal",
+        status: p.status === "decided" ? "decided" : "pending",
+        decisions: (decisions.data ?? [])
+          .filter((d) => d.hero_proposal_id === p.id)
+          .map((d) => ({
+            stage: d.stage,
+            choice: d.choice,
+            model: d.model,
+            budgetUsd: d.budget_usd,
+            notes: d.notes,
+            reason: d.reason,
+            decidedAt: d.decided_at,
+          })),
+        jobs: (jobs.data ?? [])
+          .filter((j) => j.slot === p.proposal_id)
+          .map((j) => ({
+            model: j.model,
+            status: j.status,
+            costUsd: j.cost_usd,
+            quoteUsd: j.quote_usd,
+          })),
+      };
+    }),
+  );
 }

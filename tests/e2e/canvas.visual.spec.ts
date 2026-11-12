@@ -15,7 +15,10 @@ for (const colorScheme of ["light", "dark"] as const) {
       await page.addInitScript(() => {
         const style = document.createElement("style");
         style.textContent = '[data-testid="performance-line"] { display: none; }';
-        document.documentElement.appendChild(style);
+        // In <head> once it exists: React's hydration of <html> drops nodes it didn't render.
+        document.addEventListener("DOMContentLoaded", () => {
+          document.head.appendChild(style);
+        });
       });
       await loadScenario("canvas-busy");
       const stage = page.getByRole("region", { name: "Workflow canvas" });

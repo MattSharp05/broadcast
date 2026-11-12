@@ -29,6 +29,7 @@ export default async function WorkflowPage() {
       timezone={data.timezone}
       details={data.details}
       contentAccounts={data.contentAccounts}
+      performance={data.performance}
       addContent={addContent}
       queueActions={{
         savePost,

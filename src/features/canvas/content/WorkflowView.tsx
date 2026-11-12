@@ -13,6 +13,7 @@ import {
 } from "react";
 import { Button } from "@/components/Button";
 import { PageHeader } from "@/components/PageHeader";
+import type { PerformanceData } from "@/lib/domain/performance";
 import { Popover } from "@/components/Popover";
 import { TagFilter } from "@/components/TagFilter";
 import { Toast } from "@/components/Toast";
@@ -37,6 +38,7 @@ import type { DropTarget } from "./drag/targets";
 import { useCardDrag } from "./drag/useCardDrag";
 import { DETAIL_SELECTOR, useDetailInteractions } from "./interactions";
 import { LEFT, layoutCanvas, nowAnchor, type CanvasLayout } from "./layout";
+import { PerformanceLine } from "./PerformanceLine";
 import { firstFailedCard, workflowStats } from "./stats";
 import { useMinuteClock } from "./useMinuteClock";
 
@@ -52,6 +54,7 @@ export interface WorkflowViewProps {
   details: WorkflowDetails;
   /** The Add content dialog's accounts and server action (BC-14). */
   contentAccounts: ContentAccount[];
+  performance: PerformanceData;
   addContent: (input: AddContentInput) => Promise<ActionResult<AddedContent>>;
   /** Editing the queue and slots from the drawers (BC-18). */
   queueActions?: QueueActions;
@@ -186,6 +189,7 @@ export function WorkflowView({
   timezone,
   details,
   contentAccounts,
+  performance,
   addContent,
   queueActions,
 }: WorkflowViewProps) {
@@ -198,6 +202,7 @@ export function WorkflowView({
   const tags = useMemo(() => tagsOf(columns), [columns]);
   const activeTag = tag === ALL_TAGS || tags.includes(tag) ? tag : ALL_TAGS;
   const shown = useMemo(() => filterByTag(columns, activeTag), [columns, activeTag]);
+  const shownIds = useMemo(() => shown.map((c) => c.id), [shown]);
   const layout = useMemo(() => layoutCanvas(shown), [shown]);
 
   const narrow = useSyncExternalStore(
@@ -473,6 +478,7 @@ export function WorkflowView({
           </>
         }
       />
+      <PerformanceLine data={performance} accountIds={shownIds} now={now} />
       <Canvas
         ref={canvasRef}
         className={styles.canvas}

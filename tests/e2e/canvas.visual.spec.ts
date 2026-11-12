@@ -10,6 +10,16 @@ for (const colorScheme of ["light", "dark"] as const) {
     test.use({ colorScheme });
 
     test(`canvas-busy matches the baseline @visual`, async ({ page, loadScenario }) => {
+      // The performance line (added after these baselines) is hidden from the first paint, so the
+      // canvas measures and places itself as before; performance.spec.ts checks the line.
+      await page.addInitScript(() => {
+        const style = document.createElement("style");
+        style.textContent = '[data-testid="performance-line"] { display: none; }';
+        // In <head> once it exists: React's hydration of <html> drops nodes it didn't render.
+        document.addEventListener("DOMContentLoaded", () => {
+          document.head.appendChild(style);
+        });
+      });
       await loadScenario("canvas-busy");
       const stage = page.getByRole("region", { name: "Workflow canvas" });
       await expect(stage).toHaveAttribute("data-ready", "true");

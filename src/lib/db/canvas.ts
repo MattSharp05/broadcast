@@ -18,7 +18,9 @@ import {
   type PostMetricRow,
 } from "@/lib/domain/details";
 import type { JobLogLine } from "@/lib/domain/failed-posts";
+import type { PerformanceData } from "@/lib/domain/performance";
 import { loadAccountDetails } from "./details";
+import { loadPerformance } from "./performance";
 import { createServerSupabase } from "./server";
 import type { Database } from "./types";
 import { VIDEOS_BUCKET } from "./videos";
@@ -37,6 +39,8 @@ export interface WorkflowData extends CanvasModel {
   details: WorkflowDetails;
   /** The Add content dialog's "Post to" list (BC-14), in column order. */
   contentAccounts: ContentAccount[];
+  /** The performance line's numbers (totals are added up in the browser per period and tag). */
+  performance: PerformanceData;
 }
 
 export interface WorkflowDetails {
@@ -238,10 +242,13 @@ export async function loadWorkflow(): Promise<WorkflowData> {
     };
   });
 
+  const performance = await loadPerformance(db, workspace.id, now);
+
   return {
     ...model,
     details,
     contentAccounts,
+    performance,
     workspace: { id: workspace.id, kind: workspace.kind },
     now: now.toISOString(),
     frozen: workspace.kind === "sandbox" && workspace.clockOverride !== null,

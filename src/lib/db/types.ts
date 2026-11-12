@@ -333,8 +333,11 @@ export type Database = {
           cap_per_video_usd: number;
           created_at: string;
           default_face_model: string;
+          default_mesh_model: string;
+          enabled_mesh_models: string[];
           enabled_models: string[];
           fallback_face_model: string | null;
+          fallback_mesh_model: string | null;
           step_modes: NonNullable<Json>;
           updated_at: string;
           workspace_id: string;
@@ -345,8 +348,11 @@ export type Database = {
           cap_per_video_usd?: number;
           created_at?: string;
           default_face_model?: string;
+          default_mesh_model?: string;
+          enabled_mesh_models?: string[];
           enabled_models?: string[];
           fallback_face_model?: string | null;
+          fallback_mesh_model?: string | null;
           step_modes?: NonNullable<Json>;
           updated_at?: string;
           workspace_id: string;
@@ -356,8 +362,11 @@ export type Database = {
           cap_per_video_usd?: number;
           created_at?: string;
           default_face_model?: string;
+          default_mesh_model?: string;
+          enabled_mesh_models?: string[];
           enabled_models?: string[];
           fallback_face_model?: string | null;
+          fallback_mesh_model?: string | null;
           step_modes?: NonNullable<Json>;
           updated_at?: string;
           workspace_id?: string;
@@ -710,6 +719,143 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "gen_keys_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      hero_decisions: {
+        Row: {
+          budget_usd: number | null;
+          choice: string;
+          decided_at: string;
+          hero_proposal_id: string;
+          id: string;
+          model: string | null;
+          notes: string;
+          reason: string;
+          stage: string;
+          workspace_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          budget_usd?: number | null;
+          choice: string;
+          decided_at?: string;
+          hero_proposal_id: string;
+          id?: string;
+          model?: string | null;
+          notes?: string;
+          reason: string;
+          stage: string;
+          workspace_id: string;
+        };
+        Update: {
+          budget_usd?: number | null;
+          choice?: string;
+          decided_at?: string;
+          hero_proposal_id?: string;
+          id?: string;
+          model?: string | null;
+          notes?: string;
+          reason?: string;
+          stage?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "hero_decisions_hero_proposal_id_workspace_id_fkey";
+            columns: ["hero_proposal_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "hero_proposals";
+            referencedColumns: ["id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "hero_decisions_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      hero_proposals: {
+        Row: {
+          comparison_stills: NonNullable<Json>;
+          created_at: string;
+          estimate_usd: number;
+          id: string;
+          input: NonNullable<Json>;
+          object: string;
+          on_screen: string;
+          options: NonNullable<Json>;
+          production_id: string;
+          proposal_id: string;
+          reason: string;
+          scene: string;
+          stage: string;
+          status: string;
+          stills: NonNullable<Json>;
+          suggested_model: string | null;
+          updated_at: string;
+          why_generate: string;
+          workspace_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          comparison_stills?: NonNullable<Json>;
+          created_at?: string;
+          estimate_usd?: number;
+          id?: string;
+          input?: NonNullable<Json>;
+          object: string;
+          on_screen?: string;
+          options?: NonNullable<Json>;
+          production_id: string;
+          proposal_id: string;
+          reason?: string;
+          scene?: string;
+          stage?: string;
+          status?: string;
+          stills?: NonNullable<Json>;
+          suggested_model?: string | null;
+          updated_at?: string;
+          why_generate?: string;
+          workspace_id: string;
+        };
+        Update: {
+          comparison_stills?: NonNullable<Json>;
+          created_at?: string;
+          estimate_usd?: number;
+          id?: string;
+          input?: NonNullable<Json>;
+          object?: string;
+          on_screen?: string;
+          options?: NonNullable<Json>;
+          production_id?: string;
+          proposal_id?: string;
+          reason?: string;
+          scene?: string;
+          stage?: string;
+          status?: string;
+          stills?: NonNullable<Json>;
+          suggested_model?: string | null;
+          updated_at?: string;
+          why_generate?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "hero_proposals_production_id_workspace_id_fkey";
+            columns: ["production_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "productions";
+            referencedColumns: ["id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "hero_proposals_workspace_id_fkey";
             columns: ["workspace_id"];
             isOneToOne: false;
             referencedRelation: "workspaces";

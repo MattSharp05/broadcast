@@ -6,6 +6,7 @@ import { fail, loadFactorySettings } from "@/lib/db/factory";
 import { currentWorkspace } from "@/lib/db/workspace";
 import { monthStart, spendOf } from "@/lib/domain/factory/budget";
 import { FACE_MODELS, isFree, isSelectable } from "@/lib/domain/factory/models";
+import { MESH_MODELS, isMeshSelectable, meshOptions, meshPrice } from "@/lib/domain/factory/mesh";
 import { listGenKeys } from "@/lib/factory/gen";
 import { KEY_PROVIDERS } from "@/lib/factory/gen-providers";
 import { routineConfigured } from "@/lib/factory/runner";
@@ -34,6 +35,11 @@ export default async function FactorySettingsPage() {
       .eq("workspace_id", workspace.id),
   ]);
   if (jobs.error) fail("reading the spend", jobs.error);
+  const mesh = await admin
+    .from("factory_settings")
+    .select("enabled_mesh_models, default_mesh_model, fallback_mesh_model")
+    .eq("workspace_id", workspace.id)
+    .maybeSingle();
   const since = monthStart(now).toISOString();
   const providers = KEY_PROVIDERS.map((p) => {
     const own = jobs.data.filter((j) => j.provider === p.key);
@@ -79,6 +85,21 @@ export default async function FactorySettingsPage() {
       modes={settings.stepModes}
       monthUsd={spendOf(jobs.data.filter((j) => j.created_at >= since))}
       routineReady={routineConfigured()}
+      meshModels={MESH_MODELS.map((m) => ({
+        key: m.key,
+        label: m.label,
+        provider: m.provider,
+        pricePerS: meshPrice(m, meshOptions(m, null)),
+        maxS: 0,
+        status: m.status,
+        notes: m.licence.summary,
+        free: m.priceUsd === 0,
+        selectable: isMeshSelectable(m),
+        hasKey: m.priceUsd === 0 || withKey.has(m.provider) || ctx.sandbox,
+      }))}
+      meshEnabled={mesh.data?.enabled_mesh_models ?? ["placeholder"]}
+      meshDefault={mesh.data?.default_mesh_model ?? "placeholder"}
+      meshFallback={mesh.data?.fallback_mesh_model ?? null}
     />
   );
 }

@@ -131,7 +131,9 @@ export async function loadScenario(
         seed.factory.productions.length +
         seed.factory.steps.length +
         seed.factory.reworks.length +
-        seed.factory.genJobs.length,
+        seed.factory.genJobs.length +
+        seed.factory.heroProposals.length +
+        seed.factory.heroDecisions.length,
     },
   };
 }
@@ -164,6 +166,8 @@ async function loadFactory(db: SupabaseClient<Database>, f: SandboxSeed["factory
     ["production_steps", f.steps],
     ["production_reworks", f.reworks],
     ["gen_jobs", f.genJobs],
+    ["hero_proposals", f.heroProposals],
+    ["hero_decisions", f.heroDecisions],
   ] as const;
   for (const [table, rows] of tables) {
     if (!rows.length) continue;

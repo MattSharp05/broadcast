@@ -25,6 +25,8 @@ export const ALL_TABLES = [
   "fake_containers",
   "gen_jobs",
   "gen_keys",
+  "hero_decisions",
+  "hero_proposals",
   "job_log",
   "media_assets",
   "oauth_credentials",

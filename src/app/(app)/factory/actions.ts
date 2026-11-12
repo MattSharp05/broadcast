@@ -300,3 +300,28 @@ export async function scheduleVideo(
     return addedMessage(1, post?.scheduledAt ?? null, ctx.now, timezone);
   }, pid);
 }
+
+/** Matthew's choice on a hero 3D asset proposal (BC-30). Autopilot never decides these. */
+export async function decideHero(
+  id: unknown,
+  heroId: unknown,
+  input: { choice: unknown; model?: unknown; notes?: unknown; reason?: unknown },
+) {
+  const pid = checkId(id);
+  return guard(async () => {
+    const hid = checkId(heroId);
+    const ctx = await engine();
+    const { decide } = await import("@/lib/factory/hero");
+    const { workspaceKindOf } = await import("@/lib/db/workspaces");
+    return decide(
+      {
+        db: ctx.db,
+        workspaceId: ctx.workspaceId,
+        sandbox: workspaceKindOf(ctx.workspaceId) === "sandbox",
+        now: ctx.now,
+      },
+      hid,
+      input,
+    );
+  }, pid);
+}

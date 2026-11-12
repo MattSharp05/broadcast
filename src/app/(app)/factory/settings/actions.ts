@@ -186,3 +186,42 @@ export async function saveDefaultModes(modes: Record<string, unknown>) {
     return "Default approval modes saved.";
   });
 }
+
+/** 3D models for hero assets (BC-30): enabled, default and fallback. */
+export async function saveMeshModels(input: ModelSettings) {
+  return guard(async () => {
+    const { meshModel, isMeshSelectable } = await import("@/lib/domain/factory/mesh");
+    const ctx = await gen();
+    const raw = input as unknown as Record<string, unknown> | null;
+    const enabled = Array.isArray(raw?.enabled)
+      ? raw.enabled.filter((k): k is string => typeof k === "string")
+      : [];
+    const keys = await ctx.db
+      .from("gen_keys")
+      .select("provider")
+      .eq("workspace_id", ctx.workspaceId);
+    if (keys.error) fail("reading the keys", keys.error);
+    const withKey = new Set(keys.data.map((k) => k.provider));
+    for (const k of enabled) {
+      const m = meshModel(k);
+      if (!m || !isMeshSelectable(m)) throw new FactoryError("bad_model", `${k} can't be enabled.`);
+      if (m.priceUsd > 0 && !ctx.sandbox && !withKey.has(m.provider)) {
+        throw new FactoryError("no_key", `Save a ${m.provider} key before enabling ${m.label}.`);
+      }
+    }
+    const list = [...new Set(["placeholder", ...enabled])];
+    const def = typeof raw?.defaultModel === "string" ? raw.defaultModel : "placeholder";
+    const fb =
+      typeof raw?.fallbackModel === "string" && raw.fallbackModel ? raw.fallbackModel : null;
+    if (!list.includes(def))
+      throw new FactoryError("bad_default", "The default 3D model must be enabled.");
+    if (fb && !list.includes(fb))
+      throw new FactoryError("bad_fallback", "The fallback 3D model must be enabled.");
+    const { error } = await ctx.db
+      .from("factory_settings")
+      .update({ enabled_mesh_models: list, default_mesh_model: def, fallback_mesh_model: fb })
+      .eq("workspace_id", ctx.workspaceId);
+    if (error) fail("saving the 3D models", error);
+    return "3D model settings saved.";
+  });
+}

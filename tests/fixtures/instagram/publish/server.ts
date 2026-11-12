@@ -50,6 +50,7 @@ export interface FixtureContainer {
   videoUrl: string;
   mediaType: string;
   shareToFeed: string | null;
+  isAiGenerated: string | null;
   checks: number;
   /** Set once published. */
   mediaId: string | null;
@@ -188,6 +189,7 @@ export function createPublishFixture(opts: PublishFixtureOptions = {}): PublishF
         videoUrl: form.get("video_url") ?? "",
         mediaType: form.get("media_type") ?? "",
         shareToFeed: form.get("share_to_feed"),
+        isAiGenerated: form.get("is_ai_generated"),
         checks: 0,
         mediaId: null,
       });

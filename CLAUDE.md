@@ -6,8 +6,9 @@ backlog of videos. A scheduler publishes due posts through the platforms' offici
 (Instagram Reels in the MVP, TikTok in v1) and collects stats afterwards. Videos arrive through
 the dashboard's **Add content** or `POST /api/content` (used by video-editor sessions). The
 dashboard has three tabs: Workflow (a pan/zoom canvas of every account's timeline around "now"),
-Accounts (a table with tags, descriptions and the Add account wizard) and Content Factory (a
-placeholder until v1).
+Accounts (a table with tags, descriptions and the Add account wizard) and Content Factory (one page
+per video: idea → style → avatar → voice → music → render → rework → caption → schedule, run by
+Claude sessions; ADR 0007).
 
 ## Workflow
 Follows the `dev-workflow` skill (ticket-driven: Notion → branch → PR → QA → merge).
@@ -58,6 +59,8 @@ Playwright · MSW. Details and reasons: `docs/TDD.md`, ADRs in `docs/decisions/`
 - `node scripts/broadcast-upload.mjs --file x.mp4 --accounts a,b [--caption …] [--pin …]`: queues a
   video through the content API (`BROADCAST_URL` + `BROADCAST_API_KEY` from `/dev/api-keys`);
   see `docs/content-api.md`.
+- Content Factory sessions: `docs/factory-api.md` (factory API + `/api/gen/*` proxy, factory tokens);
+  the face model registry is mirrored from video-editor with `node scripts/sync-face-models.mjs`.
 - Scenarios: `/workflow?scenario=<name>[&now=ISO]` (signed in) resets the Sandbox and loads one;
   `/dev` lists them. Register new ones in `src/lib/scenarios/index.ts`.
 

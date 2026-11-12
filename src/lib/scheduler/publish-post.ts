@@ -16,6 +16,8 @@ export interface StepPost {
   id: string;
   handle: string;
   caption: string;
+  /** Avatar videos: disclosed as AI on the container (ADR 0007). */
+  isAiGenerated?: boolean;
   /** When the post's current container was made (finds a post whose publish answer was lost). */
   containerCreatedAt: Date | null;
 }
@@ -76,6 +78,7 @@ export async function advancePost(input: StepInput): Promise<PublishOutcome | nu
         const { containerId } = await provider.createReelContainer(account, {
           videoUrl: await input.videoUrl(),
           caption: post.caption,
+          isAiGenerated: post.isAiGenerated ?? false,
         });
         return { kind: "container_created", containerId };
       }

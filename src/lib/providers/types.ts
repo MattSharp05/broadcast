@@ -106,7 +106,7 @@ export interface SocialProvider {
   getPublishingQuota(account: ProviderAccount): Promise<PublishingQuota>;
   createReelContainer(
     account: ProviderAccount,
-    input: { videoUrl: string; caption: string },
+    input: { videoUrl: string; caption: string; isAiGenerated?: boolean },
   ): Promise<{ containerId: string }>;
   getContainerStatus(account: ProviderAccount, containerId: string): Promise<ContainerStatus>;
   /**

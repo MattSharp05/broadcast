@@ -63,7 +63,7 @@ interface Stored extends PublishPost {
   permalink: string | null;
 }
 
-function setup(opts: PublishFixtureOptions = {}) {
+function setup(opts: PublishFixtureOptions & { aiGenerated?: boolean } = {}) {
   let now = NOW;
   const ig: PublishFixture = createPublishFixture({ now: () => now, ...opts });
   server.use(...ig.handlers);
@@ -96,6 +96,7 @@ function setup(opts: PublishFixtureOptions = {}) {
         id: "p1",
         handle: ready.handle,
         caption: CAPTION,
+        isAiGenerated: opts.aiGenerated ?? false,
         containerCreatedAt: post.containerCreatedAt,
       },
       action,
@@ -124,6 +125,13 @@ function setup(opts: PublishFixtureOptions = {}) {
 }
 
 describe("publishing a Reel to Instagram", () => {
+  it("discloses an avatar video as AI on its container (is_ai_generated)", async () => {
+    const { ig, tick } = setup({ aiGenerated: true });
+    expect((await tick()).outcome).toMatchObject({ kind: "container_created" });
+    const [container] = [...ig.containers.values()];
+    expect(container?.isAiGenerated).toBe("true");
+  });
+
   it("happy path: checks the quota, uploads, then publishes once with the permalink", async () => {
     const { ig, post, tick } = setup();
 
@@ -139,6 +147,7 @@ describe("publishing a Reel to Instagram", () => {
       videoUrl: VIDEO_URL,
       mediaType: "REELS",
       shareToFeed: "true",
+      isAiGenerated: null,
     });
 
     const second = await tick();

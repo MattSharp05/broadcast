@@ -15,6 +15,7 @@ import {
 } from "@/lib/domain/factory/steps";
 import { ago, whenLabel } from "@/lib/domain/format";
 import { planQueue } from "@/lib/domain/queue";
+import { signOutputUrls } from "@/lib/factory/assets";
 import { routineConfigured } from "@/lib/factory/runner";
 import { createAdminSupabase } from "./admin";
 import {
@@ -430,20 +431,23 @@ export async function loadProductionPage(id: string): Promise<ProductionPage | n
     sessionUrl: p.session_url,
     projectSlug: p.project_slug,
     remakeOf: p.remake_of,
-    steps: order.map((step) => {
-      const row = (steps.data ?? []).find((s) => s.step === step);
-      return {
-        step,
-        label: STEP_LABELS[step],
-        status: row?.status ?? "pending",
-        progress: row?.progress ?? 0,
-        message: row?.message ?? null,
-        output: row?.output ?? {},
-        attempt: row?.attempt ?? 0,
-        sessionUrl: row?.session_url ?? null,
-        mode: modeFor(step, videoModes, settings.stepModes),
-      };
-    }),
+    steps: await Promise.all(
+      order.map(async (step) => {
+        const row = (steps.data ?? []).find((s) => s.step === step);
+        return {
+          step,
+          label: STEP_LABELS[step],
+          status: row?.status ?? "pending",
+          progress: row?.progress ?? 0,
+          message: row?.message ?? null,
+          // Session uploads are `storage:` paths: signed for an hour.
+          output: await signOutputUrls(createAdminSupabase(), row?.output ?? {}, ws),
+          attempt: row?.attempt ?? 0,
+          sessionUrl: row?.session_url ?? null,
+          mode: modeFor(step, videoModes, settings.stepModes),
+        };
+      }),
+    ),
     recipe: recipeRows(media.data?.recipe ?? null),
     spend: {
       videoUsd: spend.videoUsd,

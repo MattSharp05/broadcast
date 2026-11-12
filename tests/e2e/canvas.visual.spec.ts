@@ -14,6 +14,9 @@ for (const colorScheme of ["light", "dark"] as const) {
       const stage = page.getByRole("region", { name: "Workflow canvas" });
       await expect(stage).toHaveAttribute("data-ready", "true");
       await page.evaluate(() => document.fonts.ready);
+      // The performance line (added after these baselines) is hidden so the canvas keeps its
+      // place; it has its own e2e checks in performance.spec.ts.
+      await page.addStyleTag({ content: '[data-testid="performance-line"] { display: none; }' });
       await page.mouse.move(0, 0);
       await expect(page).toHaveScreenshot(`canvas-busy-${colorScheme}.png`, {
         animations: "disabled",

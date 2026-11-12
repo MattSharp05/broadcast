@@ -87,6 +87,12 @@ in `src/` other than `tokens.css` holds a literal colour.
   title, an inline stats line (items split by 1px dividers, e.g. "13 scheduled | Next post in
   9 h 46 min | 9 posted today | 1 failed"), then actions on the right. Below 760px the rail
   becomes a bottom tab bar.
+- **Performance line (Workflow):** a slim 38px line under the top bar, not KPI tiles. A small
+  period select (Last 7 days by default, Last 30 days, All time), then views, reach, likes,
+  comments, shares, saves and followers as "**12.4K** views" items split by 1px `--line`
+  hairlines, tabular numbers, `--ink-2` labels with `--ink` values. The change against the period
+  before follows as a plain "+12%" / "−4%" in `--good` / `--bad` (none for All time). A number no
+  post reported shows "—". Totals follow the Tag filter. Scrolls sideways on phones.
 - **Workflow canvas:**
   - Infinite pan and zoom with transform scale between 0.28 and 1.8. Drag to pan, wheel to
     scroll, ctrl/cmd + wheel or pinch to zoom.

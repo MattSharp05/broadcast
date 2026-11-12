@@ -10,13 +10,17 @@ for (const colorScheme of ["light", "dark"] as const) {
     test.use({ colorScheme });
 
     test(`canvas-busy matches the baseline @visual`, async ({ page, loadScenario }) => {
+      // The performance line (added after these baselines) is hidden from the first paint, so the
+      // canvas measures and places itself as before; performance.spec.ts checks the line.
+      await page.addInitScript(() => {
+        const style = document.createElement("style");
+        style.textContent = '[data-testid="performance-line"] { display: none; }';
+        document.documentElement.appendChild(style);
+      });
       await loadScenario("canvas-busy");
       const stage = page.getByRole("region", { name: "Workflow canvas" });
       await expect(stage).toHaveAttribute("data-ready", "true");
       await page.evaluate(() => document.fonts.ready);
-      // The performance line (added after these baselines) is hidden so the canvas keeps its
-      // place; it has its own e2e checks in performance.spec.ts.
-      await page.addStyleTag({ content: '[data-testid="performance-line"] { display: none; }' });
       await page.mouse.move(0, 0);
       await expect(page).toHaveScreenshot(`canvas-busy-${colorScheme}.png`, {
         animations: "disabled",

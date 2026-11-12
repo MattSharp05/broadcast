@@ -18,6 +18,7 @@ import type { OnQueueChanged, QueueActions } from "../edit-types";
 import type { DetailClock } from "../types";
 import { EDIT_MESSAGES } from "@/lib/domain/queue-edit";
 import { MoveForm, useMoveChoices } from "./move";
+import { RecipeSection } from "./Recipe";
 
 const HOUR_MS = 3_600_000;
 const QUARTER_MS = 15 * 60_000;
@@ -124,6 +125,8 @@ export function PostEditor({ card, account, detail, clock, actions, onChanged }:
           </span>
         </div>
       </div>
+
+      <RecipeSection recipe={detail?.recipe} />
 
       <fieldset className={edit.field} data-section="timing" disabled={busy}>
         <legend>Timing</legend>

@@ -1,3 +1,4 @@
+import { recipeRows, type RecipeRow } from "@/lib/domain/factory/recipe";
 import { UPCOMING_STATUSES, avatarIndex, profileUrl, type AccountState } from "@/lib/domain/canvas";
 import {
   REQUIRED_PERMISSIONS,
@@ -92,6 +93,8 @@ export interface PostDetail {
   history?: JobLogLine[];
   /** A failed post still has its upload (it may be live already): Retry checks it first. */
   containerKept?: boolean;
+  /** A Content Factory video's recipe (ADR 0007), shown next to its performance. */
+  recipe?: RecipeRow[];
 }
 
 export interface PostDetailInput {
@@ -105,6 +108,7 @@ export interface PostDetailInput {
   permalink: string | null;
   containerId?: string | null;
   history?: JobLogLine[];
+  recipe?: unknown;
 }
 
 function statsOf(row: PostMetricRow): PostStats {
@@ -150,6 +154,7 @@ export function postDetail(post: PostDetailInput, rows: readonly PostMetricRow[]
     nextRefresh: published
       ? (STAT_OFFSETS.find((o) => !taken.has(o) && !missed.has(o)) ?? null)
       : null,
+    ...(post.recipe ? { recipe: recipeRows(post.recipe) } : {}),
     ...(post.status === "failed"
       ? { history: post.history ?? [], containerKept: !!post.containerId }
       : {}),

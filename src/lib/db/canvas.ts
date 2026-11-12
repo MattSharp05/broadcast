@@ -100,7 +100,7 @@ export async function loadWorkflow(): Promise<WorkflowData> {
     db
       .from("posts")
       .select(
-        "id, account_id, caption, timing, queue_position, status, scheduled_at, published_at, last_error, attempts, permalink, container_id, media_assets(duration_s, thumbnail_path)",
+        "id, account_id, caption, timing, queue_position, status, scheduled_at, published_at, last_error, attempts, permalink, container_id, media_assets(duration_s, thumbnail_path, recipe)",
       )
       .eq("workspace_id", workspace.id)
       .or(`status.in.(queued,paused,publishing,failed),published_at.gte.${since}`)
@@ -214,6 +214,7 @@ export async function loadWorkflow(): Promise<WorkflowData> {
         permalink: p.permalink,
         containerId: p.container_id,
         history: history.get(p.id),
+        recipe: p.media_assets.recipe,
       })),
       metricRows,
     ),

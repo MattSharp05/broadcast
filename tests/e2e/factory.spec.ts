@@ -1,61 +1,140 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 
-// BC-7: the Content Factory placeholder tab. Static: a callout, a 4-column example board and a
-// disabled "New idea" button. Runs on every project (desktop and phone).
+// BC-25…28: the Content Factory on the Sandbox. The fake runner plays every Claude session, and the
+// generation proxy uses its fake provider: no session, no money.
 
-test.beforeEach(async ({ page }) => {
-  await page.goto("/factory");
-});
+const FACTORY = { path: "/factory" };
 
-test("shows the callout, the four example columns and a disabled New idea button", async ({
-  page,
-}) => {
+test("makes a free video from the idea to the queue", async ({ page, loadScenario }) => {
+  await loadScenario("factory-new", FACTORY);
   await expect(page.getByRole("heading", { level: 1, name: "Content Factory" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Placeholder until v1" })).toBeVisible();
-  await expect(page.getByText(/Add content on the Workflow tab or through the API/)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "No videos yet" })).toBeVisible();
 
-  const board = page.getByRole("region", { name: "Example board" });
-  await expect(board).toBeVisible();
-  await expect(page.getByText(/Example board: these cards show how ideas will move/)).toBeVisible();
+  await page.getByRole("button", { name: "New video" }).first().click();
+  await expect(page).toHaveURL(/\/factory\/[0-9a-f-]{36}$/);
 
-  const columns = board.getByRole("heading", { level: 3 });
-  await expect(columns).toHaveText([
-    /^Ideas\s*3$/,
-    /^Scripting\s*2$/,
-    /^In video-editor\s*1$/,
-    /^Ready for the queue\s*1$/,
-  ]);
-  await expect(board.locator("[data-example]")).toHaveCount(7);
+  await page.getByLabel("Idea", { exact: true }).fill("How the moon causes tides");
+  await page.getByRole("button", { name: "Save idea" }).click();
+  await expect(page.getByRole("button", { name: "Save idea" })).toBeDisabled();
 
-  await expect(page.getByRole("button", { name: "New idea" })).toBeDisabled();
+  // Style: five packs, four with an example frame from a past project.
+  const styleCards = page.locator("[data-style]");
+  await expect(styleCards).toHaveCount(5);
+  await expect(page.locator("[data-style] img")).toHaveCount(4);
+  await page.locator('[data-style="realistic-3d"]').click();
+  await expect(page.locator('[data-style="realistic-3d"]')).toHaveAttribute(
+    "data-selected",
+    "true",
+  );
+
+  // Voice and music: scrollable lists with play buttons.
+  const voices = page.getByTestId("voice-list");
+  await expect(voices.getByRole("button", { name: /^Play American male/ })).toBeEnabled();
+  await expect(
+    voices.getByRole("button", { name: /No sample for American female/ }),
+  ).toBeDisabled();
+  await voices.locator('[data-voice="design-m2"]').click();
+  const music = page.getByTestId("music-list");
+  await expect(music).toContainText(
+    'Music: "Floating Cities" by Kevin MacLeod (incompetech.com), CC BY 4.0',
+  );
+  await music.locator('[data-track="floating-cities"]').click();
+  await expect(music.locator('[data-track="floating-cities"]')).toHaveAttribute(
+    "data-selected",
+    "true",
+  );
+
+  await page.getByRole("button", { name: "Start production" }).click();
+  const idea = page.locator('[data-step="idea"]');
+  await expect(idea).toHaveAttribute("data-status", "waiting");
+
+  for (const step of ["idea", "script", "style", "visuals", "render"]) {
+    const row = page.locator(`[data-step="${step}"]`);
+    await expect(row).toHaveAttribute("data-status", "waiting");
+    await row.getByRole("button", { name: "Approve", exact: true }).click();
+    await expect(row).toHaveAttribute("data-status", "approved");
+  }
+  await expect(page.getByTestId("recipe")).toContainText("realistic-3d");
+  await expect(page.getByTestId("caption-options")).toContainText("CC BY 4.0");
+
+  await page.getByRole("button", { name: "Add to queue" }).click();
+  await expect(page.getByTestId("toast")).toContainText("Added to 1 queue");
+  await expect(page.getByTestId("scheduled")).toContainText("@codingjourney");
+  // The same video can't go to a second account: remake it instead.
+  await expect(page.getByRole("button", { name: /^Remake for @maya.explains/ })).toBeVisible();
 });
 
-test("at 390px the board scrolls inside its own container, not the page", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+test("lists every video and shows progress, waiting and failed steps", async ({
+  page,
+  loadScenario,
+}) => {
+  await loadScenario("factory-pipeline", FACTORY);
+  const table = page.getByRole("table", { name: "Videos" });
+  await expect(table.locator("tbody tr")).toHaveCount(5);
+  await expect(table).toContainText("Waiting for you");
+  await expect(table).toContainText("Ready to schedule");
+  await expect(table).toContainText("Failed");
+
+  await table.getByRole("link", { name: "How a git merge works" }).click();
+  await expect(page.getByRole("progressbar", { name: "Render progress" })).toHaveAttribute(
+    "aria-valuenow",
+    "60",
+  );
+
   await page.goto("/factory");
+  await page.getByRole("link", { name: "Why ice floats" }).click();
+  const failed = page.locator('[data-step="style"]');
+  await expect(failed).toHaveAttribute("data-status", "failed");
+  await expect(failed).toContainText("Remotion couldn't load the paper texture");
+  await failed.getByRole("button", { name: /^Redo/ }).click();
+  await expect(failed).toHaveAttribute("data-status", "waiting");
+});
 
-  const board = page.getByRole("region", { name: "Example board" });
-  await expect(board).toBeVisible();
+test("the avatar quote is paid: it shows the estimate first and spend after", async ({
+  page,
+  loadScenario,
+}) => {
+  await loadScenario("factory-avatar-quote", FACTORY);
+  await page.getByRole("link", { name: "How tides work" }).click();
+  const quote = page.locator('[data-step="face_quote"]');
+  await expect(quote.getByTestId("face-quote")).toContainText("$1.05");
+  await expect(quote).toContainText("Paid");
+  await quote.getByRole("button", { name: "Approve and pay up to $1.05" }).click();
+  await expect(quote).toHaveAttribute("data-status", "approved");
+  await expect(page.getByTestId("gen-jobs").locator("li")).toHaveCount(3);
+  await expect(page.locator("header")).toContainText("$0.84");
+});
 
-  const sizes = await page.evaluate(() => {
-    const b = document.querySelector<HTMLElement>('[data-testid="factory-board"]');
-    const doc = document.scrollingElement ?? document.documentElement;
-    const main = document.querySelector("main");
-    return {
-      boardScroll: b ? b.scrollWidth - b.clientWidth : 0,
-      boardClipped: b ? b.scrollHeight - b.clientHeight : 0,
-      pageScroll: doc.scrollWidth - doc.clientWidth,
-      mainScroll: main ? main.scrollWidth - main.clientWidth : 0,
-    };
-  });
-  expect(sizes.boardScroll).toBeGreaterThan(0);
-  expect(sizes.boardClipped, "columns are cut off at the bottom").toBeLessThanOrEqual(0);
-  expect(sizes.pageScroll).toBeLessThanOrEqual(0);
-  expect(sizes.mainScroll).toBeLessThanOrEqual(0);
+test("over the monthly cap the quote can't be approved", async ({ page, loadScenario }) => {
+  await loadScenario("factory-over-cap", FACTORY);
+  await page.getByRole("link", { name: "Why the sea is salty" }).click();
+  const quote = page.locator('[data-step="face_quote"]');
+  await expect(quote).toContainText("Autopilot paused");
+  await quote.getByRole("button", { name: /^Approve and pay/ }).click();
+  await expect(page.getByTestId("toast")).toContainText("monthly cap");
+  await expect(quote).toHaveAttribute("data-status", "waiting");
+});
 
-  // The last column can be reached by scrolling the board.
-  await board.evaluate((el) => {
-    el.scrollTo({ left: el.scrollWidth });
-  });
-  await expect(board.getByRole("heading", { name: /Ready for the queue/ })).toBeInViewport();
+test("reworking the voice keeps the paid avatar clips; a slot redo pays", async ({
+  page,
+  loadScenario,
+}) => {
+  await loadScenario("factory-rework", FACTORY);
+  await page.getByRole("link", { name: "How rainbows form" }).click();
+  await expect(page.locator("header")).toContainText("$0.84");
+  await expect(page.locator("#rework")).toContainText("keeps the 3 paid avatar clips");
+
+  await page.getByLabel("What to redo", { exact: true }).selectOption("voice");
+  await page.getByRole("button", { name: "Redo voice" }).click();
+  await expect(page.locator('[data-step="render"]')).toHaveAttribute("data-status", "waiting");
+  await expect(page.locator("header")).toContainText("$0.84");
+  await expect(page.getByTestId("gen-jobs").locator("li")).toHaveCount(3);
+
+  await page.getByLabel("What to redo", { exact: true }).selectOption("avatar_slot");
+  await page.getByLabel("Slot", { exact: true }).selectOption("hook");
+  const redoSlot = page.getByRole("button", { name: /Redo this avatar slot, paid \$0\.28/ });
+  await expect(redoSlot).toBeVisible();
+  await redoSlot.click();
+  await expect(page.getByTestId("gen-jobs").locator("li")).toHaveCount(4);
+  await expect(page.locator("header")).toContainText("$1.12");
 });

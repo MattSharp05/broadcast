@@ -158,7 +158,8 @@ export async function mintFactoryToken(ctx: EngineContext, productionId: string)
     workspace_id: ctx.workspaceId,
     production_id: productionId,
     token_hash: hashFactoryToken(token),
-    expires_at: new Date(ctx.now.getTime() + FACTORY_TOKEN_TTL_MS).toISOString(),
+    // Real time, never the Sandbox clock: the session runs now.
+    expires_at: new Date(Date.now() + FACTORY_TOKEN_TTL_MS).toISOString(),
   });
   if (error) fail("saving the session token", error);
   return token;

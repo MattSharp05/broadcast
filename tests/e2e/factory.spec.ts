@@ -138,3 +138,29 @@ test("reworking the voice keeps the paid avatar clips; a slot redo pays", async 
   await expect(page.getByTestId("gen-jobs").locator("li")).toHaveCount(4);
   await expect(page.locator("header")).toContainText("$1.12");
 });
+
+test("settings: a key is stored masked and tested, models and caps are saved", async ({
+  page,
+  loadScenario,
+}) => {
+  await loadScenario("factory-new", { path: "/factory/settings" });
+  const fal = page.locator('[data-provider="fal"]');
+  await fal.getByLabel("fal.ai key").fill("fal-sandbox-secret-9876");
+  await fal.getByRole("button", { name: "Save key" }).click();
+  await expect(page.getByTestId("masked-fal")).toHaveText("•••• 9876");
+  // The key itself never comes back to the page.
+  await expect(page.locator("body")).not.toContainText("fal-sandbox-secret");
+  await fal.getByRole("button", { name: "Test key" }).click();
+  await expect(fal).toContainText("Tested");
+
+  const models = page.getByTestId("settings-models");
+  await expect(models.locator('[data-model="hedra-character-3"] input')).toBeDisabled();
+  await models.locator('[data-model="fal-kling-avatar-std"] input').check();
+  await page.getByLabel("Default model", { exact: true }).selectOption("fal-kling-avatar-std");
+  await page.getByRole("button", { name: "Save face models" }).click();
+  await expect(page.getByTestId("toast")).toContainText("Face model settings saved");
+
+  await page.getByLabel("Per video ($)").fill("3");
+  await page.getByRole("button", { name: "Save caps" }).click();
+  await expect(page.getByTestId("toast")).toContainText("$3.00 a video");
+});

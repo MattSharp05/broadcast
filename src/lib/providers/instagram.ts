@@ -777,12 +777,14 @@ export function createInstagramProvider(deps: InstagramProviderDeps): SocialProv
       };
     },
 
-    async createReelContainer(account, { videoUrl, caption }) {
+    async createReelContainer(account, { videoUrl, caption, isAiGenerated }) {
       const res = await post(`/${IG_GRAPH_VERSION}/${userId(account)}/media`, {
         media_type: "REELS",
         video_url: videoUrl,
         caption,
         share_to_feed: "true",
+        // Self-disclosure of AI (avatar videos). Only sent when true.
+        ...(isAiGenerated ? { is_ai_generated: "true" } : {}),
         access_token: account.accessToken,
       });
       const containerId = asString(res.id);

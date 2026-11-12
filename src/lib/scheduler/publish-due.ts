@@ -47,7 +47,7 @@ export function publishPlatforms(input: {
 }
 
 const POST_COLUMNS =
-  "id, workspace_id, account_id, media_id, caption, status, container_id, container_created_at, attempts, " +
+  "id, workspace_id, account_id, media_id, caption, is_ai_generated, status, container_id, container_created_at, attempts, " +
   "social_accounts(handle, platform, platform_user_id, status, status_reason, slots), " +
   "media_assets(storage_path)";
 
@@ -57,6 +57,7 @@ interface LoadedPost {
   account_id: string;
   media_id: string;
   caption: string;
+  is_ai_generated: boolean;
   status: PublishPost["status"];
   container_id: string | null;
   container_created_at: string | null;
@@ -313,6 +314,7 @@ function stepPost(post: LoadedPost) {
     id: post.id,
     handle: post.social_accounts.handle,
     caption: post.caption,
+    isAiGenerated: post.is_ai_generated,
     containerCreatedAt: post.container_created_at ? new Date(post.container_created_at) : null,
   };
 }

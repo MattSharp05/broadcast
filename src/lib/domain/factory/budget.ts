@@ -1,5 +1,7 @@
 import { faceModel, priceFor, roundUsd } from "./models";
 
+export const roundUsdValue = roundUsd;
+
 /**
  * Money (pure). Every paid action shows an estimate before it runs: registry price × seconds,
  * plus a re-roll allowance where a clip may need a second take. The caps (per video and per

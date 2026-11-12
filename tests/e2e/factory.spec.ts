@@ -164,3 +164,52 @@ test("settings: a key is stored masked and tested, models and caps are saved", a
   await page.getByRole("button", { name: "Save caps" }).click();
   await expect(page.getByTestId("toast")).toContainText("$3.00 a video");
 });
+
+test("the avatar studio walks to v1, and a new voice makes v2", async ({ page, loadScenario }) => {
+  await loadScenario("factory-new", { path: "/factory/avatars" });
+  await expect(page.getByRole("table", { name: "Avatars" })).toContainText("Maya");
+  await page.getByRole("link", { name: "New avatar" }).click();
+  await page.getByLabel("Name").fill("Leo");
+  await page.getByLabel("Account").selectOption({ label: "@codingjourney" });
+  await page.getByRole("button", { name: "Open the studio" }).click();
+  await expect(page).toHaveURL(/\/factory\/avatars\/[0-9a-f-]{36}$/);
+
+  // 1. Persona drafts (free).
+  await page.getByRole("button", { name: "Draft 3 personas" }).click();
+  const persona = page.getByRole("radiogroup", { name: "Personas" }).getByRole("radio").first();
+  await persona.click();
+  await expect(persona).toBeChecked();
+  await page.getByRole("button", { name: "Continue" }).click();
+  // 2. Portraits: paid, the estimate is on the button.
+  await page.getByRole("button", { name: "Generate (paid, ~$0.32)" }).click();
+  const portrait = page.getByRole("radiogroup", { name: "Portraits" }).getByRole("radio").nth(1);
+  await portrait.click({ force: true });
+  await expect(portrait).toBeChecked();
+  await page.getByRole("button", { name: "Continue" }).click();
+  // 3. Face pack: approve four.
+  await page.getByRole("button", { name: /^Generate \(paid/ }).click();
+  for (const label of ["Frontal", "Three-quarter left", "Three-quarter right", "Smile"]) {
+    await page.getByRole("button", { name: `Approve ${label}` }).click();
+    await expect(page.getByTestId("face-pack")).toContainText(`${label}: approved`);
+  }
+  await page.getByRole("button", { name: "Continue" }).click();
+  // 4. Voice: a blind pick.
+  await page.getByRole("button", { name: "Load 3 voices" }).click();
+  const voices = page.getByRole("radiogroup", { name: "Voices" });
+  await expect(voices).toContainText("Voice A");
+  await voices.getByRole("radio").first().click();
+  await expect(voices.getByRole("radio").first()).toBeChecked();
+  await page.getByRole("button", { name: "Continue" }).click();
+  // 5. Screen test, then v1.
+  await page.getByRole("button", { name: /^Generate/ }).click();
+  const test1 = page.getByRole("radiogroup", { name: "Screen tests" }).getByRole("radio").first();
+  await test1.click();
+  await expect(test1).toBeChecked();
+  await page.getByRole("button", { name: "Approve and save as v1" }).click();
+  await expect(page.getByTestId("avatar-versions")).toContainText("v1");
+
+  await page.getByLabel("Avatar voice").selectOption("design-f2");
+  await page.getByRole("button", { name: "Save profile" }).click();
+  await expect(page.getByTestId("toast")).toContainText("Saved as v2");
+  await expect(page.getByTestId("avatar-versions")).toContainText("v2");
+});

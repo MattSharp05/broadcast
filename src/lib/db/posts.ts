@@ -49,7 +49,11 @@ export interface QueueContext {
 }
 
 export interface NewContent extends QueueContext {
-  media: NewMedia;
+  /** A new upload's media row; or `existingMediaId` for a stored video (Content Factory). */
+  media: NewMedia | null;
+  existingMediaId?: string;
+  /** Avatar videos: `is_ai_generated` on the Instagram container (ADR 0007). */
+  isAiGenerated?: boolean;
   caption: string;
   accountIds: readonly string[];
   timing: ContentTiming;
@@ -75,7 +79,9 @@ export type ContentErrorCode =
   | "caption_too_long"
   | "pinned_past"
   | "pinned_invalid"
-  | "bad_path";
+  | "bad_path"
+  | "no_video"
+  | "already_posted";
 
 /** A request that can't be queued, with a message for the person who sent it. */
 export class ContentError extends Error {
@@ -110,7 +116,8 @@ function validate(input: NewContent): string[] {
   if (problem === "pinned_invalid") {
     throw new ContentError("pinned_invalid", "Choose a date and time to pin the post to.");
   }
-  checkMediaPaths(input.workspaceId, input.media);
+  if (input.media) checkMediaPaths(input.workspaceId, input.media);
+  else if (!input.existingMediaId) throw new ContentError("no_video", "Choose a video first.");
   return accountIds;
 }
 
@@ -231,7 +238,8 @@ export async function queueContent(db: Db, input: NewContent): Promise<QueuedCon
     throw new ContentError("unknown_account", "One of the chosen accounts no longer exists.");
   }
 
-  const mediaId = await insertMedia(db, ws, input.media);
+  const mediaId = input.media ? await insertMedia(db, ws, input.media) : input.existingMediaId;
+  if (!mediaId) throw new ContentError("no_video", "Choose a video first.");
 
   const created: string[] = [];
   const touched: { id: string; slots: string[] }[] = [];
@@ -271,6 +279,7 @@ export async function queueContent(db: Db, input: NewContent): Promise<QueuedCon
             queue_position: queuePosition,
             scheduled_at: input.timing.kind === "pinned" ? input.timing.at.toISOString() : null,
             status,
+            is_ai_generated: input.isAiGenerated ?? false,
           })
           .select("id")
           .single();
@@ -288,7 +297,7 @@ export async function queueContent(db: Db, input: NewContent): Promise<QueuedCon
     // is the one worth reporting.
     try {
       if (created.length) await db.from("posts").delete().eq("workspace_id", ws).in("id", created);
-      await db.from("media_assets").delete().eq("workspace_id", ws).eq("id", mediaId);
+      if (input.media) await db.from("media_assets").delete().eq("workspace_id", ws).eq("id", mediaId);
       for (const account of touched) await replan(db, input, account);
     } catch (undo) {
       console.error("Undoing a failed queueContent failed:", undo);

@@ -297,7 +297,8 @@ export async function queueContent(db: Db, input: NewContent): Promise<QueuedCon
     // is the one worth reporting.
     try {
       if (created.length) await db.from("posts").delete().eq("workspace_id", ws).in("id", created);
-      if (input.media) await db.from("media_assets").delete().eq("workspace_id", ws).eq("id", mediaId);
+      if (input.media)
+        await db.from("media_assets").delete().eq("workspace_id", ws).eq("id", mediaId);
       for (const account of touched) await replan(db, input, account);
     } catch (undo) {
       console.error("Undoing a failed queueContent failed:", undo);

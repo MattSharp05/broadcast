@@ -4,17 +4,26 @@ import { createFakeProvider } from "@/lib/providers/fake";
 import { createDbFakeStore } from "@/lib/providers/fake-store";
 import { SCENARIOS, getScenario } from "@/lib/scenarios";
 import { loadScenario } from "@/lib/scenarios/load";
-import { ALL_TABLES, adminClient, anonClient, type TableName } from "./helpers";
+import { ALL_TABLES, adminClient, anonClient } from "./helpers";
 
 const admin = adminClient();
 const LIVE = WORKSPACE_IDS.live;
 const SANDBOX = WORKSPACE_IDS.sandbox;
 const NOW = new Date("2026-11-05T22:14:00Z");
 
+type GlobalTable =
+  "app_settings" | "scheduler_status" | "workspaces" | "factory_voices" | "factory_music";
+const GLOBAL_TABLES: readonly string[] = [
+  "app_settings",
+  "scheduler_status",
+  "workspaces",
+  "factory_voices",
+  "factory_music",
+];
+
 /** Tables with a workspace_id (all but the global ones and workspaces itself). */
 const WORKSPACE_TABLES = ALL_TABLES.filter(
-  (t): t is Exclude<TableName, "app_settings" | "scheduler_status" | "workspaces"> =>
-    t !== "app_settings" && t !== "scheduler_status" && t !== "workspaces",
+  (t): t is Exclude<(typeof ALL_TABLES)[number], GlobalTable> => !GLOBAL_TABLES.includes(t),
 );
 
 async function liveSnapshot(): Promise<Record<string, unknown[]>> {

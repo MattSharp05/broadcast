@@ -28,6 +28,31 @@ export interface SandboxSeed {
   postMetrics: Insert<"post_metrics">[];
   accountMetrics: Insert<"account_metrics">[];
   jobLog: Insert<"job_log">[];
+  /** Content Factory rows (BC-24). */
+  factory: FactorySeed;
+}
+
+export interface FactorySeed {
+  /** Changes to the Sandbox's factory settings (caps, models, step modes). */
+  settings: Insert<"factory_settings"> | null;
+  avatars: Insert<"avatars">[];
+  avatarVersions: Insert<"avatar_versions">[];
+  productions: (Insert<"productions"> & { created_at?: string })[];
+  steps: Insert<"production_steps">[];
+  reworks: Insert<"production_reworks">[];
+  genJobs: (Insert<"gen_jobs"> & { created_at?: string })[];
+}
+
+export function emptyFactory(): FactorySeed {
+  return {
+    settings: null,
+    avatars: [],
+    avatarVersions: [],
+    productions: [],
+    steps: [],
+    reworks: [],
+    genJobs: [],
+  };
 }
 
 export interface ScenarioContext {
@@ -42,6 +67,8 @@ export interface Scenario {
   name: string;
   /** One line for /dev: what state it sets up. */
   description: string;
+  /** The page /dev opens it on (default /workflow). */
+  page?: string;
   build(ctx: ScenarioContext): SandboxSeed;
 }
 
@@ -58,5 +85,6 @@ export function emptySeed(timezone: string): SandboxSeed {
     postMetrics: [],
     accountMetrics: [],
     jobLog: [],
+    factory: emptyFactory(),
   };
 }

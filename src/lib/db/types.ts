@@ -104,6 +104,104 @@ export type Database = {
         };
         Relationships: [];
       };
+      avatar_versions: {
+        Row: {
+          avatar_id: string;
+          created_at: string;
+          note: string;
+          profile: NonNullable<Json>;
+          version: number;
+          workspace_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          avatar_id: string;
+          created_at?: string;
+          note?: string;
+          profile: NonNullable<Json>;
+          version: number;
+          workspace_id: string;
+        };
+        Update: {
+          avatar_id?: string;
+          created_at?: string;
+          note?: string;
+          profile?: NonNullable<Json>;
+          version?: number;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "avatar_versions_avatar_id_workspace_id_fkey";
+            columns: ["avatar_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "avatars";
+            referencedColumns: ["id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "avatar_versions_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      avatars: {
+        Row: {
+          account_id: string | null;
+          created_at: string;
+          current_version: number;
+          id: string;
+          name: string;
+          profile: NonNullable<Json>;
+          studio: NonNullable<Json>;
+          studio_step: string;
+          updated_at: string;
+          workspace_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          account_id?: string | null;
+          created_at?: string;
+          current_version?: number;
+          id?: string;
+          name: string;
+          profile?: NonNullable<Json>;
+          studio?: NonNullable<Json>;
+          studio_step?: string;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          account_id?: string | null;
+          created_at?: string;
+          current_version?: number;
+          id?: string;
+          name?: string;
+          profile?: NonNullable<Json>;
+          studio?: NonNullable<Json>;
+          studio_step?: string;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "avatars_account_id_workspace_id_fkey";
+            columns: ["account_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "social_accounts";
+            referencedColumns: ["id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "avatars_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       brands: {
         Row: {
           created_at: string;
@@ -188,6 +286,186 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      factory_music: {
+        Row: {
+          artist: string;
+          bpm: number | null;
+          credit: string;
+          key: string;
+          licence: string;
+          mood: string;
+          sample_url: string;
+          sort: number;
+          source_url: string;
+          title: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          artist: string;
+          bpm?: number | null;
+          credit: string;
+          key: string;
+          licence: string;
+          mood?: string;
+          sample_url: string;
+          sort?: number;
+          source_url: string;
+          title: string;
+        };
+        Update: {
+          artist?: string;
+          bpm?: number | null;
+          credit?: string;
+          key?: string;
+          licence?: string;
+          mood?: string;
+          sample_url?: string;
+          sort?: number;
+          source_url?: string;
+          title?: string;
+        };
+        Relationships: [];
+      };
+      factory_settings: {
+        Row: {
+          cap_monthly_usd: number;
+          cap_per_video_usd: number;
+          created_at: string;
+          default_face_model: string;
+          enabled_models: string[];
+          fallback_face_model: string | null;
+          step_modes: NonNullable<Json>;
+          updated_at: string;
+          workspace_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          cap_monthly_usd?: number;
+          cap_per_video_usd?: number;
+          created_at?: string;
+          default_face_model?: string;
+          enabled_models?: string[];
+          fallback_face_model?: string | null;
+          step_modes?: NonNullable<Json>;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          cap_monthly_usd?: number;
+          cap_per_video_usd?: number;
+          created_at?: string;
+          default_face_model?: string;
+          enabled_models?: string[];
+          fallback_face_model?: string | null;
+          step_modes?: NonNullable<Json>;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "factory_settings_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: true;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      factory_tokens: {
+        Row: {
+          created_at: string;
+          expires_at: string;
+          id: string;
+          last_used_at: string | null;
+          production_id: string;
+          revoked_at: string | null;
+          token_hash: string;
+          workspace_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          expires_at: string;
+          id?: string;
+          last_used_at?: string | null;
+          production_id: string;
+          revoked_at?: string | null;
+          token_hash: string;
+          workspace_id: string;
+        };
+        Update: {
+          created_at?: string;
+          expires_at?: string;
+          id?: string;
+          last_used_at?: string | null;
+          production_id?: string;
+          revoked_at?: string | null;
+          token_hash?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "factory_tokens_production_id_workspace_id_fkey";
+            columns: ["production_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "productions";
+            referencedColumns: ["id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "factory_tokens_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      factory_voices: {
+        Row: {
+          credit: string;
+          description: string;
+          key: string;
+          kind: string;
+          label: string;
+          licence: string;
+          model: string | null;
+          paid: boolean;
+          provider: string;
+          sample_text: string | null;
+          sample_url: string | null;
+          sort: number;
+        };
+        ComputedFields: never;
+        Insert: {
+          credit: string;
+          description?: string;
+          key: string;
+          kind: string;
+          label: string;
+          licence: string;
+          model?: string | null;
+          paid?: boolean;
+          provider?: string;
+          sample_text?: string | null;
+          sample_url?: string | null;
+          sort?: number;
+        };
+        Update: {
+          credit?: string;
+          description?: string;
+          key?: string;
+          kind?: string;
+          label?: string;
+          licence?: string;
+          model?: string | null;
+          paid?: boolean;
+          provider?: string;
+          sample_text?: string | null;
+          sample_url?: string | null;
+          sort?: number;
+        };
+        Relationships: [];
       };
       fake_accounts: {
         Row: {
@@ -296,6 +574,149 @@ export type Database = {
           },
         ];
       };
+      gen_jobs: {
+        Row: {
+          avatar_id: string | null;
+          completed_at: string | null;
+          cost_usd: number | null;
+          created_at: string;
+          error: string | null;
+          id: string;
+          idempotency_key: string;
+          input: NonNullable<Json>;
+          kind: string;
+          model: string;
+          output_url: string | null;
+          production_id: string | null;
+          provider: string;
+          provider_request_id: string | null;
+          quote_usd: number;
+          response_url: string | null;
+          seconds: number;
+          slot: string;
+          status: Database["public"]["Enums"]["gen_job_status"];
+          status_url: string | null;
+          updated_at: string;
+          workspace_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          avatar_id?: string | null;
+          completed_at?: string | null;
+          cost_usd?: number | null;
+          created_at?: string;
+          error?: string | null;
+          id?: string;
+          idempotency_key: string;
+          input?: NonNullable<Json>;
+          kind?: string;
+          model: string;
+          output_url?: string | null;
+          production_id?: string | null;
+          provider: string;
+          provider_request_id?: string | null;
+          quote_usd: number;
+          response_url?: string | null;
+          seconds: number;
+          slot: string;
+          status?: Database["public"]["Enums"]["gen_job_status"];
+          status_url?: string | null;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          avatar_id?: string | null;
+          completed_at?: string | null;
+          cost_usd?: number | null;
+          created_at?: string;
+          error?: string | null;
+          id?: string;
+          idempotency_key?: string;
+          input?: NonNullable<Json>;
+          kind?: string;
+          model?: string;
+          output_url?: string | null;
+          production_id?: string | null;
+          provider?: string;
+          provider_request_id?: string | null;
+          quote_usd?: number;
+          response_url?: string | null;
+          seconds?: number;
+          slot?: string;
+          status?: Database["public"]["Enums"]["gen_job_status"];
+          status_url?: string | null;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "gen_jobs_avatar_id_workspace_id_fkey";
+            columns: ["avatar_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "avatars";
+            referencedColumns: ["id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "gen_jobs_production_id_workspace_id_fkey";
+            columns: ["production_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "productions";
+            referencedColumns: ["id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "gen_jobs_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      gen_keys: {
+        Row: {
+          created_at: string;
+          key_enc: string;
+          last4: string;
+          provider: string;
+          test_message: string | null;
+          test_ok: boolean | null;
+          tested_at: string | null;
+          updated_at: string;
+          workspace_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          key_enc: string;
+          last4: string;
+          provider: string;
+          test_message?: string | null;
+          test_ok?: boolean | null;
+          tested_at?: string | null;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          created_at?: string;
+          key_enc?: string;
+          last4?: string;
+          provider?: string;
+          test_message?: string | null;
+          test_ok?: boolean | null;
+          tested_at?: string | null;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "gen_keys_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       job_log: {
         Row: {
           account_id: string | null;
@@ -360,6 +781,7 @@ export type Database = {
           duration_s: number | null;
           height: number | null;
           id: string;
+          recipe: Json | null;
           storage_path: string;
           thumbnail_path: string | null;
           updated_at: string;
@@ -374,6 +796,7 @@ export type Database = {
           duration_s?: number | null;
           height?: number | null;
           id?: string;
+          recipe?: Json | null;
           storage_path: string;
           thumbnail_path?: string | null;
           updated_at?: string;
@@ -387,6 +810,7 @@ export type Database = {
           duration_s?: number | null;
           height?: number | null;
           id?: string;
+          recipe?: Json | null;
           storage_path?: string;
           thumbnail_path?: string | null;
           updated_at?: string;
@@ -598,6 +1022,7 @@ export type Database = {
           container_id: string | null;
           created_at: string;
           id: string;
+          is_ai_generated: boolean;
           last_error: string | null;
           media_id: string;
           media_ig_id: string | null;
@@ -622,6 +1047,7 @@ export type Database = {
           container_id?: string | null;
           created_at?: string;
           id?: string;
+          is_ai_generated?: boolean;
           last_error?: string | null;
           media_id: string;
           media_ig_id?: string | null;
@@ -645,6 +1071,7 @@ export type Database = {
           container_id?: string | null;
           created_at?: string;
           id?: string;
+          is_ai_generated?: boolean;
           last_error?: string | null;
           media_id?: string;
           media_ig_id?: string | null;
@@ -675,6 +1102,270 @@ export type Database = {
           },
           {
             foreignKeyName: "posts_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      production_reworks: {
+        Row: {
+          created_at: string;
+          id: string;
+          note: string;
+          production_id: string;
+          quote_usd: number;
+          ref: string | null;
+          status: string;
+          target: string;
+          updated_at: string;
+          workspace_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          id?: string;
+          note?: string;
+          production_id: string;
+          quote_usd?: number;
+          ref?: string | null;
+          status?: string;
+          target: string;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          note?: string;
+          production_id?: string;
+          quote_usd?: number;
+          ref?: string | null;
+          status?: string;
+          target?: string;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "production_reworks_production_id_workspace_id_fkey";
+            columns: ["production_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "productions";
+            referencedColumns: ["id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "production_reworks_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      production_steps: {
+        Row: {
+          attempt: number;
+          created_at: string;
+          finished_at: string | null;
+          message: string | null;
+          output: NonNullable<Json>;
+          production_id: string;
+          progress: number;
+          session_id: string | null;
+          session_url: string | null;
+          started_at: string | null;
+          status: Database["public"]["Enums"]["factory_step_status"];
+          step: Database["public"]["Enums"]["factory_step"];
+          updated_at: string;
+          workspace_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          attempt?: number;
+          created_at?: string;
+          finished_at?: string | null;
+          message?: string | null;
+          output?: NonNullable<Json>;
+          production_id: string;
+          progress?: number;
+          session_id?: string | null;
+          session_url?: string | null;
+          started_at?: string | null;
+          status?: Database["public"]["Enums"]["factory_step_status"];
+          step: Database["public"]["Enums"]["factory_step"];
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          attempt?: number;
+          created_at?: string;
+          finished_at?: string | null;
+          message?: string | null;
+          output?: NonNullable<Json>;
+          production_id?: string;
+          progress?: number;
+          session_id?: string | null;
+          session_url?: string | null;
+          started_at?: string | null;
+          status?: Database["public"]["Enums"]["factory_step_status"];
+          step?: Database["public"]["Enums"]["factory_step"];
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "production_steps_production_id_workspace_id_fkey";
+            columns: ["production_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "productions";
+            referencedColumns: ["id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "production_steps_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      productions: {
+        Row: {
+          account_id: string | null;
+          avatar_id: string | null;
+          avatar_version: number | null;
+          caption: string | null;
+          caption_options: NonNullable<Json>;
+          created_at: string;
+          face_model: string | null;
+          id: string;
+          idea: string;
+          media_id: string | null;
+          music_key: string | null;
+          post_id: string | null;
+          project_slug: string | null;
+          remake_of: string | null;
+          script: Json | null;
+          session_id: string | null;
+          session_url: string | null;
+          status: Database["public"]["Enums"]["production_status"];
+          step_modes: NonNullable<Json>;
+          style: string | null;
+          title: string;
+          updated_at: string;
+          use_avatar: boolean;
+          voice_key: string | null;
+          workspace_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          account_id?: string | null;
+          avatar_id?: string | null;
+          avatar_version?: number | null;
+          caption?: string | null;
+          caption_options?: NonNullable<Json>;
+          created_at?: string;
+          face_model?: string | null;
+          id?: string;
+          idea?: string;
+          media_id?: string | null;
+          music_key?: string | null;
+          post_id?: string | null;
+          project_slug?: string | null;
+          remake_of?: string | null;
+          script?: Json | null;
+          session_id?: string | null;
+          session_url?: string | null;
+          status?: Database["public"]["Enums"]["production_status"];
+          step_modes?: NonNullable<Json>;
+          style?: string | null;
+          title?: string;
+          updated_at?: string;
+          use_avatar?: boolean;
+          voice_key?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          account_id?: string | null;
+          avatar_id?: string | null;
+          avatar_version?: number | null;
+          caption?: string | null;
+          caption_options?: NonNullable<Json>;
+          created_at?: string;
+          face_model?: string | null;
+          id?: string;
+          idea?: string;
+          media_id?: string | null;
+          music_key?: string | null;
+          post_id?: string | null;
+          project_slug?: string | null;
+          remake_of?: string | null;
+          script?: Json | null;
+          session_id?: string | null;
+          session_url?: string | null;
+          status?: Database["public"]["Enums"]["production_status"];
+          step_modes?: NonNullable<Json>;
+          style?: string | null;
+          title?: string;
+          updated_at?: string;
+          use_avatar?: boolean;
+          voice_key?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "productions_account_id_workspace_id_fkey";
+            columns: ["account_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "social_accounts";
+            referencedColumns: ["id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "productions_avatar_id_workspace_id_fkey";
+            columns: ["avatar_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "avatars";
+            referencedColumns: ["id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "productions_media_id_workspace_id_fkey";
+            columns: ["media_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "media_assets";
+            referencedColumns: ["id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "productions_music_key_fkey";
+            columns: ["music_key"];
+            isOneToOne: false;
+            referencedRelation: "factory_music";
+            referencedColumns: ["key"];
+          },
+          {
+            foreignKeyName: "productions_post_id_workspace_id_fkey";
+            columns: ["post_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "posts";
+            referencedColumns: ["id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "productions_remake_of_workspace_id_fkey";
+            columns: ["remake_of", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "productions";
+            referencedColumns: ["id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "productions_voice_key_fkey";
+            columns: ["voice_key"];
+            isOneToOne: false;
+            referencedRelation: "factory_voices";
+            referencedColumns: ["key"];
+          },
+          {
+            foreignKeyName: "productions_workspace_id_fkey";
             columns: ["workspace_id"];
             isOneToOne: false;
             referencedRelation: "workspaces";
@@ -742,9 +1433,12 @@ export type Database = {
       };
       social_accounts: {
         Row: {
+          ai_bio_done: boolean;
+          ai_label_done: boolean;
           brand_id: string;
           created_at: string;
           description: string;
+          face_model: string | null;
           followers: number | null;
           handle: string;
           id: string;
@@ -761,9 +1455,12 @@ export type Database = {
         };
         ComputedFields: never;
         Insert: {
+          ai_bio_done?: boolean;
+          ai_label_done?: boolean;
           brand_id: string;
           created_at?: string;
           description?: string;
+          face_model?: string | null;
           followers?: number | null;
           handle: string;
           id?: string;
@@ -779,9 +1476,12 @@ export type Database = {
           workspace_id: string;
         };
         Update: {
+          ai_bio_done?: boolean;
+          ai_label_done?: boolean;
           brand_id?: string;
           created_at?: string;
           description?: string;
+          face_model?: string | null;
           followers?: number | null;
           handle?: string;
           id?: string;
@@ -893,9 +1593,13 @@ export type Database = {
     };
     Enums: {
       account_status: "ready" | "needs_attention" | "not_connected";
+      factory_step: "idea" | "script" | "style" | "visuals" | "face_quote" | "render";
+      factory_step_status: "pending" | "running" | "waiting" | "approved" | "failed" | "skipped";
+      gen_job_status: "queued" | "running" | "completed" | "failed";
       platform: "instagram" | "fake";
       post_status: "queued" | "publishing" | "published" | "failed" | "paused" | "removed";
       post_timing: "queue" | "pinned";
+      production_status: "draft" | "running" | "waiting" | "ready" | "scheduled" | "failed";
       stat_offset: "1h" | "6h" | "24h" | "48h" | "7d";
       workspace_kind: "live" | "sandbox";
     };
@@ -1010,9 +1714,13 @@ export const Constants = {
   public: {
     Enums: {
       account_status: ["ready", "needs_attention", "not_connected"],
+      factory_step: ["idea", "script", "style", "visuals", "face_quote", "render"],
+      factory_step_status: ["pending", "running", "waiting", "approved", "failed", "skipped"],
+      gen_job_status: ["queued", "running", "completed", "failed"],
       platform: ["instagram", "fake"],
       post_status: ["queued", "publishing", "published", "failed", "paused", "removed"],
       post_timing: ["queue", "pinned"],
+      production_status: ["draft", "running", "waiting", "ready", "scheduled", "failed"],
       stat_offset: ["1h", "6h", "24h", "48h", "7d"],
       workspace_kind: ["live", "sandbox"],
     },

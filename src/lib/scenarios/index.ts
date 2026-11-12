@@ -2,6 +2,7 @@ import { addContent } from "./add-content";
 import { canvasBusy } from "./canvas-busy";
 import { connectMissingPermission } from "./connect-missing-permission";
 import { empty } from "./empty";
+import { FACTORY_SCENARIOS } from "./factory";
 import { noAccounts } from "./no-accounts";
 import { postFailed } from "./post-failed";
 import { publishDueNow } from "./publish-due-now";
@@ -25,6 +26,7 @@ export const SCENARIOS: readonly Scenario[] = [
   statsDue,
   tokenExpiring,
   postFailed,
+  ...FACTORY_SCENARIOS,
 ];
 
 export function getScenario(name: string): Scenario | undefined {

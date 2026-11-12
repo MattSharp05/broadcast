@@ -107,6 +107,8 @@ export async function loadScenario(
       db.from("job_log").insert(inSandbox(seed.jobLog), { defaultToNull: false }),
     );
 
+  await loadFactory(db, seed.factory);
+
   return {
     scenario: scenario.name,
     now: now.toISOString(),
@@ -122,6 +124,14 @@ export async function loadScenario(
       postMetrics: seed.postMetrics.length,
       accountMetrics: seed.accountMetrics.length,
       jobLog: seed.jobLog.length,
+      factory:
+        (seed.factory.settings ? 1 : 0) +
+        seed.factory.avatars.length +
+        seed.factory.avatarVersions.length +
+        seed.factory.productions.length +
+        seed.factory.steps.length +
+        seed.factory.reworks.length +
+        seed.factory.genJobs.length,
     },
   };
 }
@@ -138,4 +148,25 @@ export async function setSandboxClock(
       .update({ clock_override: fixedNow ? fixedNow.toISOString() : null })
       .eq("workspace_id", WORKSPACE_IDS.sandbox),
   );
+}
+
+async function loadFactory(db: SupabaseClient<Database>, f: SandboxSeed["factory"]): Promise<void> {
+  if (f.settings) {
+    await run(
+      "factory settings",
+      db.from("factory_settings").update(f.settings).eq("workspace_id", WORKSPACE_IDS.sandbox),
+    );
+  }
+  const tables = [
+    ["avatars", f.avatars],
+    ["avatar_versions", f.avatarVersions],
+    ["productions", f.productions],
+    ["production_steps", f.steps],
+    ["production_reworks", f.reworks],
+    ["gen_jobs", f.genJobs],
+  ] as const;
+  for (const [table, rows] of tables) {
+    if (!rows.length) continue;
+    await run(table, db.from(table).insert(inSandbox(rows as never[]), { defaultToNull: false }));
+  }
 }

@@ -1,0 +1,88 @@
+{
+  "_note": "Face (image + audio -> talking video) models. price_usd_per_s as seen 2026-11-11/12; recheck before budgeting. status: ready = tested end to end here; untested = adapter written, first paid run must verify the input schema; planned = listed for comparison, no adapter yet. Edit this file (or Broadcast's model settings) to add a model.",
+  "default_prompt": "The person looks into the camera and speaks naturally. Subtle blinking and breathing only. Static camera, locked framing. Static camera.",
+  "models": [
+    {
+      "key": "placeholder",
+      "label": "Placeholder (free, local)",
+      "provider": "placeholder",
+      "price_usd_per_s": 0,
+      "max_s": 600,
+      "status": "ready",
+      "notes": "Master ref with a slow push-in; for drafts and pipeline tests."
+    },
+    {
+      "key": "fal-kling-avatar-std",
+      "label": "Kling AI Avatar v2 Standard (fal)",
+      "provider": "fal",
+      "endpoint": "fal-ai/kling-video/ai-avatar/v2/standard",
+      "price_usd_per_s": 0.0562,
+      "max_s": 300,
+      "inputs": { "image": "image_url", "audio": "audio_url", "prompt": "prompt" },
+      "output": "video.url",
+      "status": "untested",
+      "notes": "Cheapest decent official-price option (Kling's own API lists $0.056/s 720p). Price on fal is third-party reported."
+    },
+    {
+      "key": "fal-kling-avatar-pro",
+      "label": "Kling AI Avatar v2 Pro (fal)",
+      "provider": "fal",
+      "endpoint": "fal-ai/kling-video/ai-avatar/v2/pro",
+      "price_usd_per_s": 0.115,
+      "max_s": 300,
+      "inputs": { "image": "image_url", "audio": "audio_url", "prompt": "prompt" },
+      "output": "video.url",
+      "status": "untested",
+      "notes": "1080p tier."
+    },
+    {
+      "key": "fal-omnihuman-1.5",
+      "label": "OmniHuman 1.5 (fal)",
+      "provider": "fal",
+      "endpoint": "fal-ai/bytedance/omnihuman/v1.5",
+      "price_usd_per_s": 0.16,
+      "max_s": 60,
+      "inputs": { "image": "image_url", "audio": "audio_url", "prompt": "prompt" },
+      "output": "video.url",
+      "status": "untested",
+      "notes": "Strongest emotion and gesture; priciest. fal page tags commercial use."
+    },
+    {
+      "key": "hedra-character-3",
+      "label": "Hedra Character-3",
+      "provider": "hedra",
+      "price_usd_per_s": 0.05,
+      "max_s": 600,
+      "status": "planned",
+      "notes": "Price third-party reported; 9:16, up to 1080p."
+    },
+    {
+      "key": "heygen-avatar-iv",
+      "label": "HeyGen Avatar IV / 6",
+      "provider": "heygen",
+      "price_usd_per_s": 0.05,
+      "max_s": 1800,
+      "status": "planned",
+      "notes": "Prices only after login; 0.05-0.10/s reported."
+    },
+    {
+      "key": "kling-direct-avatar-std",
+      "label": "Kling Avatar (Kling's own API)",
+      "provider": "kling",
+      "price_usd_per_s": 0.056,
+      "max_s": 300,
+      "status": "planned",
+      "notes": "Official price; JWT auth, prepaid packs."
+    },
+    {
+      "key": "mirage-avatar-x",
+      "label": "Captions Mirage Avatar X",
+      "provider": "captions",
+      "price_usd_per_s": 0.15,
+      "billing_increment_s": 6,
+      "max_s": 60,
+      "status": "planned",
+      "notes": "720p; API may be early access."
+    }
+  ]
+}

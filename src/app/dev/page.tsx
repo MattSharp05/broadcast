@@ -45,7 +45,7 @@ export default async function DevPage() {
         <ul className={styles.list}>
           {SCENARIOS.map((s) => (
             <li key={s.name} data-scenario={s.name}>
-              <a href={scenarioHref(s.name)}>{s.name}</a>
+              <a href={scenarioHref(s.name, s.page)}>{s.name}</a>
               <span>{s.description}</span>
             </li>
           ))}

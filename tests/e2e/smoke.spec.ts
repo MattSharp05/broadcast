@@ -67,6 +67,11 @@ test("/dev lists every scenario and each link loads it", async ({ page }) => {
     "stats-due",
     "token-expiring",
     "post-failed",
+    "factory-new",
+    "factory-pipeline",
+    "factory-avatar-quote",
+    "factory-over-cap",
+    "factory-rework",
   ]);
   await expect(page.getByRole("link", { name: "Canvas engine demo" })).toHaveAttribute(
     "href",
@@ -85,11 +90,17 @@ test("/dev lists every scenario and each link loads it", async ({ page }) => {
     "stats-due": 1,
     "token-expiring": 2,
     "post-failed": 1,
+    "factory-new": 2,
+    "factory-pipeline": 2,
+    "factory-avatar-quote": 2,
+    "factory-over-cap": 2,
+    "factory-rework": 2,
   };
   for (const [name, accounts] of Object.entries(expected)) {
     await page.goto("/dev");
     await page.getByRole("link", { name, exact: true }).click();
-    await expect(page).toHaveURL(/\/workflow$/);
+    // Factory scenarios open the Content Factory; the others the Workflow tab.
+    await expect(page).toHaveURL(name.startsWith("factory-") ? /\/factory$/ : /\/workflow$/);
     await expect(marker(page)).toBeVisible();
     const debug = await sandboxDebug(page);
     expect(debug.counts.social_accounts, name).toBe(accounts);

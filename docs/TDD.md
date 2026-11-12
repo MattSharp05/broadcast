@@ -72,6 +72,15 @@ All tables carry `workspace_id`. Two workspaces exist from the first migration: 
 | `account_metrics` | account_id, day, followers |
 | `api_keys` | id, workspace_id, name, key_hash (not readable by browser roles), last_used_at, revoked_at |
 | `job_log` | id, kind, post_id/account_id, ok, message, at |
+| `productions` | Content Factory video (ADR 0007): idea, style, use_avatar, avatar_id + version, face_model override, voice_key, music_key, account_id (one), status, step_modes, script, caption + options, media_id, post_id, remake_of, session_url |
+| `production_steps` | production_id, step (`idea`/`script`/`style`/`visuals`/`face_quote`/`render`), status, progress, output (checkpoint), attempt |
+| `production_reworks` | production_id, target (script_line/scene/voice/music/caption/avatar_slot), ref, quote_usd, status |
+| `avatars` / `avatar_versions` | one avatar per account; profile (avatar.json), studio state, current_version; versions keep each saved profile |
+| `factory_settings` | per workspace: caps ($5/video, $50/month), enabled face models, default + fallback, default step modes |
+| `factory_voices` / `factory_music` | shared catalogues (no workspace_id): label, licence, credit, source_url, sample_url |
+| `gen_keys` | provider keys, encrypted (TOKEN_ENC_KEY), last4. Service role only |
+| `gen_jobs` | the spend log: slot, model, idempotency_key (unique), seconds, quote_usd, cost_usd, status, output_url |
+| `factory_tokens` | hashed, expiring session tokens for one production. Service role only |
 
 - **Queue planning:** after any change to an account's slots or posts, `planQueue(slots, timezone, now, posts)` recomputes `scheduled_at` for that account's `queue` posts (pinned posts keep their time and take their slot). Open slots are derived, not stored.
 - **Publishing:** `queued` → (due, quota ok) create container → `publishing` (container_id stored) → poll status each tick → publish → `published` (media id + permalink) → delete the video file, keep the thumbnail. Errors: backoff 1, 2, 4 min; after 3 failures `failed` with `last_error`. A post whose account is `needs_attention` is `paused`. A container is never created twice for one post; the container is checked before every publish, and one that is already `PUBLISHED` (a timed-out or crashed publish) is matched to the account's recent media by caption and time instead of being published again. Quota used up → the post waits for the account's next slot (no retry used). Publishing queues the stats rows (trigger in `0004_publish.sql`). Instagram posts are only claimed when `IG_APP_ID`/`IG_APP_SECRET`/`IG_LOGIN_CONFIG_ID` and `TOKEN_ENC_KEY` are set.
@@ -100,7 +109,7 @@ All tables carry `workspace_id`. Two workspaces exist from the first migration: 
 - **Local / cloud sessions:** `pnpm dev` + `supabase start` (Docker). `.env.local` from `.env.example`; Instagram calls use the fake provider unless `IG_APP_ID` is set.
 - **PRs:** CI only (no Vercel previews in batched QA mode).
 - **Production:** Vercel project `broadcast`, deploys from `main`; Supabase project `broadcast` (free tier). Migrations applied by the main pipeline.
-- **Secrets** (Vercel env + GitHub Actions secrets): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ACCESS_TOKEN` + `SUPABASE_PROJECT_REF` + `SUPABASE_DB_PASSWORD` (CI migrations), `ALLOWED_EMAIL`, `TOKEN_ENC_KEY` (32 random bytes, base64), `CRON_SECRET`, `IG_APP_ID`, `IG_APP_SECRET` (the Meta app's App ID and secret), `IG_LOGIN_CONFIG_ID` (Facebook Login for Business configuration), `APP_URL`.
+- **Secrets** (Vercel env + GitHub Actions secrets): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ACCESS_TOKEN` + `SUPABASE_PROJECT_REF` + `SUPABASE_DB_PASSWORD` (CI migrations), `ALLOWED_EMAIL`, `TOKEN_ENC_KEY` (32 random bytes, base64; also encrypts generation keys), `CRON_SECRET`, `FACTORY_ROUTINE_ID` + `FACTORY_ROUTINE_TOKEN` (Content Factory routine; optional), `IG_APP_ID`, `IG_APP_SECRET` (the Meta app's App ID and secret), `IG_LOGIN_CONFIG_ID` (Facebook Login for Business configuration), `APP_URL`.
 
 ## Conventions
 - Package manager pnpm; Node 22. ESLint (next + typescript-eslint strict) and Prettier.

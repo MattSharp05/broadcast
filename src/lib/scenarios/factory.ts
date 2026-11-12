@@ -441,10 +441,66 @@ export const factoryRework: Scenario = {
   },
 };
 
+export const avatarStudio: Scenario = {
+  name: "avatar-studio",
+  page: "/factory/avatars",
+  description:
+    "The Avatar studio: Maya is saved (v1); Leo is half-way, at the face pack with six shots to review.",
+  build({ now }) {
+    const { seed, id } = baseSeed("avatar-studio", now);
+    addMaya(seed, id, now);
+    const still = (n: number) => `/factory/fake/still-${n}.svg`;
+    seed.factory.avatars.push({
+      id: id("avatar", "leo"),
+      account_id: id("account", "cj"),
+      name: "Leo",
+      studio_step: "face_pack",
+      current_version: 0,
+      profile: { id: "leo", identity: { name: "Leo" } },
+      studio: {
+        personas: [
+          {
+            id: "p1",
+            name: "Leo",
+            age_range: "early 30s",
+            from: "Lisbon",
+            backstory: "A developer who explains code with kitchen analogies.",
+            tone: "playful",
+            energy: "bright",
+            signature_phrase: "Picture this.",
+          },
+        ],
+        persona_pick: "p1",
+        portraits: [1, 2, 3, 4].map((n) => ({
+          id: `m${n}`,
+          url: still(n),
+          label: `Candidate ${n}`,
+        })),
+        portrait_pick: "m2",
+        face_pack: [
+          "Frontal",
+          "Three-quarter left",
+          "Three-quarter right",
+          "Smile",
+          "Wardrobe w1",
+          "Setting s1",
+        ].map((label, i) => ({
+          id: `f${i + 1}`,
+          url: still((i % 4) + 1),
+          label,
+          status: "pending",
+        })),
+      },
+    });
+    return seed;
+  },
+};
+
 export const FACTORY_SCENARIOS: readonly Scenario[] = [
   factoryNew,
   factoryPipeline,
   factoryAvatarQuote,
   factoryOverCap,
   factoryRework,
+  avatarStudio,
 ];

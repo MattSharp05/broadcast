@@ -62,6 +62,17 @@ test("makes a free video from the idea to the queue", async ({ page, loadScenari
   await expect(page.getByTestId("scheduled")).toContainText("@codingjourney");
   // The same video can't go to a second account: remake it instead.
   await expect(page.getByRole("button", { name: /^Remake for @maya.explains/ })).toBeVisible();
+
+  // On the Workflow canvas like any post, with its recipe in the drawer.
+  await page.getByRole("link", { name: "Open the Workflow" }).click();
+  const canvas = page.getByRole("region", { name: "Workflow canvas" });
+  await expect(canvas).toHaveAttribute("data-ready", "true");
+  const card = page.locator('[data-column="codingjourney"] [data-kind="scheduled"]').first();
+  await card.focus();
+  await page.keyboard.press("Enter");
+  const recipe = page.getByRole("dialog").locator('[data-section="recipe"]');
+  await expect(recipe).toContainText("realistic-3d");
+  await expect(recipe).toContainText("floating-cities");
 });
 
 test("lists every video and shows progress, waiting and failed steps", async ({

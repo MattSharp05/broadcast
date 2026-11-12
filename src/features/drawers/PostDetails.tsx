@@ -19,6 +19,7 @@ import type { OnQueueChanged, QueueActions } from "./edit-types";
 import { FailedPost } from "./post/failed";
 import { PostEditor } from "./post/PostEditor";
 import styles from "./drawers.module.css";
+import { RecipeSection } from "./post/Recipe";
 import { Numbers, Row } from "./previews";
 import type { DetailClock } from "./types";
 
@@ -130,6 +131,7 @@ export function PostDetails({
             ]}
           />
         </section>
+        <RecipeSection recipe={detail?.recipe} />
         <section className={styles.section}>
           <h3>Views at each refresh</h3>
           {detail ? <RefreshChart snapshots={detail.snapshots} /> : null}
@@ -201,6 +203,7 @@ export function PostDetails({
           <p className={styles.caption}>{detail?.caption ?? card.title}</p>
         </section>
       </div>
+      <RecipeSection recipe={detail?.recipe} />
       <section className={styles.section} data-section="timing">
         <h3>Timing</h3>
         <p>{pinned ? "Pinned time" : "Queue slot"}</p>

@@ -118,6 +118,37 @@ GET  {BROADCAST_URL}/api/gen/models  -> {"default","fallback","models":[enabled 
   monthly cap. Over either: `402 budget`, nothing is submitted.
 - `output_url` stays valid at least an hour (fal keeps results for an hour); download it at once.
 
+## Hero 3D assets (BC-30)
+For a film's focal object (a landmark, a product), a session can propose an AI-generated 3D model
+instead of the three.js one. Contract agreed with video-editor's `hero-assets` skill
+(`references/broadcast-contract.md`); registry mirrored in `src/lib/factory/mesh-models.json`.
+
+```
+POST /api/factory/hero-proposals
+  {"proposal_id","video_id","object","scene","reason","why_generate","on_screen",
+   "input":{"mode":"image|text","prompt","image"},"suggested_model","estimate_usd","options":[…],
+   "stills":[{"label","image"}],"stage":"proposal|comparison"}
+  -> 200 {"proposal_id","status":"pending"}   idempotent on proposal_id + stage; a comparison adds its stills
+GET  /api/factory/hero-proposals/{proposal_id}
+  -> {"stage","status":"pending|decided","decision":null|{"choice","model","budget_usd","notes","reason","decided_at"}}
+GET  /api/factory/hero-decisions
+  -> [{proposal_id,video_id,object,stage,choice,model,cost_usd,reason,decided_at}]   (every decision: the skill learns from it)
+POST /api/gen/mesh-jobs
+  {"proposal_id","video_id","model","idempotency_key","mode","image","prompt","seed","options"}
+  -> 200 {"job_id","status","quote_usd"} · 403 not_approved · 402 budget · 200 + the same job for a seen key
+GET  /api/gen/mesh-jobs/{job_id} -> {"status","output_url" (Broadcast's copy of the .glb),"outputs","cost_usd","error"}
+```
+
+- Images are a PNG/JPEG data URI (stored by Broadcast), an https URL or a `storage:` path.
+- Matthew decides on the production page: Keep three.js, Redo three.js with notes, or Generate with a
+  model (each listed with its price and licence). After a comparison: Use generated, Keep three.js,
+  Redo, or Generate again. A reason is always required. Autopilot never decides these.
+- A mesh job runs only when the proposal's latest decision is `generate` with that model, and the
+  server's quote (registry price + options) fits the decision's budget and the caps. The fal input is
+  rebuilt from the registry; the client's `fal_input` and `quote_usd` are advisory.
+- A result without a `.glb` fails the job. A finished `.glb` is copied into Broadcast's storage, so
+  the URL outlives fal's.
+
 ## Sandbox
 In the Sandbox workspace no session runs: a fake runner posts canned outputs for every step and
 the proxy's fake provider "generates" clips at once at the quoted price, so the whole page can be

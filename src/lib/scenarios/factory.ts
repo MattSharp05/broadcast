@@ -496,6 +496,115 @@ export const avatarStudio: Scenario = {
   },
 };
 
+/** A 3D film (Las Vegas Sphere) at the visuals step, with a hero proposal in the given state. */
+function heroSeed(name: string, now: Date, state: "waiting" | "compare" | "history"): SandboxSeed {
+  const { seed, id } = baseSeed(name, now);
+  seed.factory.settings = {
+    enabled_mesh_models: ["placeholder", "tripo-v2.5", "meshy-6", "hunyuan3d-v2"],
+    default_mesh_model: "tripo-v2.5",
+  };
+  const pid = addProduction(seed, id, now, {
+    key: "vegas",
+    idea: "How the Las Vegas Sphere works",
+    style: "realistic-3d",
+    account: "cj",
+    done: ["idea", "script", "style"],
+    current: {
+      step: "visuals",
+      status: "running",
+      progress: 40,
+      message: "Building the Sphere in three.js.",
+    },
+    status: "running",
+    hoursAgo: 4,
+  });
+  const still = (n: number) => `/factory/fake/still-${n}.svg`;
+  const heroId = id("hero", "sphere");
+  const stills = [
+    { label: "threejs-wide", url: still(1) },
+    { label: "threejs-close", url: still(2) },
+  ];
+  seed.factory.heroProposals.push({
+    id: heroId,
+    production_id: pid,
+    proposal_id: "vegas-sphere-1",
+    object: "Las Vegas Sphere",
+    scene: "act2/sphere",
+    reason:
+      "The Sphere is on screen for 4 s in a slow push-in; the three.js version reads as a plain ball.",
+    why_generate: "A generated model keeps the LED panel seams and the venue base.",
+    on_screen: "4 s, close-up",
+    input: { mode: "image", prompt: "The Las Vegas Sphere at dusk", image: still(3) },
+    suggested_model: "tripo-v2.5",
+    estimate_usd: 0.3,
+    options: [],
+    stills,
+    comparison_stills: state === "waiting" ? [] : [{ label: "generated-close", url: still(4) }],
+    stage: state === "waiting" ? "proposal" : "comparison",
+    status: state === "history" ? "decided" : "pending",
+  });
+  if (state !== "waiting") {
+    seed.factory.heroDecisions.push({
+      hero_proposal_id: heroId,
+      stage: "proposal",
+      choice: "generate",
+      model: "tripo-v2.5",
+      budget_usd: 0.3,
+      reason: "Close-up for 4 s: worth $0.30 to try.",
+      decided_at: new Date(now.getTime() - 2 * HOUR_MS).toISOString(),
+    });
+    seed.factory.genJobs.push({
+      production_id: pid,
+      kind: "mesh",
+      slot: "vegas-sphere-1",
+      model: "tripo-v2.5",
+      provider: "fal",
+      idempotency_key: "fake:vegas-sphere-1:tripo",
+      seconds: 1,
+      quote_usd: 0.3,
+      cost_usd: 0.3,
+      status: "completed",
+      output_url: "/factory/fake/model.glb",
+      created_at: new Date(now.getTime() - 90 * 60_000).toISOString(),
+    });
+  }
+  if (state === "history") {
+    seed.factory.heroDecisions.push({
+      hero_proposal_id: heroId,
+      stage: "comparison",
+      choice: "use_generated",
+      model: null,
+      budget_usd: null,
+      reason: "The panel seams read in the close-up; the three.js one looked like a beach ball.",
+      decided_at: new Date(now.getTime() - HOUR_MS).toISOString(),
+    });
+  }
+  return seed;
+}
+
+export const factoryHeroProposal: Scenario = {
+  name: "factory-hero-proposal",
+  page: PAGE,
+  description:
+    "A hero 3D asset proposal waiting: the Las Vegas Sphere in three.js, with the 3D models and their prices.",
+  build: ({ now }) => heroSeed("factory-hero-proposal", now, "waiting"),
+};
+
+export const factoryHeroCompare: Scenario = {
+  name: "factory-hero-compare",
+  page: PAGE,
+  description: "A generated Sphere ($0.30, Tripo) next to the three.js one: pick one.",
+  build: ({ now }) => heroSeed("factory-hero-compare", now, "compare"),
+};
+
+export const factoryHeroHistory: Scenario = {
+  name: "factory-hero-history",
+  page: PAGE,
+  description:
+    "A decided hero asset: generate with Tripo, then use generated, each with Matthew's reason.",
+  build: ({ now }) => heroSeed("factory-hero-history", now, "history"),
+};
+
 export const FACTORY_SCENARIOS: readonly Scenario[] = [
   factoryNew,
   factoryPipeline,
@@ -503,4 +612,7 @@ export const FACTORY_SCENARIOS: readonly Scenario[] = [
   factoryOverCap,
   factoryRework,
   avatarStudio,
+  factoryHeroProposal,
+  factoryHeroCompare,
+  factoryHeroHistory,
 ];

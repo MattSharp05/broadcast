@@ -73,6 +73,9 @@ test("/dev lists every scenario and each link loads it", async ({ page }) => {
     "factory-over-cap",
     "factory-rework",
     "avatar-studio",
+    "factory-hero-proposal",
+    "factory-hero-compare",
+    "factory-hero-history",
   ]);
   await expect(page.getByRole("link", { name: "Canvas engine demo" })).toHaveAttribute(
     "href",
@@ -97,6 +100,9 @@ test("/dev lists every scenario and each link loads it", async ({ page }) => {
     "factory-over-cap": 2,
     "factory-rework": 2,
     "avatar-studio": 2,
+    "factory-hero-proposal": 2,
+    "factory-hero-compare": 2,
+    "factory-hero-history": 2,
   };
   for (const [name, accounts] of Object.entries(expected)) {
     await page.goto("/dev");

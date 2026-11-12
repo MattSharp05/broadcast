@@ -224,3 +224,34 @@ test("the avatar studio walks to v1, and a new voice makes v2", async ({ page, l
   await expect(page.getByTestId("toast")).toContainText("Saved as v2");
   await expect(page.getByTestId("avatar-versions")).toContainText("v2");
 });
+
+test("hero 3D asset: Matthew picks a model (paid, priced) with a reason, then compares", async ({
+  page,
+  loadScenario,
+}) => {
+  await loadScenario("factory-hero-proposal", { path: "/factory" });
+  await page.getByRole("link", { name: "How the Las Vegas Sphere works" }).click();
+  const card = page.locator('[data-hero="vegas-sphere-1"]');
+  await expect(card).toContainText("Waiting for you");
+  await expect(card.getByRole("group", { name: "three.js version" }).locator("img")).toHaveCount(2);
+  const generate = card.getByRole("button", {
+    name: /^Generate with Tripo v2.5 \(fal\), paid \$0\.30/,
+  });
+  await expect(generate).toBeDisabled(); // a reason first
+  await card.getByLabel(/Why/).fill("Close-up for 4 s");
+  await generate.click();
+  await expect(card.getByTestId("hero-decisions")).toContainText(
+    "Generate with tripo-v2.5 (up to $0.30)",
+  );
+
+  await loadScenario("factory-hero-compare", { path: "/factory" });
+  await page.getByRole("link", { name: "How the Las Vegas Sphere works" }).click();
+  const compare = page.locator('[data-hero="vegas-sphere-1"]');
+  await expect(compare).toContainText("Compare and pick");
+  await expect(compare.getByRole("group", { name: "Generated version" })).toBeVisible();
+  await compare.getByLabel(/Why/).fill("The seams read better");
+  await compare.getByRole("button", { name: "Use generated" }).click();
+  await expect(compare.getByTestId("hero-decisions")).toContainText(
+    "After comparing: Use generated",
+  );
+});

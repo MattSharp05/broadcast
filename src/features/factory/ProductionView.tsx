@@ -19,6 +19,7 @@ import { STYLE_PACKS } from "@/lib/domain/factory/styles";
 import { AudioPlayButton } from "./AudioPlayButton";
 import { AvatarSection } from "./AvatarSection";
 import { PipelineSection } from "./PipelineSection";
+import { HeroSection } from "./HeroSection";
 import { ReworkSection } from "./ReworkSection";
 import { CaptionSection } from "./CaptionSection";
 import { STATUS_TONE, STATUS_WORD } from "./status";
@@ -72,6 +73,7 @@ const SECTIONS = [
   ["voice", "4. Voiceover"],
   ["music", "5. Music"],
   ["render", "6. Visuals and render"],
+  ["hero", "Hero 3D assets"],
   ["rework", "7. Rework"],
   ["caption", "8. Caption"],
   ["schedule", "9. Schedule"],
@@ -170,6 +172,7 @@ export function ProductionView({
               notify={notify}
               pending={pending}
             />
+            <HeroSection video={video} options={options} run={run} pending={pending} />
             <ReworkSection video={video} run={run} pending={pending} />
             <CaptionSection video={video} save={save} pending={pending} />
             <ScheduleSection video={video} options={options} run={run} pending={pending} />

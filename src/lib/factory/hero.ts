@@ -140,6 +140,7 @@ export async function upsertProposal(
     reason: str(body.reason),
     why_generate: str(body.why_generate),
     on_screen: str(body.on_screen, 200),
+    score: str(body.score, 500),
     input: {
       mode: input.mode === "text" ? "text" : "image",
       prompt: str(input.prompt) || null,
@@ -215,7 +216,7 @@ export async function decisionsExport(ctx: HeroContext) {
       .order("decided_at"),
     ctx.db
       .from("hero_proposals")
-      .select("id, proposal_id, production_id, object")
+      .select("id, proposal_id, production_id, object, score")
       .eq("workspace_id", ctx.workspaceId),
     ctx.db
       .from("gen_jobs")
@@ -234,6 +235,7 @@ export async function decisionsExport(ctx: HeroContext) {
       proposal_id: p?.proposal_id ?? null,
       video_id: p?.production_id ?? null,
       object: p?.object ?? null,
+      score: p?.score ?? "",
       stage: d.stage,
       choice: d.choice,
       model: d.model,

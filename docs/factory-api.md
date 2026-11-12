@@ -125,14 +125,14 @@ instead of the three.js one. Contract agreed with video-editor's `hero-assets` s
 
 ```
 POST /api/factory/hero-proposals
-  {"proposal_id","video_id","object","scene","reason","why_generate","on_screen",
+  {"proposal_id","video_id","object","scene","reason","why_generate","on_screen","score",
    "input":{"mode":"image|text","prompt","image"},"suggested_model","estimate_usd","options":[…],
    "stills":[{"label","image"}],"stage":"proposal|comparison"}
   -> 200 {"proposal_id","status":"pending"}   idempotent on proposal_id + stage; a comparison adds its stills
 GET  /api/factory/hero-proposals/{proposal_id}
   -> {"stage","status":"pending|decided","decision":null|{"choice","model","budget_usd","notes","reason","decided_at"}}
 GET  /api/factory/hero-decisions
-  -> [{proposal_id,video_id,object,stage,choice,model,cost_usd,reason,decided_at}]   (every decision: the skill learns from it)
+  -> [{proposal_id,video_id,object,score,stage,choice,model,cost_usd,reason,decided_at}]   (every decision: the skill learns from it)
 POST /api/gen/mesh-jobs
   {"proposal_id","video_id","model","idempotency_key","mode","image","prompt","seed","options"}
   -> 200 {"job_id","status","quote_usd"} · 403 not_approved · 402 budget · 200 + the same job for a seen key

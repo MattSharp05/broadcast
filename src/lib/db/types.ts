@@ -795,6 +795,7 @@ export type Database = {
           proposal_id: string;
           reason: string;
           scene: string;
+          score: string;
           stage: string;
           status: string;
           stills: NonNullable<Json>;
@@ -817,6 +818,7 @@ export type Database = {
           proposal_id: string;
           reason?: string;
           scene?: string;
+          score?: string;
           stage?: string;
           status?: string;
           stills?: NonNullable<Json>;
@@ -838,6 +840,7 @@ export type Database = {
           proposal_id?: string;
           reason?: string;
           scene?: string;
+          score?: string;
           stage?: string;
           status?: string;
           stills?: NonNullable<Json>;

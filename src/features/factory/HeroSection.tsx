@@ -119,6 +119,11 @@ function HeroCard({
           {waiting ? (comparison ? "Compare and pick" : "Waiting for you") : "Decided"}
         </StatusDot>
       </div>
+      {hero.score ? (
+        <p className={styles.meta} data-testid="hero-score">
+          Score: {hero.score}
+        </p>
+      ) : null}
       {hero.reason ? <p className={styles.help}>{hero.reason}</p> : null}
       {hero.whyGenerate ? (
         <p className={styles.help}>Why generating may look better: {hero.whyGenerate}</p>

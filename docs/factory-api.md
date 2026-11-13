@@ -57,6 +57,10 @@ Everything the step needs:
 }
 ```
 
+`voice.key` names a voice in video-editor's `lab/voice-picker/library/voices.json` (its reference
+clip and text); the session clones every line from that clip, so the video sounds like the sample.
+A new voice in `factory_voices` needs its reference clip added there under the same key.
+
 `face_clips` lists the paid clips already made. **On any rework other than an avatar slot, reuse
 them and keep each avatar slot's audio exactly as it was**: the proxy returns the kept clip for a
 slot whatever idempotency key is sent, so nothing is generated or charged again.

@@ -10,15 +10,22 @@ import {
   SIGNUP_CHECKS,
   SLOTS_MAX,
   addSlot,
+  cleanUsername,
   cleanVaultUrl,
   type SignupCheck,
   type WizardDraft,
 } from "@/lib/domain/add-account";
 import { TAG_MAX_LENGTH, addTag, removeTag, tagSuggestions } from "@/lib/domain/tags";
 import styles from "./wizard.module.css";
+import { TextArea } from "@/components/TextArea";
 
 export const INSTAGRAM_SIGNUP_URL = "https://www.instagram.com/accounts/emailsignup/";
-export const INSTAGRAM_TESTER_INVITES_URL = "https://www.instagram.com/accounts/manage_access/";
+export const FACEBOOK_PAGE_CREATE_URL = "https://www.facebook.com/pages/create";
+export const FACEBOOK_YOUR_PAGES_URL = "https://www.facebook.com/pages/?category=your_pages";
+export const FACEBOOK_PAGE_INSTAGRAM_URL =
+  "https://www.facebook.com/settings/?tab=linked_instagram";
+export const BUSINESS_SUITE_INSTAGRAM_URL =
+  "https://business.facebook.com/latest/settings/instagram_account";
 export const BITWARDEN_URL = "https://vault.bitwarden.com/";
 
 export interface StepProps {
@@ -157,18 +164,49 @@ const CHECK_COPY: Record<SignupCheck, { title: string; help: React.ReactNode }> 
     title: "Switched to a professional account (Creator)",
     help: "Instagram settings, then Account type and tools. Publishing through the API needs this.",
   },
-  tester: {
-    title: "Tester invite for Broadcast accepted",
-    help: (
-      <>
-        Instagram settings, then Apps and websites, then Tester invites.{" "}
-        <a href={INSTAGRAM_TESTER_INVITES_URL} target="_blank" rel="noopener noreferrer">
-          Open tester invites
-        </a>
-      </>
-    ),
+  page: {
+    title: "Linked to its own Facebook Page",
+    help: "Broadcast connects through Facebook, which only offers Instagram accounts linked to a Page. Each account needs its own Page: one already linked to another account can't be reused.",
   },
 };
+
+/** How to link the new account to a Page, on desktop (shown under the Page check). */
+function PageSteps({ username }: { username: string }) {
+  const handle = cleanUsername(username);
+  return (
+    <ol className={styles.howTo} aria-label="How to link a Facebook Page">
+      <li>
+        Create a Page named after the account, for example &ldquo;StoryTimeScroll AI&rdquo;, with
+        category Digital creator. Skip the optional steps after Create Page.{" "}
+        <a href={FACEBOOK_PAGE_CREATE_URL} target="_blank" rel="noopener noreferrer">
+          Create a Page
+        </a>
+      </li>
+      <li>
+        Switch into the new Page: click Switch next to it on Your Pages.{" "}
+        <a href={FACEBOOK_YOUR_PAGES_URL} target="_blank" rel="noopener noreferrer">
+          Open Your Pages
+        </a>
+      </li>
+      <li>
+        Still switched into the Page, open its Instagram settings and click Connect account. Log in
+        as <b>@{handle ?? "the new account"}</b>; if Instagram is logged in as another account,
+        switch or log out first.{" "}
+        <a href={FACEBOOK_PAGE_INSTAGRAM_URL} target="_blank" rel="noopener noreferrer">
+          Open the Page&rsquo;s Instagram settings
+        </a>
+      </li>
+      <li>
+        No Connect button there? Use Meta Business Suite: pick the new Page at the top left, then
+        Connect Instagram account.{" "}
+        <a href={BUSINESS_SUITE_INSTAGRAM_URL} target="_blank" rel="noopener noreferrer">
+          Open Business Suite
+        </a>
+      </li>
+      <li>Check it worked: the Page&rsquo;s Instagram settings list the new account.</li>
+    </ol>
+  );
+}
 
 export function SignupStep({ draft, update }: StepProps) {
   const usernameId = useId();
@@ -198,21 +236,31 @@ export function SignupStep({ draft, update }: StepProps) {
           }}
         />
       </div>
-      {SIGNUP_CHECKS.map((c) => (
-        <label key={c} className={styles.check}>
-          <input
-            type="checkbox"
-            checked={draft.checks[c]}
-            onChange={(e) => {
-              update({ checks: { ...draft.checks, [c]: e.target.checked } });
-            }}
-          />
-          <span>
-            <b>{CHECK_COPY[c].title}</b>
-            <span>{CHECK_COPY[c].help}</span>
-          </span>
-        </label>
-      ))}
+      {SIGNUP_CHECKS.map((c) => {
+        const box = (
+          <label key={c} className={styles.check}>
+            <input
+              type="checkbox"
+              checked={draft.checks[c]}
+              onChange={(e) => {
+                update({ checks: { ...draft.checks, [c]: e.target.checked } });
+              }}
+            />
+            <span>
+              <b>{CHECK_COPY[c].title}</b>
+              <span>{CHECK_COPY[c].help}</span>
+            </span>
+          </label>
+        );
+        return c === "page" ? (
+          <div key={c} className={styles.checkGroup}>
+            {box}
+            <PageSteps username={draft.username} />
+          </div>
+        ) : (
+          box
+        );
+      })}
     </>
   );
 }
@@ -337,7 +385,7 @@ export function PostingStep({
         <label htmlFor={descId} className={styles.label}>
           Description
         </label>
-        <textarea
+        <TextArea
           id={descId}
           className={styles.input}
           rows={3}

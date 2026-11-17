@@ -142,14 +142,10 @@ describe("stepComplete", () => {
   });
 
   it("step 2: a valid username and all three boxes", () => {
-    const all = { verified: true, creator: true, tester: true };
+    const all = { verified: true, creator: true, page: true };
     expect(stepComplete(draft({ username: "kartracer.dev" }), 1, null)).toBe(false);
     expect(
-      stepComplete(
-        draft({ username: "kartracer.dev", checks: { ...all, tester: false } }),
-        1,
-        null,
-      ),
+      stepComplete(draft({ username: "kartracer.dev", checks: { ...all, page: false } }), 1, null),
     ).toBe(false);
     expect(stepComplete(draft({ username: "", checks: all }), 1, null)).toBe(false);
     expect(stepComplete(draft({ username: "kart racer", checks: all }), 1, null)).toBe(false);
@@ -199,7 +195,7 @@ describe("parseDraft", () => {
     const saved = draft({
       step: 2,
       username: "kartracer.dev",
-      checks: { verified: true, creator: true, tester: true },
+      checks: { verified: true, creator: true, page: true },
       vaultUrl: "https://vault.bitwarden.com/x",
       tags: ["Tech"],
     });
@@ -224,7 +220,7 @@ describe("parseDraft", () => {
     const d = draft({
       step: 4,
       username: "ok",
-      checks: { verified: true, creator: true, tester: true },
+      checks: { verified: true, creator: true, page: true },
     });
     expect(parseDraft(JSON.stringify(d), BRANDS)?.step).toBe(3);
   });

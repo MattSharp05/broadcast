@@ -15,7 +15,7 @@ async function openWizard(page: Page) {
 const CHECKS = [
   /Account created and email or phone verified/,
   /Switched to a professional/,
-  /Tester invite/,
+  /Linked to its own Facebook Page/,
 ];
 
 async function fillSignup(page: Page, username: string) {

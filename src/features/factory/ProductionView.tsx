@@ -24,6 +24,7 @@ import { ReworkSection } from "./ReworkSection";
 import { CaptionSection } from "./CaptionSection";
 import { STATUS_TONE, STATUS_WORD } from "./status";
 import styles from "./factory.module.css";
+import { TextArea } from "@/components/TextArea";
 
 export interface ToastState {
   message: string;
@@ -205,7 +206,7 @@ function IdeaSection({ video, save, pending }: SectionProps) {
       </p>
       <label className={styles.field}>
         Idea
-        <textarea
+        <TextArea
           className={styles.textarea}
           value={idea}
           onChange={(e) => {

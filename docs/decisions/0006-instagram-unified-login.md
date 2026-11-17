@@ -101,8 +101,10 @@ Matthew chose (2026-11-08) user access tokens from the login flow, not system-us
    OAuth login, Web OAuth login, Enforce HTTPS and Strict mode on.
 3. App settings → Basic: App domains `broadcast-iota-murex.vercel.app`; copy App ID and App secret.
 4. App roles: Matthew's Facebook account is an admin of the app (development mode only lets app
-   roles log in). If the Unified-login page asks, add the Instagram account as an Instagram Tester
-   and accept the invite in Instagram.
+   roles log in). No Instagram Tester invite is needed: each Instagram account must instead be
+   linked to its own Facebook Page that Matthew manages (the Add account wizard's step 2 walks
+   through it, BC-32), and in the Facebook window he ticks the new Page and account while keeping
+   the existing ones ticked.
 5. Vercel → broadcast → Settings → Environment Variables (Production): `IG_APP_ID` = App ID,
    `IG_APP_SECRET` = App secret, `IG_LOGIN_CONFIG_ID` = Configuration ID (`APP_URL` and
    `TOKEN_ENC_KEY` already set). Redeploy.

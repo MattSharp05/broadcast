@@ -18,6 +18,7 @@ import styles from "./content.module.css";
 import { readVideo, type ReadVideo } from "./media";
 import type { ActionResult, AddContentInput, AddedContent } from "./types";
 import { putFile, requestUploadTicket } from "./upload";
+import { TextArea } from "@/components/TextArea";
 
 export interface AddContentPreset {
   accountIds: string[];
@@ -330,7 +331,7 @@ function AddContentForm({
 
         <div className={styles.field}>
           <label htmlFor={ids.caption}>Caption</label>
-          <textarea
+          <TextArea
             id={ids.caption}
             className={styles.input}
             rows={3}

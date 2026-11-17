@@ -19,7 +19,7 @@ export type WizardStep = 0 | 1 | 2 | 3 | 4;
 export const LAST_STEP: WizardStep = 4;
 
 /** The three things to do on Instagram before connecting (step 2). */
-export const SIGNUP_CHECKS = ["verified", "creator", "tester"] as const;
+export const SIGNUP_CHECKS = ["verified", "creator", "page"] as const;
 export type SignupCheck = (typeof SIGNUP_CHECKS)[number];
 
 /** Posting slots a new account starts with (the mockup's). */
@@ -52,7 +52,7 @@ export function emptyDraft(brands: readonly { id: string }[]): WizardDraft {
     brandId: brands[0]?.id ?? NEW_BRAND,
     newBrand: "",
     username: "",
-    checks: { verified: false, creator: false, tester: false },
+    checks: { verified: false, creator: false, page: false },
     vaultUrl: "",
     accountId: null,
     tags: [],
@@ -229,7 +229,7 @@ export function parseDraft(
     checks: {
       verified: checks.verified === true,
       creator: checks.creator === true,
-      tester: checks.tester === true,
+      page: checks.page === true,
     },
     vaultUrl: str(data.vaultUrl),
     accountId,

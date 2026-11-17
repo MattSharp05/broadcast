@@ -83,11 +83,26 @@ export function ConnectStep({
             publish and read insights. You&rsquo;ll come straight back here.
           </p>
         ) : (
-          <p className={styles.lead}>
-            Facebook opens in a pop-up. Log in, choose <b>@{typed ?? "your new account"}</b> and its
-            Facebook Page, and allow Broadcast to publish and read insights. You&rsquo;ll come
-            straight back here.
-          </p>
+          <>
+            <p className={styles.lead}>
+              Facebook opens in a pop-up. Log in with your own Facebook account, then:
+            </p>
+            <ol className={styles.steps}>
+              <li>
+                If Facebook offers your previous choices, click <b>Edit previous settings</b> (or
+                Edit access). Otherwise it reuses them and the new account isn&rsquo;t shared.
+              </li>
+              <li>
+                Pages: tick the new account&rsquo;s Page <b>and</b> keep the Pages you already use
+                ticked.
+              </li>
+              <li>
+                Instagram accounts: tick <b>@{typed ?? "your new account"}</b> and keep the accounts
+                already in Broadcast ticked. Unticking one stops Broadcast posting to it.
+              </li>
+              <li>Allow publishing and insights. You&rsquo;ll come straight back here.</li>
+            </ol>
+          </>
         )}
         {error}
         {connectButton(sandbox ? "Connect (Sandbox)" : "Connect with Instagram")}
@@ -121,8 +136,9 @@ export function ConnectStep({
       )}
       {otherHandle ? (
         <Note tone="warn">
-          You connected @{connected.handle}, not @{typed}. Continue if that&rsquo;s right, or
-          reconnect and log in as @{typed}.
+          You connected @{connected.handle}, not @{typed}, so Facebook didn&rsquo;t share @{typed}.
+          Check it&rsquo;s linked to its own Facebook Page (step 2), then Reconnect: in the Facebook
+          window click Edit previous settings and tick @{typed} and its Page.
         </Note>
       ) : null}
       {otherBrand ? (
@@ -166,7 +182,7 @@ export function ConnectStep({
           <dd>Stored encrypted, renews automatically</dd>
         </div>
       </dl>
-      {ready ? null : connectButton("Reconnect", true)}
+      {ready && !otherHandle ? null : connectButton("Reconnect", true)}
     </>
   );
 }

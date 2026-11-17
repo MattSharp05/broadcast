@@ -107,9 +107,9 @@ export const CONNECT_ERRORS = {
   wrong_account:
     "The Instagram account you shared isn't the one you're reconnecting. Reconnect again and, in the Facebook window, choose that account.",
   no_instagram:
-    "Facebook didn't share an Instagram account. Connect again and, in the Facebook window, choose your Instagram account. It must be a business or creator account linked to a Facebook Page you manage.",
+    "Facebook didn't share an Instagram account. Connect again and, in the Facebook window, click Edit previous settings and tick your Instagram account and its Page. It must be a business or creator account linked to a Facebook Page you manage.",
   several_accounts:
-    "You shared several Instagram accounts that aren't in Broadcast yet, so Broadcast can't tell which one to add. Connect again and, in the Facebook window, choose only the account you want to add.",
+    "You shared several Instagram accounts that aren't in Broadcast yet, so Broadcast can't tell which one to add. Connect again and, in the Facebook window, tick only one new account (keep the accounts already in Broadcast ticked).",
   failed:
     "Connecting failed on Broadcast's side. Try again; if it keeps failing, check the server logs.",
 } as const;

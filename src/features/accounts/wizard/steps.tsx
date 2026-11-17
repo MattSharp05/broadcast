@@ -17,6 +17,7 @@ import {
 } from "@/lib/domain/add-account";
 import { TAG_MAX_LENGTH, addTag, removeTag, tagSuggestions } from "@/lib/domain/tags";
 import styles from "./wizard.module.css";
+import { TextArea } from "@/components/TextArea";
 
 export const INSTAGRAM_SIGNUP_URL = "https://www.instagram.com/accounts/emailsignup/";
 export const FACEBOOK_PAGE_CREATE_URL = "https://www.facebook.com/pages/create";
@@ -384,7 +385,7 @@ export function PostingStep({
         <label htmlFor={descId} className={styles.label}>
           Description
         </label>
-        <textarea
+        <TextArea
           id={descId}
           className={styles.input}
           rows={3}

@@ -6,6 +6,7 @@ import { Button } from "@/components/Button";
 import type { ProductionPage } from "@/lib/db/factory-page";
 import { CAPTION_MAX } from "@/lib/domain/factory/captions";
 import styles from "./factory.module.css";
+import { TextArea } from "@/components/TextArea";
 
 /** Section 8: generated caption options with their credit lines; pick one and edit it. */
 export function CaptionSection({
@@ -55,7 +56,7 @@ export function CaptionSection({
           </div>
           <label className={styles.field}>
             Caption
-            <textarea
+            <TextArea
               className={styles.textarea}
               value={text}
               onChange={(e) => {

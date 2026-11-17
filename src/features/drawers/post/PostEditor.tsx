@@ -19,6 +19,7 @@ import type { DetailClock } from "../types";
 import { EDIT_MESSAGES } from "@/lib/domain/queue-edit";
 import { MoveForm, useMoveChoices } from "./move";
 import { RecipeSection } from "./Recipe";
+import { TextArea } from "@/components/TextArea";
 
 const HOUR_MS = 3_600_000;
 const QUARTER_MS = 15 * 60_000;
@@ -110,7 +111,7 @@ export function PostEditor({ card, account, detail, clock, actions, onChanged }:
         />
         <div className={`${edit.field} ${edit.grow}`} data-section="caption">
           <label htmlFor={ids.caption}>Caption</label>
-          <textarea
+          <TextArea
             id={ids.caption}
             className={edit.input}
             rows={7}

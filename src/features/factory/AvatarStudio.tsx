@@ -27,6 +27,7 @@ import { usd } from "@/lib/domain/factory/budget";
 import { AudioPlayButton } from "./AudioPlayButton";
 import { useFactoryAction } from "./ProductionView";
 import styles from "./factory.module.css";
+import { TextArea } from "@/components/TextArea";
 
 interface AvatarData {
   id: string;
@@ -571,7 +572,7 @@ function ProfileForm(props: {
       </div>
       <label className={styles.field}>
         Backstory
-        <textarea
+        <TextArea
           className={styles.textarea}
           value={backstory}
           onChange={(e) => {
@@ -687,7 +688,7 @@ function ProfileForm(props: {
       </div>
       <label className={styles.field}>
         Notes (what worked)
-        <textarea
+        <TextArea
           className={styles.textarea}
           value={notes}
           onChange={(e) => {

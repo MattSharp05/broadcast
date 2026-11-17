@@ -26,6 +26,10 @@
   border-left: 1px solid var(--line);
   box-shadow: var(--shadow-lg);
   color: var(--ink);
+  /* The whole panel scrolls, header included: a long title (a post's full caption) mustn't
+     squeeze the body into a sliver. */
+  overflow-y: auto;
+  overscroll-behavior: contain;
   animation: slide 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
@@ -35,6 +39,7 @@
 
 .head {
   display: flex;
+  flex: none;
   align-items: flex-start;
   gap: 12px;
   padding: 18px 20px 16px;
@@ -74,11 +79,9 @@
 
 .body {
   display: flex;
-  flex: 1;
+  flex: 1 0 auto;
   flex-direction: column;
   gap: 22px;
-  min-height: 0;
-  overflow: auto;
   padding: 20px;
   padding-right: max(20px, env(safe-area-inset-right, 0px));
 }

@@ -202,6 +202,58 @@ export type Database = {
           },
         ];
       };
+      board_cards: {
+        Row: {
+          id: string;
+          position: number;
+          production_id: string;
+          scene_id: string | null;
+          seconds: number;
+          status: string;
+          still_path: string | null;
+          text: string;
+          workspace_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          id?: string;
+          position: number;
+          production_id: string;
+          scene_id?: string | null;
+          seconds: number;
+          status?: string;
+          still_path?: string | null;
+          text?: string;
+          workspace_id: string;
+        };
+        Update: {
+          id?: string;
+          position?: number;
+          production_id?: string;
+          scene_id?: string | null;
+          seconds?: number;
+          status?: string;
+          still_path?: string | null;
+          text?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "board_cards_production_id_workspace_id_fkey";
+            columns: ["production_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "productions";
+            referencedColumns: ["id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "board_cards_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       brands: {
         Row: {
           created_at: string;
@@ -280,6 +332,71 @@ export type Database = {
           },
           {
             foreignKeyName: "content_uploads_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      delivery_packs: {
+        Row: {
+          caption: string;
+          checks: NonNullable<Json>;
+          cover_path: string | null;
+          cover_t_s: number | null;
+          hashtags: string[];
+          id: string;
+          manifest: NonNullable<Json>;
+          production_id: string;
+          ready_at: string | null;
+          version_id: string;
+          workspace_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          caption?: string;
+          checks?: NonNullable<Json>;
+          cover_path?: string | null;
+          cover_t_s?: number | null;
+          hashtags?: string[];
+          id?: string;
+          manifest?: NonNullable<Json>;
+          production_id: string;
+          ready_at?: string | null;
+          version_id: string;
+          workspace_id: string;
+        };
+        Update: {
+          caption?: string;
+          checks?: NonNullable<Json>;
+          cover_path?: string | null;
+          cover_t_s?: number | null;
+          hashtags?: string[];
+          id?: string;
+          manifest?: NonNullable<Json>;
+          production_id?: string;
+          ready_at?: string | null;
+          version_id?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "delivery_packs_production_id_workspace_id_fkey";
+            columns: ["production_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "productions";
+            referencedColumns: ["id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "delivery_packs_version_id_production_id_workspace_id_fkey";
+            columns: ["version_id", "production_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "production_versions";
+            referencedColumns: ["id", "production_id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "delivery_packs_workspace_id_fkey";
             columns: ["workspace_id"];
             isOneToOne: false;
             referencedRelation: "workspaces";
@@ -925,6 +1042,7 @@ export type Database = {
       media_assets: {
         Row: {
           bytes: number | null;
+          cover_path: string | null;
           created_at: string;
           deleted_at: string | null;
           duration_s: number | null;
@@ -940,6 +1058,7 @@ export type Database = {
         ComputedFields: never;
         Insert: {
           bytes?: number | null;
+          cover_path?: string | null;
           created_at?: string;
           deleted_at?: string | null;
           duration_s?: number | null;
@@ -954,6 +1073,7 @@ export type Database = {
         };
         Update: {
           bytes?: number | null;
+          cover_path?: string | null;
           created_at?: string;
           deleted_at?: string | null;
           duration_s?: number | null;
@@ -1258,6 +1378,55 @@ export type Database = {
           },
         ];
       };
+      production_events: {
+        Row: {
+          actor: string;
+          created_at: string;
+          id: string;
+          intent: string;
+          production_id: string;
+          session_url: string | null;
+          step: string | null;
+          workspace_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          actor: string;
+          created_at?: string;
+          id?: string;
+          intent: string;
+          production_id: string;
+          session_url?: string | null;
+          step?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          actor?: string;
+          created_at?: string;
+          id?: string;
+          intent?: string;
+          production_id?: string;
+          session_url?: string | null;
+          step?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "production_events_production_id_workspace_id_fkey";
+            columns: ["production_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "productions";
+            referencedColumns: ["id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "production_events_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       production_reworks: {
         Row: {
           created_at: string;
@@ -1380,11 +1549,112 @@ export type Database = {
           },
         ];
       };
+      production_versions: {
+        Row: {
+          batch_id: string | null;
+          bytes: number | null;
+          contact_sheet_path: string | null;
+          created_at: string;
+          duration_s: number | null;
+          fps: number | null;
+          git_sha: string;
+          height: number | null;
+          id: string;
+          intent: string;
+          loudness_lufs: number | null;
+          made_by: string;
+          media_id: string | null;
+          number: number;
+          production_id: string;
+          proxy_path: string | null;
+          pruned_at: string | null;
+          true_peak_db: number | null;
+          width: number | null;
+          workspace_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          batch_id?: string | null;
+          bytes?: number | null;
+          contact_sheet_path?: string | null;
+          created_at?: string;
+          duration_s?: number | null;
+          fps?: number | null;
+          git_sha: string;
+          height?: number | null;
+          id?: string;
+          intent?: string;
+          loudness_lufs?: number | null;
+          made_by: string;
+          media_id?: string | null;
+          number: number;
+          production_id: string;
+          proxy_path?: string | null;
+          pruned_at?: string | null;
+          true_peak_db?: number | null;
+          width?: number | null;
+          workspace_id: string;
+        };
+        Update: {
+          batch_id?: string | null;
+          bytes?: number | null;
+          contact_sheet_path?: string | null;
+          created_at?: string;
+          duration_s?: number | null;
+          fps?: number | null;
+          git_sha?: string;
+          height?: number | null;
+          id?: string;
+          intent?: string;
+          loudness_lufs?: number | null;
+          made_by?: string;
+          media_id?: string | null;
+          number?: number;
+          production_id?: string;
+          proxy_path?: string | null;
+          pruned_at?: string | null;
+          true_peak_db?: number | null;
+          width?: number | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "production_versions_batch_id_production_id_workspace_id_fkey";
+            columns: ["batch_id", "production_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "review_batches";
+            referencedColumns: ["id", "production_id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "production_versions_media_id_workspace_id_fkey";
+            columns: ["media_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "media_assets";
+            referencedColumns: ["id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "production_versions_production_id_workspace_id_fkey";
+            columns: ["production_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "productions";
+            referencedColumns: ["id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "production_versions_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       productions: {
         Row: {
           account_id: string | null;
           avatar_id: string | null;
           avatar_version: number | null;
+          board_approved_at: string | null;
+          board_rev: number;
           caption: string | null;
           caption_options: NonNullable<Json>;
           created_at: string;
@@ -1413,6 +1683,8 @@ export type Database = {
           account_id?: string | null;
           avatar_id?: string | null;
           avatar_version?: number | null;
+          board_approved_at?: string | null;
+          board_rev?: number;
           caption?: string | null;
           caption_options?: NonNullable<Json>;
           created_at?: string;
@@ -1440,6 +1712,8 @@ export type Database = {
           account_id?: string | null;
           avatar_id?: string | null;
           avatar_version?: number | null;
+          board_approved_at?: string | null;
+          board_rev?: number;
           caption?: string | null;
           caption_options?: NonNullable<Json>;
           created_at?: string;
@@ -1515,6 +1789,169 @@ export type Database = {
           },
           {
             foreignKeyName: "productions_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      review_batches: {
+        Row: {
+          answered_by_version: string | null;
+          id: string;
+          production_id: string;
+          sent_at: string;
+          session_id: string | null;
+          session_url: string | null;
+          status: string;
+          version_id: string;
+          workspace_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          answered_by_version?: string | null;
+          id?: string;
+          production_id: string;
+          sent_at?: string;
+          session_id?: string | null;
+          session_url?: string | null;
+          status?: string;
+          version_id: string;
+          workspace_id: string;
+        };
+        Update: {
+          answered_by_version?: string | null;
+          id?: string;
+          production_id?: string;
+          sent_at?: string;
+          session_id?: string | null;
+          session_url?: string | null;
+          status?: string;
+          version_id?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "review_batches_answered_by_version_production_id_workspace_fkey";
+            columns: ["answered_by_version", "production_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "production_versions";
+            referencedColumns: ["id", "production_id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "review_batches_production_id_workspace_id_fkey";
+            columns: ["production_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "productions";
+            referencedColumns: ["id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "review_batches_version_id_production_id_workspace_id_fkey";
+            columns: ["version_id", "production_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "production_versions";
+            referencedColumns: ["id", "production_id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "review_batches_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      review_notes: {
+        Row: {
+          answered_in_version: string | null;
+          batch_id: string | null;
+          box: Json | null;
+          created_at: string;
+          crop_path: string | null;
+          frame: number | null;
+          id: string;
+          kind: string;
+          number: number;
+          production_id: string;
+          reply: string | null;
+          status: string;
+          t_s: number | null;
+          text: string;
+          updated_at: string;
+          version_id: string;
+          workspace_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          answered_in_version?: string | null;
+          batch_id?: string | null;
+          box?: Json | null;
+          created_at?: string;
+          crop_path?: string | null;
+          frame?: number | null;
+          id?: string;
+          kind: string;
+          number: number;
+          production_id: string;
+          reply?: string | null;
+          status?: string;
+          t_s?: number | null;
+          text: string;
+          updated_at?: string;
+          version_id: string;
+          workspace_id: string;
+        };
+        Update: {
+          answered_in_version?: string | null;
+          batch_id?: string | null;
+          box?: Json | null;
+          created_at?: string;
+          crop_path?: string | null;
+          frame?: number | null;
+          id?: string;
+          kind?: string;
+          number?: number;
+          production_id?: string;
+          reply?: string | null;
+          status?: string;
+          t_s?: number | null;
+          text?: string;
+          updated_at?: string;
+          version_id?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "review_notes_answered_in_version_production_id_workspace_i_fkey";
+            columns: ["answered_in_version", "production_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "production_versions";
+            referencedColumns: ["id", "production_id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "review_notes_batch_id_production_id_workspace_id_fkey";
+            columns: ["batch_id", "production_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "review_batches";
+            referencedColumns: ["id", "production_id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "review_notes_production_id_workspace_id_fkey";
+            columns: ["production_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "productions";
+            referencedColumns: ["id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "review_notes_version_id_production_id_workspace_id_fkey";
+            columns: ["version_id", "production_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "production_versions";
+            referencedColumns: ["id", "production_id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "review_notes_workspace_id_fkey";
             columns: ["workspace_id"];
             isOneToOne: false;
             referencedRelation: "workspaces";

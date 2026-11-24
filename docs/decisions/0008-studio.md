@@ -14,8 +14,11 @@ ending with a pack that is ready to post. None of that works if each render over
   the full file is stored), a 720p proxy and a contact sheet in the `factory` bucket, its facts
   (duration, fps, size, bytes, loudness, true peak), who made it (`render`, `revise`, `import`)
   and a one-line intent (≤ 160). Rows never change after insert (trigger
-  `production_versions_immutable`); the only updates allowed are storing the file once, pruning
-  (`media_id` / `proxy_path` cleared, `pruned_at` set) and a deleted batch clearing `batch_id`.
+  `production_versions_immutable`); the only updates allowed are filling in the file, proxy and
+  facts once (from null) as the render finishes, pruning once (`media_id` / `proxy_path` cleared,
+  `pruned_at` set; nothing is refilled after) and a deleted batch clearing `batch_id`. Batches,
+  notes and packs reference versions through `(id, production_id, workspace_id)`, so they can
+  never mix two productions' versions.
   `productions.media_id` stays the version chosen for posting (BC-36 sets it).
 - **`git_sha` is required.** Each version records the video-editor commit it was rendered from,
   so a pruned version can be rebuilt exactly and every note answer points at real code.
@@ -31,12 +34,12 @@ ending with a pack that is ready to post. None of that works if each render over
 - **Storyboard.** `board_cards` (position, text ≤ 280, seconds, still, scene, `planned → approved →
   built`); `productions.board_rev` counts edits and `board_approved_at` records the approval.
 - **Storage policy** (`src/lib/domain/factory/versions.ts` → `pruneSelection`): posted versions
-  and the chosen one keep everything; the newest version keeps its full file; the newest 3 of the
+  and the chosen one keep everything; the newest of the rest keeps its full file; the newest 3 of the
   rest keep their proxy; everything older is cleared down to the row and its contact sheet.
 - **Delivery packs.** One `delivery_packs` row per version: cover (path and time), caption,
   hashtags, checks and a manifest, `ready_at` once every check passes
   (`src/lib/domain/factory/delivery.ts`: 9:16, ≤ 50 MB and 3–90 s from `src/lib/media/checks.ts`,
-  caption ≤ 2200 with every credit line, ≤ 30 hashtags, the AI flag on avatar videos, and loudness
+  caption ≤ 2200 as posted (with the pack's hashtags added) and with every credit line, ≤ 30 hashtags, the AI flag on avatar videos, and loudness
   −16…−12 LUFS / true peak ≤ −1 dBTP when the render reports them). `media_assets.cover_path` is
   the source of Instagram's `cover_url` (BC-43).
 - **Posting stays Matthew's action.** A ready pack means the video can be posted, nothing more.

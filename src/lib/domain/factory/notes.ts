@@ -121,6 +121,7 @@ export function applyAnswers(
   sent: readonly SentNote[],
   answers: readonly NoteAnswer[],
 ): ApplyAnswersResult {
+  if (!sent.length) return { ok: false, errors: ["This batch has no sent notes to answer."] };
   const errors: string[] = [];
   const byId = new Map(sent.map((n) => [n.id, n]));
   const seen = new Map<string, NoteAnswer>();

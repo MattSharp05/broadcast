@@ -337,11 +337,77 @@ describe("row level security", () => {
         .update({ intent: "Changed" })
         .eq("id", id);
       expect(rewrite.error?.message).toMatch(/never change after insert/);
+
+      // Facts arrive once, as the render finishes.
+      const versions = allowed.from("production_versions");
+      const fill = await versions.update({ proxy_path: "v1_720.mp4", bytes: 1000 }).eq("id", id);
+      expect(fill.error).toBeNull();
+      const refill = await allowed.from("production_versions").update({ bytes: 2000 }).eq("id", id);
+      expect(refill.error?.message).toMatch(/bytes is set once/);
+
       const prune = await allowed
         .from("production_versions")
         .update({ media_id: null, proxy_path: null, pruned_at: new Date().toISOString() })
         .eq("id", id);
       expect(prune.error).toBeNull();
+      const restore = await allowed
+        .from("production_versions")
+        .update({ media_id: seeded.mediaId })
+        .eq("id", id);
+      expect(restore.error?.message).toMatch(/media_id is set once/);
+      const unprune = await allowed
+        .from("production_versions")
+        .update({ pruned_at: null })
+        .eq("id", id);
+      expect(unprune.error?.message).toMatch(/pruned once/);
+    });
+
+    it("refuses region notes without a box and rows mixing two productions", async () => {
+      const ws = WORKSPACE_IDS.sandbox;
+      const { data: version } = await allowed
+        .from("production_versions")
+        .select("id")
+        .eq("production_id", seeded.productionId)
+        .single();
+      const version_id = version?.id ?? "";
+      const noBox = await allowed.from("review_notes").insert({
+        workspace_id: ws,
+        production_id: seeded.productionId,
+        version_id,
+        number: 9,
+        kind: "region",
+        t_s: 1,
+        frame: 30,
+        text: "Where?",
+      });
+      expect(noBox.error?.code).toBe("23514");
+
+      const other = await allowed
+        .from("productions")
+        .insert({ workspace_id: ws, title: "Another video" })
+        .select("id")
+        .single();
+      const otherId = other.data?.id ?? "";
+      const mixed = await allowed
+        .from("review_batches")
+        .insert({ workspace_id: ws, production_id: otherId, version_id });
+      expect(mixed.error?.code).toBe("23503");
+      const fresh = await allowed
+        .from("production_versions")
+        .insert({
+          workspace_id: ws,
+          production_id: seeded.productionId,
+          number: 3,
+          git_sha: "0123abc",
+          made_by: "import",
+        })
+        .select("id")
+        .single();
+      const pack = await allowed
+        .from("delivery_packs")
+        .insert({ workspace_id: ws, production_id: otherId, version_id: fresh.data?.id ?? "" });
+      expect(pack.error?.code).toBe("23503");
+      await allowed.from("productions").delete().eq("id", otherId);
     });
 
     it("reads api_keys but never key_hash", async () => {

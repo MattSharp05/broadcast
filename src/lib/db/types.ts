@@ -389,11 +389,11 @@ export type Database = {
             referencedColumns: ["id", "workspace_id"];
           },
           {
-            foreignKeyName: "delivery_packs_version_id_workspace_id_fkey";
-            columns: ["version_id", "workspace_id"];
+            foreignKeyName: "delivery_packs_version_id_production_id_workspace_id_fkey";
+            columns: ["version_id", "production_id", "workspace_id"];
             isOneToOne: false;
             referencedRelation: "production_versions";
-            referencedColumns: ["id", "workspace_id"];
+            referencedColumns: ["id", "production_id", "workspace_id"];
           },
           {
             foreignKeyName: "delivery_packs_workspace_id_fkey";
@@ -1619,11 +1619,11 @@ export type Database = {
         };
         Relationships: [
           {
-            foreignKeyName: "production_versions_batch_id_workspace_id_fkey";
-            columns: ["batch_id", "workspace_id"];
+            foreignKeyName: "production_versions_batch_id_production_id_workspace_id_fkey";
+            columns: ["batch_id", "production_id", "workspace_id"];
             isOneToOne: false;
             referencedRelation: "review_batches";
-            referencedColumns: ["id", "workspace_id"];
+            referencedColumns: ["id", "production_id", "workspace_id"];
           },
           {
             foreignKeyName: "production_versions_media_id_workspace_id_fkey";
@@ -1833,11 +1833,11 @@ export type Database = {
         };
         Relationships: [
           {
-            foreignKeyName: "review_batches_answered_by_version_workspace_id_fkey";
-            columns: ["answered_by_version", "workspace_id"];
+            foreignKeyName: "review_batches_answered_by_version_production_id_workspace_fkey";
+            columns: ["answered_by_version", "production_id", "workspace_id"];
             isOneToOne: false;
             referencedRelation: "production_versions";
-            referencedColumns: ["id", "workspace_id"];
+            referencedColumns: ["id", "production_id", "workspace_id"];
           },
           {
             foreignKeyName: "review_batches_production_id_workspace_id_fkey";
@@ -1847,11 +1847,11 @@ export type Database = {
             referencedColumns: ["id", "workspace_id"];
           },
           {
-            foreignKeyName: "review_batches_version_id_workspace_id_fkey";
-            columns: ["version_id", "workspace_id"];
+            foreignKeyName: "review_batches_version_id_production_id_workspace_id_fkey";
+            columns: ["version_id", "production_id", "workspace_id"];
             isOneToOne: false;
             referencedRelation: "production_versions";
-            referencedColumns: ["id", "workspace_id"];
+            referencedColumns: ["id", "production_id", "workspace_id"];
           },
           {
             foreignKeyName: "review_batches_workspace_id_fkey";
@@ -1923,18 +1923,18 @@ export type Database = {
         };
         Relationships: [
           {
-            foreignKeyName: "review_notes_answered_in_version_workspace_id_fkey";
-            columns: ["answered_in_version", "workspace_id"];
+            foreignKeyName: "review_notes_answered_in_version_production_id_workspace_i_fkey";
+            columns: ["answered_in_version", "production_id", "workspace_id"];
             isOneToOne: false;
             referencedRelation: "production_versions";
-            referencedColumns: ["id", "workspace_id"];
+            referencedColumns: ["id", "production_id", "workspace_id"];
           },
           {
-            foreignKeyName: "review_notes_batch_id_workspace_id_fkey";
-            columns: ["batch_id", "workspace_id"];
+            foreignKeyName: "review_notes_batch_id_production_id_workspace_id_fkey";
+            columns: ["batch_id", "production_id", "workspace_id"];
             isOneToOne: false;
             referencedRelation: "review_batches";
-            referencedColumns: ["id", "workspace_id"];
+            referencedColumns: ["id", "production_id", "workspace_id"];
           },
           {
             foreignKeyName: "review_notes_production_id_workspace_id_fkey";
@@ -1944,11 +1944,11 @@ export type Database = {
             referencedColumns: ["id", "workspace_id"];
           },
           {
-            foreignKeyName: "review_notes_version_id_workspace_id_fkey";
-            columns: ["version_id", "workspace_id"];
+            foreignKeyName: "review_notes_version_id_production_id_workspace_id_fkey";
+            columns: ["version_id", "production_id", "workspace_id"];
             isOneToOne: false;
             referencedRelation: "production_versions";
-            referencedColumns: ["id", "workspace_id"];
+            referencedColumns: ["id", "production_id", "workspace_id"];
           },
           {
             foreignKeyName: "review_notes_workspace_id_fkey";

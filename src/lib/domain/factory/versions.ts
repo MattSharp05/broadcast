@@ -1,7 +1,7 @@
 /**
  * Versions (pure, ADR 0008): every render of a video is kept as a numbered version instead of
  * overwriting the last one. Storage is bounded by pruning: a posted (or chosen) version keeps its
- * full file and proxy, the newest version keeps its full file, and the newest few others keep only
+ * full file and proxy, the newest draft keeps its full file, and the newest few others keep only
  * their 720p proxy. Everything else is cleared (the row stays; git_sha makes it reproducible).
  */
 
@@ -36,7 +36,7 @@ export interface PruneAction {
 
 /**
  * What to clear, oldest first. Kept whole: posted and chosen versions. Full file also kept: the
- * newest version (it may still be chosen). Proxies also kept: the newest `keep` of the rest.
+ * newest of the rest (it may still be chosen). Proxies also kept: the newest `keep` of the rest.
  * Only actions that clear something are returned.
  */
 export function pruneSelection(
@@ -44,8 +44,9 @@ export function pruneSelection(
   keep: number = KEEP_PROXIES,
 ): PruneAction[] {
   const newestFirst = [...versions].sort((a, b) => b.number - a.number);
-  const newestId = newestFirst[0]?.id;
   const others = newestFirst.filter((v) => !v.posted && !v.chosen);
+  // The newest draft may still be chosen, even when a newer version was posted.
+  const newestId = others[0]?.id;
   const keepProxy = new Set(others.slice(0, Math.max(0, keep)).map((v) => v.id));
 
   const actions: PruneAction[] = [];

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { creditLines } from "./captions";
 import {
   countHashtags,
+  postedCaption,
   deliveryChecks,
   deliveryReady,
   type DeliveryCheckKey,
@@ -50,6 +51,14 @@ describe("versions", () => {
     expect(actions.find((a) => a.id === "v6")).toBeUndefined();
     expect(actions.find((a) => a.id === "v1")).toEqual({ id: "v1", media: true, proxy: true });
     expect(actions.find((a) => a.id === "v3")).toEqual({ id: "v3", media: true, proxy: true });
+  });
+
+  it("keeps the newest draft's file when a newer version was posted", () => {
+    expect(pruneSelection([v(5), v(6, { posted: true })])).toEqual([]);
+    expect(pruneSelection([v(3), v(4), v(5), v(6, { posted: true })])).toEqual([
+      { id: "v3", media: true, proxy: false },
+      { id: "v4", media: true, proxy: false },
+    ]);
   });
 
   it("returns nothing for versions already pruned", () => {
@@ -137,6 +146,10 @@ describe("notes", () => {
   });
 
   it("rejects missing, duplicate, unknown and reply-less answers", () => {
+    expect(applyAnswers([], [])).toEqual({
+      ok: false,
+      errors: ["This batch has no sent notes to answer."],
+    });
     const missing = applyAnswers(sent, [{ noteId: "n1", status: "answered", reply: "Done" }]);
     expect(missing).toEqual({ ok: false, errors: ["Note 2 has no answer."] });
 
@@ -258,6 +271,16 @@ describe("delivery checks", () => {
     expect(checks.map((c) => c.key)).not.toContain("loudness");
     expect(checks.map((c) => c.key)).not.toContain("true_peak");
     expect(deliveryReady(checks)).toBe(true);
+  });
+
+  it("measures the caption with the pack's hashtags added", () => {
+    expect(postedCaption("Tides. #moon", ["Moon", "#space", ""])).toBe("Tides. #moon\n\n#space");
+    expect(postedCaption("Tides.", [])).toBe("Tides.");
+    const caption = `${good.caption}\n${"a".repeat(2190 - good.caption.length)}`;
+    expect(failing({ ...good, caption, hashtags: [] })).toEqual([]);
+    expect(failing({ ...good, caption, hashtags: ["science", "physics"] })).toEqual([
+      ["caption_length", expect.stringMatching(/with its hashtags is 2210 characters/)],
+    ]);
   });
 
   it("counts hashtags once across the pack and the caption", () => {

@@ -58,6 +58,27 @@ export function countHashtags(caption: string, hashtags: readonly string[]): num
   return tags.size;
 }
 
+/**
+ * The caption as it will be posted: the pack's hashtags that aren't already in it are added on
+ * their own line at the end.
+ */
+export function postedCaption(caption: string, hashtags: readonly string[]): string {
+  const inCaption = new Set(
+    [...caption.matchAll(/#([\p{L}\p{N}_]+)/gu)].map((m) => (m[1] ?? "").toLowerCase()),
+  );
+  const extra: string[] = [];
+  for (const t of hashtags) {
+    const tag = t.trim().replace(/^#/, "");
+    if (tag && !inCaption.has(tag.toLowerCase())) {
+      inCaption.add(tag.toLowerCase());
+      extra.push(`#${tag}`);
+    }
+  }
+  const text = caption.trimEnd();
+  if (!extra.length) return text;
+  return `${text}${text ? "\n\n" : ""}${extra.join(" ")}`;
+}
+
 const pass = (key: DeliveryCheckKey): DeliveryCheck => ({ key, ok: true, message: "" });
 const fail = (key: DeliveryCheckKey, message: string): DeliveryCheck => ({
   key,
@@ -91,11 +112,12 @@ export function deliveryChecks(input: DeliveryInput): DeliveryCheck[] {
   checks.push(duration ? fail("duration", duration.message) : pass("duration"));
 
   const caption = input.caption;
+  const posted = postedCaption(caption, input.hashtags);
   checks.push(
-    caption.length > CAPTION_MAX
+    posted.length > CAPTION_MAX
       ? fail(
           "caption_length",
-          `The caption is ${caption.length} characters. Instagram allows ${CAPTION_MAX}.`,
+          `The caption with its hashtags is ${posted.length} characters. Instagram allows ${CAPTION_MAX}.`,
         )
       : pass("caption_length"),
   );

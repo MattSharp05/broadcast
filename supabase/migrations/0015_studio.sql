@@ -3,8 +3,11 @@
 -- ready-to-post delivery pack per version.
 --
 -- * Every table carries workspace_id with a composite FK to its parent (CLAUDE.md).
--- * Versions never change after insert, except: media_id set once the full file is stored,
---   media_id / proxy_path cleared by pruning (pruned_at), and batch_id cleared if its batch goes.
+-- * Versions never change after insert, except: the file, proxy and facts filled in once (from
+--   null) as the render finishes, media_id / proxy_path cleared by pruning (pruned_at, once), and
+--   batch_id cleared if its batch goes.
+-- * Children point at versions and batches through (id, production_id, workspace_id), so a note,
+--   batch or pack can never mix versions of two productions.
 -- * productions.media_id stays "the version chosen for posting" (BC-36 sets it).
 -- * Everything cascades from productions, so reset_sandbox() (which deletes the Sandbox's
 --   productions) clears these tables too.
@@ -37,6 +40,7 @@ create table public.production_versions (
   pruned_at timestamptz,
   created_at timestamptz not null default now(),
   unique (id, workspace_id),
+  unique (id, production_id, workspace_id),
   unique (production_id, number),
   foreign key (production_id, workspace_id)
     references public.productions (id, workspace_id) on delete cascade,
@@ -45,6 +49,7 @@ create table public.production_versions (
 );
 
 create index production_versions_workspace_idx on public.production_versions (workspace_id);
+create index production_versions_batch_idx on public.production_versions (batch_id) where batch_id is not null;
 
 -- ───────────────────────────── review batches and notes ─────────────────────────────
 
@@ -61,20 +66,25 @@ create table public.review_batches (
   session_id text,
   session_url text,
   unique (id, workspace_id),
+  unique (id, production_id, workspace_id),
   foreign key (production_id, workspace_id)
     references public.productions (id, workspace_id) on delete cascade,
-  foreign key (version_id, workspace_id)
-    references public.production_versions (id, workspace_id) on delete cascade,
-  foreign key (answered_by_version, workspace_id)
-    references public.production_versions (id, workspace_id) on delete set null (answered_by_version)
+  foreign key (version_id, production_id, workspace_id)
+    references public.production_versions (id, production_id, workspace_id) on delete cascade,
+  foreign key (answered_by_version, production_id, workspace_id)
+    references public.production_versions (id, production_id, workspace_id)
+    on delete set null (answered_by_version)
 );
 
 create index review_batches_production_idx on public.review_batches (production_id, sent_at);
 create index review_batches_workspace_idx on public.review_batches (workspace_id);
+create index review_batches_version_idx on public.review_batches (version_id);
+create index review_batches_answered_by_idx on public.review_batches (answered_by_version)
+  where answered_by_version is not null;
 
 alter table public.production_versions
-  add foreign key (batch_id, workspace_id)
-    references public.review_batches (id, workspace_id) on delete set null (batch_id);
+  add foreign key (batch_id, production_id, workspace_id)
+    references public.review_batches (id, production_id, workspace_id) on delete set null (batch_id);
 
 create table public.review_notes (
   id uuid primary key default gen_random_uuid(),
@@ -101,22 +111,25 @@ create table public.review_notes (
     case kind
       when 'general' then t_s is null and frame is null and box is null
       when 'moment' then t_s is not null and frame is not null and box is null
-      else t_s is not null and frame is not null and jsonb_typeof(box) = 'object'
+      else t_s is not null and frame is not null and box is not null and jsonb_typeof(box) = 'object'
     end
   ),
   foreign key (production_id, workspace_id)
     references public.productions (id, workspace_id) on delete cascade,
-  foreign key (version_id, workspace_id)
-    references public.production_versions (id, workspace_id) on delete cascade,
-  foreign key (batch_id, workspace_id)
-    references public.review_batches (id, workspace_id) on delete set null (batch_id),
-  foreign key (answered_in_version, workspace_id)
-    references public.production_versions (id, workspace_id) on delete set null (answered_in_version)
+  foreign key (version_id, production_id, workspace_id)
+    references public.production_versions (id, production_id, workspace_id) on delete cascade,
+  foreign key (batch_id, production_id, workspace_id)
+    references public.review_batches (id, production_id, workspace_id) on delete set null (batch_id),
+  foreign key (answered_in_version, production_id, workspace_id)
+    references public.production_versions (id, production_id, workspace_id)
+    on delete set null (answered_in_version)
 );
 
 create index review_notes_production_idx on public.review_notes (production_id, version_id, number);
 create index review_notes_batch_idx on public.review_notes (batch_id) where batch_id is not null;
 create index review_notes_workspace_idx on public.review_notes (workspace_id);
+create index review_notes_answered_in_idx on public.review_notes (answered_in_version)
+  where answered_in_version is not null;
 
 -- ───────────────────────────── activity feed ─────────────────────────────
 
@@ -176,8 +189,8 @@ create table public.delivery_packs (
   ready_at timestamptz,
   foreign key (production_id, workspace_id)
     references public.productions (id, workspace_id) on delete cascade,
-  foreign key (version_id, workspace_id)
-    references public.production_versions (id, workspace_id) on delete cascade
+  foreign key (version_id, production_id, workspace_id)
+    references public.production_versions (id, production_id, workspace_id) on delete cascade
 );
 
 create index delivery_packs_production_idx on public.delivery_packs (production_id);
@@ -188,25 +201,43 @@ alter table public.media_assets add column cover_path text;
 
 -- ───────────────────────────── triggers ─────────────────────────────
 
--- Versions are a record: only storing the file, pruning and a deleted batch may touch a row.
+-- Versions are a record. Allowed updates: facts filled in once from null as the render finishes;
+-- pruning (pruned_at set once, with media_id / proxy_path going to null; nothing refilled after);
+-- a deleted batch clearing batch_id (FK set null).
 create or replace function public.production_versions_immutable() returns trigger
 language plpgsql
 set search_path = ''
 as $$
+declare
+  fill_once constant text[] := '{media_id,proxy_path,contact_sheet_path,duration_s,fps,width,height,bytes,loudness_lufs,true_peak_db}';
+  o jsonb := to_jsonb(old);
+  n jsonb := to_jsonb(new);
+  col text;
 begin
-  if (to_jsonb(new) - '{media_id,proxy_path,pruned_at,batch_id}'::text[])
-     is distinct from (to_jsonb(old) - '{media_id,proxy_path,pruned_at,batch_id}'::text[]) then
+  if (n - fill_once - '{pruned_at,batch_id}'::text[]) is distinct from (o - fill_once - '{pruned_at,batch_id}'::text[]) then
     raise exception 'production versions never change after insert' using errcode = '23514';
   end if;
   if new.batch_id is distinct from old.batch_id and new.batch_id is not null then
     raise exception 'a version''s batch can only be cleared' using errcode = '23514';
   end if;
-  if new.proxy_path is distinct from old.proxy_path and new.proxy_path is not null then
-    raise exception 'a version''s proxy can only be pruned' using errcode = '23514';
+  if new.pruned_at is distinct from old.pruned_at and (old.pruned_at is not null or new.pruned_at is null) then
+    raise exception 'a version is pruned once' using errcode = '23514';
   end if;
-  if new.media_id is distinct from old.media_id and old.media_id is not null and new.media_id is not null then
-    raise exception 'a version''s file can only be stored once or pruned' using errcode = '23514';
-  end if;
+  foreach col in array fill_once loop
+    continue when (n -> col) is not distinct from (o -> col);
+    -- Pruning clears the file and the proxy (with pruned_at set); deleting the media asset clears
+    -- media_id (FK set null).
+    if jsonb_typeof(n -> col) = 'null'
+       and (col = 'media_id' or (col = 'proxy_path' and new.pruned_at is not null)) then
+      continue;
+    end if;
+    -- Filling in a fact for the first time, before any pruning.
+    if jsonb_typeof(o -> col) = 'null' and old.pruned_at is null and new.pruned_at is null then
+      continue;
+    end if;
+    raise exception 'a version''s % is set once (and only the file and proxy are pruned)', col
+      using errcode = '23514';
+  end loop;
   return new;
 end;
 $$;

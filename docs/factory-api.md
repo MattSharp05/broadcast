@@ -17,7 +17,11 @@ BROADCAST_TOKEN=bcf_live_…
 BROADCAST_VIDEO_ID=<production id>
 STEP=script
 NOTE=shorter hook            (only on a redo)
+BATCH=<review batch id>      (only on STEP=revise)
 ```
+
+`STEP` is one of the pipeline steps below, or `revise`: answer a batch of Matthew's notes on a
+version with a new version (see "Versions and revise").
 
 `BROADCAST_TOKEN` is a **factory token**: scoped to this one video, valid for 24 hours, stored by
 Broadcast as a hash only. It is not the content API key and never a provider key (fal and the
@@ -26,6 +30,11 @@ others stay in Broadcast; see "Generation proxy"). Every request sends
 unknown one gets 401.
 
 Errors are JSON `{"error": "<code>", "message": "<what to do>"}`.
+
+**Intent.** `progress`, `checkpoint`, `fail` and `versions` take an optional `intent`: one line
+saying what you are doing and why ("Re-timing the title so it lands on the beat"), at most 160
+characters (longer is cut). Each one is shown in the video's activity feed with the step and your
+session link. Send one on every call.
 
 ## Steps
 `idea → script → style → visuals → face_quote (avatar videos only) → render`. Each step is
@@ -53,9 +62,24 @@ Everything the step needs:
   "outputs": { "idea": { }, "script": { }, "style": { }, "visuals": { }, "face_quote": { } },
   "reworks": [{ "target": "voice", "ref": null, "note": "warmer", "status": "running" }],
   "face_clips": [{ "slot": "hook", "job_id": "…", "status": "completed", "output_url": "…", "kept": true }],
-  "budget": { "spent_video_usd": 0.84, "spent_month_usd": 2.04, "cap_video_usd": 4, "cap_month_usd": 50, "remaining_usd": 3.16 }
+  "budget": { "spent_video_usd": 0.84, "spent_month_usd": 2.04, "cap_video_usd": 4, "cap_month_usd": 50, "remaining_usd": 3.16 },
+  "versions": [{ "id": "…", "number": 2, "url": "https://…signed, 2 h…", "duration_s": 58.4, "fps": 30, "git_sha": "3f2c1ab", "made_by": "render" }],
+  "batch": {
+    "id": "…", "version_number": 2,
+    "notes": [
+      { "id": "…", "number": 1, "kind": "moment", "t_s": 3.2, "frame": 96, "box": null, "text": "Title lands late", "crop_url": "https://…" },
+      { "id": "…", "number": 2, "kind": "region", "t_s": 12.5, "frame": 375, "box": { "x": 0.1, "y": 0.6, "w": 0.4, "h": 0.2 }, "text": "Make this label bigger", "crop_url": "https://…" },
+      { "id": "…", "number": 3, "kind": "general", "t_s": null, "frame": null, "box": null, "text": "Music a little quieter", "crop_url": null }
+    ]
+  }
 }
 ```
+
+`versions` lists every kept version, newest first; `url` is the 720p proxy when there is one, else
+the full file (signed, valid 2 hours; `null` once a version is pruned). `batch` is the open review
+batch (only while one is open, so on `STEP=revise`): its notes are on version `version_number`.
+`frame = round(t_s × fps)` of that version; `box` is normalised 0–1 from the top left. `crop_url`
+is the frame Matthew pointed at, as he saw it in the browser (JPEG).
 
 `voice.key` names a voice in video-editor's `lab/voice-picker/library/voices.json` (its reference
 clip and text); the session clones every line from that clip, so the video sounds like the sample.
@@ -87,17 +111,57 @@ Outputs per step (extra fields are kept):
 | `style` | `{"frames": [{"url", "caption"}]}` |
 | `visuals` | `{"stills": [{"url", "scene", "caption"}]}` (`scene` ids `s1`…, used by "redo a scene") |
 | `face_quote` | `{"model", "slots": [{"slot", "seconds"}], "quote": {"model", "seconds", "baseUsd", "rerollUsd", "totalUsd", "free"}}`, from `gen_face.py quote` |
-| `render` | `{"upload": "<path from /assets>", "duration_s", "face_share", "imagery_credits": ["Earth imagery: NASA."], "caption_options"?: ["…"]}` |
+| `render` | `{"upload": "<path from /assets>", "proxy"?: "<path from /assets>", "git_sha", "duration_s", "fps"?, "loudness_lufs"?, "true_peak_db"?, "face_share", "imagery_credits": ["Earth imagery: NASA."], "caption_options"?: ["…"]}` |
 
 For `render`, upload the final MP4 through `/assets` first (`content_type: "video/mp4"`); Broadcast
 checks it like any Reel (9:16, MP4, ≤ 50 MB), stores it with the video's **recipe** (style, avatar
 and version, face model, face share, voice, music, hook, script version, cost) and drafts caption
-options with the credit lines. Do **not** queue it: posting happens only from the dashboard's
-Schedule section.
+options with the credit lines. `git_sha` (required, `git rev-parse HEAD` after committing the
+film) and the optional `proxy` (a 720p MP4 ≤ 15 MB, also through `/assets`) are kept with the
+version; `loudness_lufs` / `true_peak_db` come from `ffmpeg … ebur128` and feed the ready-to-post
+checks. Each render becomes a new numbered **version** (see below). Do **not** queue it: posting
+happens only from the dashboard.
 
 ### `POST /api/factory/{id}/fail`
 `{"step": "style", "message": "Remotion couldn't load the paper texture."}` → `204`. The page
 shows the message and a Redo button.
+
+## Versions and revise (BC-36, ADR 0008)
+Every render is kept as a numbered version (v1, v2, …) instead of replacing the last one. The
+video's current version is the newest, unless one is already posted or scheduled. Storage (ADR 0008):
+posted versions and the one chosen for posting are kept whole; of the others, the newest keeps its
+full file and the newest 3 keep their proxy; anything older is pruned after each new version (files
+deleted, the row stays with `pruned_at` and its `git_sha`, so it can be rebuilt).
+
+Matthew watches a version on the page, pins notes to moments (`moment`: a time), regions
+(`region`: a time and a box) or the whole video (`general`), and sends them as one **batch**. That
+starts a session with `STEP=revise` and `BATCH=<id>`; only one batch per video is open at a time.
+
+A revise session: reads `batch` from the brief, extracts each note's exact frame from its version
+(`ffmpeg -ss <t_s> -i <url> -frames:v 1`), changes only what the notes ask, renders, uploads the
+full MP4 and the proxy through `/assets`, then posts the new version with one answer per note:
+
+### `POST /api/factory/{id}/versions`
+```json
+{
+  "batch_id": "…", "upload": "storage:videos/…", "proxy": "storage:videos/…",
+  "git_sha": "3f2c1ab", "duration_s": 58.4, "fps": 30, "loudness_lufs": -14.2, "true_peak_db": -1.5,
+  "intent": "Moved the title in 6 frames and enlarged the label; music left as is.",
+  "answers": [
+    { "note_id": "…", "verdict": "answered", "reply": "The title now lands on the beat (frame 90)." },
+    { "note_id": "…", "verdict": "not_changed", "reply": "The label is the brand font's maximum size at 1080 wide." }
+  ]
+}
+```
+→ `201 {"version": "<version id>", "number": 3}`.
+
+- Every note in the batch gets exactly one answer, `answered` or `not_changed` (with the reason in
+  `reply`). Missing, duplicate or unknown notes → `422 answers_incomplete` and nothing is saved.
+- The upload is checked like a render (9:16, MP4, ≤ 50 MB; the proxy ≤ 15 MB). `git_sha` is
+  required.
+- A batch of another video → `403 wrong_batch`; a batch that isn't open → `409 batch_closed`.
+- The notes get your verdict and reply ("in v3"), the batch is answered, and the activity feed
+  shows your intent. Still never queued.
 
 ## Generation proxy (avatar clips)
 Provider keys never leave Broadcast. `gen_face.py` with `FACE_VIA=broadcast` sends its paid calls
@@ -154,6 +218,7 @@ GET  /api/gen/mesh-jobs/{job_id} -> {"status","output_url" (Broadcast's copy of 
   the URL outlives fal's.
 
 ## Sandbox
-In the Sandbox workspace no session runs: a fake runner posts canned outputs for every step and
+In the Sandbox workspace no session runs: a fake runner posts canned outputs (and a canned intent)
+for every step, answers a sent batch at once with a new version and a canned reply per note, and
 the proxy's fake provider "generates" clips at once at the quoted price, so the whole page can be
 tested on production with no money (`/dev` → `factory-*` scenarios).

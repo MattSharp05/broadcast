@@ -133,7 +133,11 @@ export async function loadScenario(
         seed.factory.reworks.length +
         seed.factory.genJobs.length +
         seed.factory.heroProposals.length +
-        seed.factory.heroDecisions.length,
+        seed.factory.heroDecisions.length +
+        seed.factory.versions.length +
+        seed.factory.batches.length +
+        seed.factory.notes.length +
+        seed.factory.events.length,
     },
   };
 }
@@ -173,4 +177,47 @@ async function loadFactory(db: SupabaseClient<Database>, f: SandboxSeed["factory
     if (!rows.length) continue;
     await run(table, db.from(table).insert(inSandbox(rows as never[]), { defaultToNull: false }));
   }
+  await loadStudio(db, f);
+}
+
+/**
+ * Versions and batches point at each other: a batch is on a version, and the version that answers
+ * it names the batch (set at insert: versions never change after). So: versions without a batch,
+ * the batches (without their answer), the answering versions, then each batch's answer.
+ */
+async function loadStudio(db: SupabaseClient<Database>, f: SandboxSeed["factory"]): Promise<void> {
+  const insert = async (table: string, rows: readonly object[]) => {
+    if (!rows.length) return;
+    await run(
+      table,
+      db.from(table as "production_versions").insert(inSandbox(rows as never[]), {
+        defaultToNull: false,
+      }),
+    );
+  };
+  await insert(
+    "production_versions",
+    f.versions.filter((v) => !v.batch_id),
+  );
+  await insert(
+    "review_batches",
+    f.batches.map((b) => ({ ...b, answered_by_version: null })),
+  );
+  await insert(
+    "production_versions",
+    f.versions.filter((v) => v.batch_id),
+  );
+  for (const b of f.batches) {
+    if (!b.answered_by_version || !b.id) continue;
+    await run(
+      "batch answers",
+      db
+        .from("review_batches")
+        .update({ answered_by_version: b.answered_by_version })
+        .eq("workspace_id", WORKSPACE_IDS.sandbox)
+        .eq("id", b.id),
+    );
+  }
+  await insert("review_notes", f.notes);
+  await insert("production_events", f.events);
 }

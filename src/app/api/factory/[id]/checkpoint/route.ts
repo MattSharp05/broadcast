@@ -1,14 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getProduction, getSteps } from "@/lib/db/factory";
-import { insertMedia } from "@/lib/db/posts";
 import type { Json } from "@/lib/db/types";
-import { StoredVideoError, VIDEOS_BUCKET, probeStoredVideo } from "@/lib/db/videos";
 import { isStep, nextStep } from "@/lib/domain/factory/steps";
-import { parseRef } from "@/lib/factory/assets";
 import { recordCheckpoint } from "@/lib/factory/engine";
-import { checkReel } from "@/lib/media/checks";
-import { Mp4Error } from "@/lib/media/mp4";
+import { logSessionIntent } from "@/lib/factory/studio";
 import { apiError, errorResponse, factoryRequest } from "../../shared";
+import { checkProxy, storeRender } from "../../uploads";
 
 export const dynamic = "force-dynamic";
 
@@ -21,8 +18,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const { id } = await params;
   const req = await factoryRequest(request, id, { body: true });
   if (!req.ok) return req.response;
-  const { ctx, auth } = req.value;
-  const { step, output } = req.value.body;
+  const { ctx } = req.value;
+  const { step, output, intent } = req.value.body;
   if (!isStep(step))
     return apiError(
       422,
@@ -51,43 +48,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     let mediaId: string | null = null;
     if (step === "render") {
       const out = output as Record<string, unknown>;
-      const ref =
-        typeof out.upload === "string" ? parseRef(out.upload, auth.workspaceId, id) : null;
-      if (ref?.bucket !== VIDEOS_BUCKET) {
+      if (typeof out.git_sha !== "string" || !out.git_sha.trim()) {
         return apiError(
           422,
-          "bad_upload",
-          "output.upload must be the storage: path of an MP4 from /assets.",
+          "missing_git_sha",
+          "output.git_sha is required: send `git rev-parse HEAD` after committing the film.",
         );
       }
-      let stored;
-      try {
-        stored = await probeStoredVideo(ctx.db, ref.path);
-      } catch (err) {
-        if (err instanceof StoredVideoError)
-          return apiError(
-            409,
-            "upload_missing",
-            "The render hasn't arrived in storage yet. PUT it to the upload_url first.",
-          );
-        if (err instanceof Mp4Error)
-          return apiError(422, "invalid_video", `${err.message} The render must be an MP4.`);
-        throw err;
+      if (out.proxy !== undefined && out.proxy !== null) {
+        const proxyError = await checkProxy(ctx, id, out.proxy);
+        if (proxyError) return proxyError;
       }
-      const issues = checkReel(
-        { bytes: stored.bytes, fileName: "render.mp4", mimeType: "video/mp4" },
-        stored.info,
-      );
-      if (issues.length)
-        return apiError(422, "invalid_video", issues.map((i) => i.message).join(" "));
-      mediaId = await insertMedia(ctx.db, ctx.workspaceId, {
-        storagePath: ref.path,
-        thumbnailPath: null,
-        durationS: Math.round(stored.info.durationS * 1000) / 1000,
-        width: stored.info.width,
-        height: stored.info.height,
-        bytes: stored.bytes,
-      });
+      const stored = await storeRender(ctx, id, out.upload, "output.upload");
+      if (!stored.ok) return stored.response;
+      mediaId = stored.value.mediaId;
       if (Array.isArray(out.caption_options)) {
         const opts = out.caption_options
           .filter((c): c is string => typeof c === "string")
@@ -100,6 +74,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             .eq("id", id);
       }
     }
+    await logSessionIntent(ctx, id, step, intent ?? (output as Record<string, unknown>).intent);
     await recordCheckpoint(ctx, id, step, output as Json, { mediaId });
     const after = await getSteps(ctx.db, ctx.workspaceId, id);
     const p = await getProduction(ctx.db, ctx.workspaceId, id);

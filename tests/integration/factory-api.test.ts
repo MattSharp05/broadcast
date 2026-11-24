@@ -130,6 +130,7 @@ describe("factory API", () => {
       step: "render",
       output: {
         upload: path,
+        git_sha: "abc1234",
         duration_s: 12,
         face_share: null,
         imagery_credits: ["Earth imagery: NASA."],

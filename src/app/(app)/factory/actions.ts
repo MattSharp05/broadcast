@@ -23,6 +23,7 @@ import {
   type EngineContext,
   type StartOutcome,
 } from "@/lib/factory/engine";
+import { logEvent, sendNotes as sendBatch } from "@/lib/factory/studio";
 
 /**
  * Content Factory actions. Server actions take whatever the browser sends: every input is checked.
@@ -214,7 +215,9 @@ export async function approve(id: unknown, step: unknown) {
   const pid = checkId(id);
   return guard(async () => {
     if (!isStep(step)) throw new FactoryError("bad_step", "Unknown step.");
-    return approveStep(await engine(), pid, step);
+    const ctx = await engine();
+    await logEvent(ctx, pid, { actor: "matthew", step, intent: `Approved the ${step} step.` });
+    return approveStep(ctx, pid, step);
   }, pid);
 }
 
@@ -223,7 +226,13 @@ export async function redo(id: unknown, step: unknown, note: unknown) {
   return guard(async () => {
     if (!isStep(step)) throw new FactoryError("bad_step", "Unknown step.");
     const text = typeof note === "string" ? note.trim().slice(0, 1000) : "";
-    return redoFrom(await engine(), pid, step, text || null);
+    const ctx = await engine();
+    await logEvent(ctx, pid, {
+      actor: "matthew",
+      step,
+      intent: text ? `Asked to redo the ${step} step: ${text}` : `Asked to redo the ${step} step.`,
+    });
+    return redoFrom(ctx, pid, step, text || null);
   }, pid);
 }
 
@@ -240,13 +249,27 @@ export async function rework(
     const quote = typeof input.quoteUsd === "number" && input.quoteUsd >= 0 ? input.quoteUsd : 0;
     if (input.target === "avatar_slot" && !ref)
       throw new FactoryError("no_slot", "Choose the avatar slot to redo.");
-    return requestRework(await engine(), pid, {
+    const ctx = await engine();
+    await logEvent(ctx, pid, {
+      actor: "matthew",
+      intent: `Asked to redo ${input.target.replace("_", " ")}${ref ? ` ${ref}` : ""}${note ? `: ${note}` : "."}`,
+    });
+    return requestRework(ctx, pid, {
       target: input.target,
       ref,
       note,
       quoteUsd: quote,
     });
   }, pid);
+}
+
+/**
+ * Sends a version's draft notes to Claude as one batch (BC-36): a revise session starts (the fake
+ * runner answers at once in the Sandbox), or the prompt to paste comes back. One open batch at a time.
+ */
+export async function sendNotes(id: unknown, versionId: unknown) {
+  const pid = checkId(id);
+  return guard(async () => sendBatch(await engine(), pid, checkId(versionId)), pid);
 }
 
 /** Queues the finished video on its one account: the next open slot or a pinned time. */

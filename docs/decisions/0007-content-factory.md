@@ -1,6 +1,7 @@
 # ADR 0007: Content Factory (productions, runner, generation proxy)
 
-Status: Accepted (2026-11-12, BC-24) · Tickets BC-24…BC-28
+Status: Accepted (2026-11-12, BC-24) · Tickets BC-24…BC-28 · Extended by
+[ADR 0008: Studio](0008-studio.md) (every render kept as a version, review notes, delivery packs)
 
 ## Context
 Matthew wants one Content Factory page for every video: idea → style → UGC avatar (yes/no) →

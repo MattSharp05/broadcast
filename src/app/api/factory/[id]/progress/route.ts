@@ -21,7 +21,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (typeof progress !== "number" || !Number.isFinite(progress))
     return apiError(422, "bad_progress", "progress is a number from 0 to 100.");
   try {
-    await logSessionIntent(req.value.ctx, id, step, intent);
     await recordProgress(
       req.value.ctx,
       id,
@@ -29,6 +28,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       progress,
       typeof message === "string" ? message.slice(0, 300) : null,
     );
+    await logSessionIntent(req.value.ctx, id, step, intent);
     return new Response(null, { status: 204 });
   } catch (err) {
     return errorResponse(err);

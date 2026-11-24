@@ -70,6 +70,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       bytes,
       loudnessLufs: num(body.loudness_lufs),
       truePeakDb: num(body.true_peak_db),
+    }).catch(async (err: unknown) => {
+      // Nothing points at the stored render: drop its row (the session can upload again).
+      await ctx.db
+        .from("media_assets")
+        .delete()
+        .eq("workspace_id", ctx.workspaceId)
+        .eq("id", mediaId);
+      throw err;
     });
     return NextResponse.json({ version: created.id, number: created.number }, { status: 201 });
   } catch (err) {

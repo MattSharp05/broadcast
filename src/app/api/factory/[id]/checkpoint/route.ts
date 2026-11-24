@@ -74,8 +74,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             .eq("id", id);
       }
     }
-    await logSessionIntent(ctx, id, step, intent ?? (output as Record<string, unknown>).intent);
-    await recordCheckpoint(ctx, id, step, output as Json, { mediaId });
+    const said = intent ?? (output as Record<string, unknown>).intent;
+    await recordCheckpoint(ctx, id, step, output as Json, { mediaId, intent: said });
+    await logSessionIntent(ctx, id, step, said);
     const after = await getSteps(ctx.db, ctx.workspaceId, id);
     const p = await getProduction(ctx.db, ctx.workspaceId, id);
     const status = after.find((s) => s.step === step)?.status;

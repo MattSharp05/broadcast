@@ -46,6 +46,7 @@ import {
   type ProductionStatus,
 } from "@/lib/domain/factory/steps";
 import { FAKE_INTENTS } from "@/lib/domain/factory/events";
+import { nextVersionNumber } from "@/lib/domain/factory/versions";
 import { submitFaceJob } from "./gen";
 import { fireRoutine, type FireResult } from "./runner";
 import { FAKE_GIT_SHA, addVersion, fakeProxy, listVersions, logEvent } from "./studio";
@@ -260,7 +261,7 @@ async function runFake(ctx: EngineContext, id: string, step: FactoryStep, attemp
   await logEvent(ctx, id, { actor: "session", step, intent: FAKE_INTENTS[step] });
   const out = output as unknown as Record<string, Json>;
   if (step === "render") {
-    const number = (await listVersions(ctx.db, ctx.workspaceId, id)).length + 1;
+    const number = nextVersionNumber(await listVersions(ctx.db, ctx.workspaceId, id));
     out.git_sha = FAKE_GIT_SHA;
     out.proxy = fakeProxy(number);
     out.fps = 30;
@@ -314,7 +315,7 @@ export async function recordCheckpoint(
   id: string,
   step: FactoryStep,
   output: Json,
-  extra: { mediaId?: string | null } = {},
+  extra: { mediaId?: string | null; intent?: unknown } = {},
 ): Promise<void> {
   const ws = ctx.workspaceId;
   const p = await getProduction(ctx.db, ws, id);
@@ -348,7 +349,7 @@ export async function recordCheckpoint(
         proxyPath: typeof out.proxy === "string" ? out.proxy : null,
         gitSha: typeof out.git_sha === "string" && out.git_sha.trim() ? out.git_sha.trim() : "",
         madeBy: "render",
-        intent: out.intent,
+        intent: extra.intent ?? out.intent,
         durationS: media.data.duration_s,
         fps: n("fps"),
         width: media.data.width,

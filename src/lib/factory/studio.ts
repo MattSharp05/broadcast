@@ -58,7 +58,7 @@ export async function logEvent(
     step: e.step ?? null,
     intent,
     session_url: e.sessionUrl ?? null,
-    created_at: ctx.now.toISOString(),
+    // The database's clock, not the Sandbox's: the feed keeps the order things happened in.
   });
   if (error) fail("saving the activity", error);
 }
@@ -131,9 +131,11 @@ export async function addVersion(
 ): Promise<{ id: string; number: number }> {
   const ws = ctx.workspaceId;
   let inserted: { id: string; number: number } | null = null;
+  let first = false;
   // Two renders landing at once can pick the same number: the unique index refuses one; retry.
   for (let attempt = 0; attempt < 3 && !inserted; attempt++) {
     const existing = await listVersions(ctx.db, ws, productionId);
+    first = existing.length === 0;
     const number = nextVersionNumber(existing);
     const { data, error } = await ctx.db
       .from("production_versions")
@@ -165,7 +167,15 @@ export async function addVersion(
 
   const p = await getProduction(ctx.db, ws, productionId);
   if (v.mediaId && !p.post_id) {
-    await updateProduction(ctx.db, ws, productionId, { media_id: v.mediaId });
+    // A render from before versions existed has no row to prune: it goes now, as it used to.
+    if (first && p.media_id && p.media_id !== v.mediaId) {
+      const old = await mediaPath(ctx.db, ws, p.media_id);
+      await updateProduction(ctx.db, ws, productionId, { media_id: v.mediaId });
+      await removeFile(ctx.db, ws, old);
+      await ctx.db.from("media_assets").delete().eq("workspace_id", ws).eq("id", p.media_id);
+    } else {
+      await updateProduction(ctx.db, ws, productionId, { media_id: v.mediaId });
+    }
   }
   await pruneVersions(ctx, productionId);
   return inserted;
@@ -343,17 +353,55 @@ export async function sendNotes(
       throw new FactoryError("batch_open", "A batch of notes is already with Claude.");
     fail("saving the batch", error);
   }
+  // Anything that fails from here puts the notes back to drafts, so they can be sent again.
+  const rollback = async () => {
+    await ctx.db
+      .from("review_batches")
+      .update({ status: "failed" })
+      .eq("workspace_id", ws)
+      .eq("id", batch.id);
+    const { error: undoError } = await ctx.db
+      .from("review_notes")
+      .update({ status: "draft", batch_id: null })
+      .eq("workspace_id", ws)
+      .in("id", picked.noteIds);
+    if (undoError) console.error("Putting the notes back to drafts failed:", undoError.message);
+  };
+  try {
+    return await startBatch(
+      ctx,
+      productionId,
+      batch,
+      version.number,
+      picked.noteIds.length,
+      rollback,
+    );
+  } catch (err) {
+    await rollback();
+    throw err;
+  }
+}
+
+async function startBatch(
+  ctx: EngineContext,
+  productionId: string,
+  batch: BatchRow,
+  versionNumber: number,
+  n: number,
+  rollback: () => Promise<void>,
+): Promise<StartOutcome & { batchId: string }> {
+  const ws = ctx.workspaceId;
   const { error: notesError } = await ctx.db
     .from("review_notes")
     .update({ status: "sent", batch_id: batch.id })
     .eq("workspace_id", ws)
-    .in("id", picked.noteIds);
+    .eq("version_id", batch.version_id)
+    .eq("status", "draft");
   if (notesError) fail("sending the notes", notesError);
-  const n = picked.noteIds.length;
   await logEvent(ctx, productionId, {
     actor: "matthew",
     step: "revise",
-    intent: `Sent ${n} ${n === 1 ? "note" : "notes"} on ${versionLabel(version.number)}.`,
+    intent: `Sent ${n} ${n === 1 ? "note" : "notes"} on ${versionLabel(versionNumber)}.`,
   });
 
   if (sandbox(ctx)) {
@@ -389,16 +437,7 @@ export async function sendNotes(
   }
   if (result.kind === "manual") return { ...result, batchId: batch.id };
   // Nothing started: the batch failed and its notes go back to drafts, to send again.
-  await ctx.db
-    .from("review_batches")
-    .update({ status: "failed" })
-    .eq("workspace_id", ws)
-    .eq("id", batch.id);
-  await ctx.db
-    .from("review_notes")
-    .update({ status: "draft", batch_id: null })
-    .eq("workspace_id", ws)
-    .in("id", picked.noteIds);
+  await rollback();
   return { kind: "error", message: result.message, batchId: batch.id };
 }
 
@@ -450,11 +489,33 @@ export async function applyRevision(
   version: Omit<NewVersion, "madeBy" | "batchId">,
 ): Promise<{ id: string; number: number }> {
   const ws = ctx.workspaceId;
-  const created = await addVersion(ctx, productionId, {
-    ...version,
-    madeBy: "revise",
-    batchId: prepared.batch.id,
-  });
+  // Read before the new version prunes anything.
+  await copyRecipe(ctx, prepared.batch.version_id, version.mediaId);
+  // Close the batch first, only if it is still open: a retried or doubled call answers it once.
+  const { data: closed, error: closeError } = await ctx.db
+    .from("review_batches")
+    .update({ status: "answered" })
+    .eq("workspace_id", ws)
+    .eq("id", prepared.batch.id)
+    .in("status", [...OPEN_BATCH])
+    .select("id");
+  if (closeError) fail("closing the batch", closeError);
+  if (!closed.length) throw new FactoryError("batch_closed", "That batch was already answered.");
+  let created: { id: string; number: number };
+  try {
+    created = await addVersion(ctx, productionId, {
+      ...version,
+      madeBy: "revise",
+      batchId: prepared.batch.id,
+    });
+  } catch (err) {
+    await ctx.db
+      .from("review_batches")
+      .update({ status: prepared.batch.status })
+      .eq("workspace_id", ws)
+      .eq("id", prepared.batch.id);
+    throw err;
+  }
   for (const u of prepared.updates) {
     const { error } = await ctx.db
       .from("review_notes")
@@ -465,7 +526,7 @@ export async function applyRevision(
   }
   const { error } = await ctx.db
     .from("review_batches")
-    .update({ status: "answered", answered_by_version: created.id })
+    .update({ answered_by_version: created.id })
     .eq("workspace_id", ws)
     .eq("id", prepared.batch.id);
   if (error) fail("closing the batch", error);
@@ -476,6 +537,35 @@ export async function applyRevision(
     sessionUrl: prepared.batch.session_url,
   });
   return created;
+}
+
+/** A revised version keeps the recipe of the version its notes were on (style, voice, music…). */
+async function copyRecipe(ctx: EngineContext, fromVersionId: string, mediaId: string | null) {
+  if (!mediaId) return;
+  const ws = ctx.workspaceId;
+  const { data: from } = await ctx.db
+    .from("production_versions")
+    .select("media_id")
+    .eq("workspace_id", ws)
+    .eq("id", fromVersionId)
+    .maybeSingle();
+  const recipe = from?.media_id
+    ? (
+        await ctx.db
+          .from("media_assets")
+          .select("recipe")
+          .eq("workspace_id", ws)
+          .eq("id", from.media_id)
+          .maybeSingle()
+      ).data?.recipe
+    : null;
+  if (!recipe) return;
+  const { error } = await ctx.db
+    .from("media_assets")
+    .update({ recipe })
+    .eq("workspace_id", ws)
+    .eq("id", mediaId);
+  if (error) fail("saving the recipe", error);
 }
 
 /** The fake runner's revise: a new version at once (the previous file), a canned reply per note. */

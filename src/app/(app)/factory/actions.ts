@@ -216,8 +216,9 @@ export async function approve(id: unknown, step: unknown) {
   return guard(async () => {
     if (!isStep(step)) throw new FactoryError("bad_step", "Unknown step.");
     const ctx = await engine();
+    const outcome = await approveStep(ctx, pid, step);
     await logEvent(ctx, pid, { actor: "matthew", step, intent: `Approved the ${step} step.` });
-    return approveStep(ctx, pid, step);
+    return outcome;
   }, pid);
 }
 
@@ -227,12 +228,13 @@ export async function redo(id: unknown, step: unknown, note: unknown) {
     if (!isStep(step)) throw new FactoryError("bad_step", "Unknown step.");
     const text = typeof note === "string" ? note.trim().slice(0, 1000) : "";
     const ctx = await engine();
+    const outcome = await redoFrom(ctx, pid, step, text || null);
     await logEvent(ctx, pid, {
       actor: "matthew",
       step,
       intent: text ? `Asked to redo the ${step} step: ${text}` : `Asked to redo the ${step} step.`,
     });
-    return redoFrom(ctx, pid, step, text || null);
+    return outcome;
   }, pid);
 }
 
@@ -250,16 +252,17 @@ export async function rework(
     if (input.target === "avatar_slot" && !ref)
       throw new FactoryError("no_slot", "Choose the avatar slot to redo.");
     const ctx = await engine();
-    await logEvent(ctx, pid, {
-      actor: "matthew",
-      intent: `Asked to redo ${input.target.replace("_", " ")}${ref ? ` ${ref}` : ""}${note ? `: ${note}` : "."}`,
-    });
-    return requestRework(ctx, pid, {
+    const outcome = await requestRework(ctx, pid, {
       target: input.target,
       ref,
       note,
       quoteUsd: quote,
     });
+    await logEvent(ctx, pid, {
+      actor: "matthew",
+      intent: `Asked to redo ${input.target.replace("_", " ")}${ref ? ` ${ref}` : ""}${note ? `: ${note}` : "."}`,
+    });
+    return outcome;
   }, pid);
 }
 

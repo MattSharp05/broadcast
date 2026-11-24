@@ -21,8 +21,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (typeof message !== "string" || !message.trim())
     return apiError(422, "bad_message", "Say what went wrong in message.");
   try {
-    await logSessionIntent(req.value.ctx, id, step, intent);
     await failStep(req.value.ctx, id, step, message.trim());
+    await logSessionIntent(req.value.ctx, id, step, intent);
     return new Response(null, { status: 204 });
   } catch (err) {
     return errorResponse(err);

@@ -295,7 +295,9 @@ describe("row level security", () => {
       expect(version.error).toBeNull();
       const version_id = version.data?.id ?? "";
       const writes = [
-        allowed.from("review_batches").insert({ workspace_id: ws, production_id, version_id }),
+        allowed
+          .from("review_batches")
+          .insert({ workspace_id: ws, production_id, version_id, status: "answered" }),
         allowed.from("review_notes").insert({
           workspace_id: ws,
           production_id,

@@ -1,72 +1,73 @@
-import Link from "next/link";
-import { StatusDot } from "@/components/StatusDot";
-import type { VideoListItem } from "@/lib/db/factory-page";
-import { usd } from "@/lib/domain/factory/budget";
-import { stylePack } from "@/lib/domain/factory/styles";
-import { NewVideoButton } from "./NewVideoButton";
-import { STATUS_TONE, STATUS_WORD } from "./status";
-import styles from "./factory.module.css";
+"use client";
 
-/** Every video, newest first: one table for all kinds (with or without an avatar). */
-export function FactoryList({ videos }: { videos: VideoListItem[] }) {
-  if (videos.length === 0) {
-    return (
-      <div className={styles.page}>
-        <div className={styles.empty}>
+import { useState } from "react";
+import { LIST_FILTERS, type ListFilter } from "@/lib/domain/factory/list";
+import type { VideoCard as Card } from "@/lib/factory/list";
+import { NewVideoButton } from "./NewVideoButton";
+import { PromptBox } from "./studio/PromptBox";
+import { VideoCard } from "./studio/VideoCard";
+import factory from "./factory.module.css";
+import styles from "./studio/studio.module.css";
+
+/**
+ * The studio list (BC-42): a prompt box to start a video, then every video as a card (newest
+ * version, state, last activity), filtered by what needs Matthew and sorted by last activity.
+ */
+export function FactoryList({
+  videos,
+  accounts,
+}: {
+  videos: Card[];
+  accounts: { id: string; handle: string }[];
+}) {
+  const [filter, setFilter] = useState<ListFilter>("all");
+  const shown = videos.filter((v) => v.filters.includes(filter));
+  return (
+    <div className={factory.page}>
+      <PromptBox accounts={accounts} />
+      {videos.length === 0 ? (
+        <div className={factory.empty}>
           <h2>No videos yet</h2>
-          <p className={styles.help}>
-            Start with an idea. You pick the style, an avatar or none, the voice and the music; a
-            Claude session makes the video and you approve each step (or put it on autopilot).
+          <p className={factory.help}>
+            Write what the video is about above and Start, or set everything up yourself first. You
+            pick the style, an avatar or none, the voice and the music; a Claude session makes the
+            video and you approve each step (or put it on autopilot).
           </p>
           <NewVideoButton />
         </div>
-      </div>
-    );
-  }
-  return (
-    <div className={styles.page}>
-      <div className={styles.tablewrap}>
-        <table className={styles.table} aria-label="Videos">
-          <thead>
-            <tr>
-              <th>Video</th>
-              <th>Account</th>
-              <th>Style</th>
-              <th>Avatar</th>
-              <th>Status</th>
-              <th>Step</th>
-              <th className={styles.num}>Spent</th>
-              <th>Updated</th>
-            </tr>
-          </thead>
-          <tbody>
-            {videos.map((v) => (
-              <tr key={v.id} data-video={v.id}>
-                <td>
-                  <Link href={`/factory/${v.id}`} className={styles.titleLink}>
-                    {v.title}
-                  </Link>
-                </td>
-                <td>
-                  {v.handle ? `@${v.handle}` : <span className={styles.muted}>Not chosen</span>}
-                </td>
-                <td>
-                  {stylePack(v.style)?.label ?? <span className={styles.muted}>Not chosen</span>}
-                </td>
-                <td>{v.avatar ?? <span className={styles.muted}>None</span>}</td>
-                <td>
-                  <StatusDot tone={STATUS_TONE[v.status] ?? "neutral"}>
-                    {STATUS_WORD[v.status] ?? v.status}
-                  </StatusDot>
-                </td>
-                <td>{v.stepLabel ?? <span className={styles.muted}>Not started</span>}</td>
-                <td className={styles.num}>{usd(v.spendUsd)}</td>
-                <td className={styles.muted}>{v.updated}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      ) : (
+        <>
+          <div className={styles.filters} role="group" aria-label="Show">
+            {LIST_FILTERS.map((f) => {
+              const count = videos.filter((v) => v.filters.includes(f.key)).length;
+              return (
+                <button
+                  key={f.key}
+                  type="button"
+                  aria-pressed={filter === f.key}
+                  onClick={() => {
+                    setFilter(f.key);
+                  }}
+                >
+                  {f.label}
+                  <span className={styles.tabCount}>{count}</span>
+                </button>
+              );
+            })}
+          </div>
+          {shown.length ? (
+            <ul className={styles.grid} aria-label="Videos">
+              {shown.map((v) => (
+                <VideoCard key={v.id} card={v} />
+              ))}
+            </ul>
+          ) : (
+            <p className={factory.help} data-testid="no-match">
+              Nothing here right now.
+            </p>
+          )}
+        </>
+      )}
     </div>
   );
 }

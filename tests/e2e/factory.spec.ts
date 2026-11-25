@@ -83,20 +83,20 @@ test("lists every video and shows progress, waiting and failed steps", async ({
   loadScenario,
 }) => {
   await loadScenario("factory-pipeline", FACTORY);
-  const table = page.getByRole("table", { name: "Videos" });
-  await expect(table.locator("tbody tr")).toHaveCount(5);
+  const table = page.getByRole("list", { name: "Videos" });
+  await expect(table.getByRole("listitem")).toHaveCount(5);
   await expect(table).toContainText("Waiting for you");
   await expect(table).toContainText("Ready to schedule");
   await expect(table).toContainText("Failed");
 
-  await table.getByRole("link", { name: "How a git merge works" }).click();
+  await table.getByRole("link", { name: /How a git merge works/ }).click();
   await expect(page.getByRole("progressbar", { name: "Render progress" })).toHaveAttribute(
     "aria-valuenow",
     "60",
   );
 
   await page.goto("/factory");
-  await page.getByRole("link", { name: "Why ice floats" }).click();
+  await page.getByRole("link", { name: /Why ice floats/ }).click();
   const failed = page.locator('[data-step="style"]');
   await expect(failed).toHaveAttribute("data-status", "failed");
   await expect(failed).toContainText("Remotion couldn't load the paper texture");

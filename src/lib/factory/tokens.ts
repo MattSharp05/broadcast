@@ -23,3 +23,19 @@ export async function mintFactoryToken(
   if (error) fail("saving the session token", error);
   return token;
 }
+
+/** Mints a token for a routine's planner session (only its hash is stored). */
+export async function mintRoutineToken(
+  ctx: { db: Db; workspaceId: string },
+  routineId: string,
+): Promise<string> {
+  const token = generateFactoryToken(workspaceKindOf(ctx.workspaceId));
+  const { error } = await ctx.db.from("factory_tokens").insert({
+    workspace_id: ctx.workspaceId,
+    routine_id: routineId,
+    token_hash: hashFactoryToken(token),
+    expires_at: new Date(Date.now() + FACTORY_TOKEN_TTL_MS).toISOString(),
+  });
+  if (error) fail("saving the planner token", error);
+  return token;
+}

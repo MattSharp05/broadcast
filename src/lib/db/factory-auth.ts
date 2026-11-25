@@ -13,11 +13,23 @@ export interface FactoryAuth {
   productionId: string;
 }
 
-export async function authenticateFactoryToken(
-  admin: Db,
-  header: string | null,
-  now: Date = new Date(),
-): Promise<FactoryAuth | null> {
+/** A planner session's token: scoped to one routine (docs/factory-api.md → Routines). */
+export interface RoutineAuth {
+  tokenId: string;
+  workspaceId: string;
+  kind: WorkspaceKind;
+  routineId: string;
+}
+
+type TokenRow = {
+  id: string;
+  workspace_id: string;
+  production_id: string | null;
+  routine_id: string | null;
+  kind: WorkspaceKind;
+};
+
+async function checkToken(admin: Db, header: string | null, now: Date): Promise<TokenRow | null> {
   const token = bearerToken(header);
   if (!token || !isFactoryTokenShape(token)) return null;
   const kind = factoryTokenKind(token);
@@ -25,7 +37,7 @@ export async function authenticateFactoryToken(
   const hash = hashFactoryToken(token);
   const { data, error } = await admin
     .from("factory_tokens")
-    .select("id, workspace_id, production_id, token_hash, expires_at, revoked_at")
+    .select("id, workspace_id, production_id, routine_id, token_hash, expires_at, revoked_at")
     .eq("token_hash", hash)
     .maybeSingle();
   if (error || !data) return null;
@@ -33,10 +45,32 @@ export async function authenticateFactoryToken(
   if (data.revoked_at || new Date(data.expires_at) <= now) return null;
   if (data.workspace_id !== WORKSPACE_IDS[kind]) return null;
   await admin.from("factory_tokens").update({ last_used_at: now.toISOString() }).eq("id", data.id);
+  return { ...data, kind };
+}
+
+/** A video's token. A routine's (planner) token is refused here. */
+export async function authenticateFactoryToken(
+  admin: Db,
+  header: string | null,
+  now: Date = new Date(),
+): Promise<FactoryAuth | null> {
+  const row = await checkToken(admin, header, now);
+  if (!row?.production_id) return null;
   return {
-    tokenId: data.id,
-    workspaceId: data.workspace_id,
-    kind,
-    productionId: data.production_id,
+    tokenId: row.id,
+    workspaceId: row.workspace_id,
+    kind: row.kind,
+    productionId: row.production_id,
   };
+}
+
+/** A routine's (planner) token. A video's token is refused here. */
+export async function authenticateRoutineToken(
+  admin: Db,
+  header: string | null,
+  now: Date = new Date(),
+): Promise<RoutineAuth | null> {
+  const row = await checkToken(admin, header, now);
+  if (!row?.routine_id) return null;
+  return { tokenId: row.id, workspaceId: row.workspace_id, kind: row.kind, routineId: row.routine_id };
 }

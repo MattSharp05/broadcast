@@ -504,8 +504,9 @@ export type Database = {
           expires_at: string;
           id: string;
           last_used_at: string | null;
-          production_id: string;
+          production_id: string | null;
           revoked_at: string | null;
+          routine_id: string | null;
           token_hash: string;
           workspace_id: string;
         };
@@ -515,8 +516,9 @@ export type Database = {
           expires_at: string;
           id?: string;
           last_used_at?: string | null;
-          production_id: string;
+          production_id?: string | null;
           revoked_at?: string | null;
+          routine_id?: string | null;
           token_hash: string;
           workspace_id: string;
         };
@@ -525,8 +527,9 @@ export type Database = {
           expires_at?: string;
           id?: string;
           last_used_at?: string | null;
-          production_id?: string;
+          production_id?: string | null;
           revoked_at?: string | null;
+          routine_id?: string | null;
           token_hash?: string;
           workspace_id?: string;
         };
@@ -536,6 +539,13 @@ export type Database = {
             columns: ["production_id", "workspace_id"];
             isOneToOne: false;
             referencedRelation: "productions";
+            referencedColumns: ["id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "factory_tokens_routine_fk";
+            columns: ["routine_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "routines";
             referencedColumns: ["id", "workspace_id"];
           },
           {
@@ -1304,6 +1314,7 @@ export type Database = {
           queue_position: number | null;
           scheduled_at: string | null;
           status: Database["public"]["Enums"]["post_status"];
+          tags: string[];
           timing: Database["public"]["Enums"]["post_timing"];
           updated_at: string;
           workspace_id: string;
@@ -1329,6 +1340,7 @@ export type Database = {
           queue_position?: number | null;
           scheduled_at?: string | null;
           status?: Database["public"]["Enums"]["post_status"];
+          tags?: string[];
           timing?: Database["public"]["Enums"]["post_timing"];
           updated_at?: string;
           workspace_id: string;
@@ -1353,6 +1365,7 @@ export type Database = {
           queue_position?: number | null;
           scheduled_at?: string | null;
           status?: Database["public"]["Enums"]["post_status"];
+          tags?: string[];
           timing?: Database["public"]["Enums"]["post_timing"];
           updated_at?: string;
           workspace_id?: string;
@@ -1663,6 +1676,7 @@ export type Database = {
           compare_styles: boolean;
           created_at: string;
           face_model: string | null;
+          genre: string | null;
           id: string;
           idea: string;
           media_id: string | null;
@@ -1670,6 +1684,8 @@ export type Database = {
           post_id: string | null;
           project_slug: string | null;
           remake_of: string | null;
+          routine_id: string | null;
+          run_mode: string;
           script: Json | null;
           session_id: string | null;
           session_url: string | null;
@@ -1677,6 +1693,7 @@ export type Database = {
           step_modes: NonNullable<Json>;
           style: string | null;
           style_candidates: string[];
+          tags: string[];
           title: string;
           updated_at: string;
           use_avatar: boolean;
@@ -1695,6 +1712,7 @@ export type Database = {
           compare_styles?: boolean;
           created_at?: string;
           face_model?: string | null;
+          genre?: string | null;
           id?: string;
           idea?: string;
           media_id?: string | null;
@@ -1702,6 +1720,8 @@ export type Database = {
           post_id?: string | null;
           project_slug?: string | null;
           remake_of?: string | null;
+          routine_id?: string | null;
+          run_mode?: string;
           script?: Json | null;
           session_id?: string | null;
           session_url?: string | null;
@@ -1709,6 +1729,7 @@ export type Database = {
           step_modes?: NonNullable<Json>;
           style?: string | null;
           style_candidates?: string[];
+          tags?: string[];
           title?: string;
           updated_at?: string;
           use_avatar?: boolean;
@@ -1726,6 +1747,7 @@ export type Database = {
           compare_styles?: boolean;
           created_at?: string;
           face_model?: string | null;
+          genre?: string | null;
           id?: string;
           idea?: string;
           media_id?: string | null;
@@ -1733,6 +1755,8 @@ export type Database = {
           post_id?: string | null;
           project_slug?: string | null;
           remake_of?: string | null;
+          routine_id?: string | null;
+          run_mode?: string;
           script?: Json | null;
           session_id?: string | null;
           session_url?: string | null;
@@ -1740,6 +1764,7 @@ export type Database = {
           step_modes?: NonNullable<Json>;
           style?: string | null;
           style_candidates?: string[];
+          tags?: string[];
           title?: string;
           updated_at?: string;
           use_avatar?: boolean;
@@ -1787,6 +1812,13 @@ export type Database = {
             columns: ["remake_of", "workspace_id"];
             isOneToOne: false;
             referencedRelation: "productions";
+            referencedColumns: ["id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "productions_routine_fk";
+            columns: ["routine_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "routines";
             referencedColumns: ["id", "workspace_id"];
           },
           {
@@ -1961,6 +1993,268 @@ export type Database = {
           },
           {
             foreignKeyName: "review_notes_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      routine_accounts: {
+        Row: {
+          account_id: string;
+          routine_id: string;
+          workspace_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          account_id: string;
+          routine_id: string;
+          workspace_id: string;
+        };
+        Update: {
+          account_id?: string;
+          routine_id?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "routine_accounts_account_id_workspace_id_fkey";
+            columns: ["account_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "social_accounts";
+            referencedColumns: ["id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "routine_accounts_routine_id_workspace_id_fkey";
+            columns: ["routine_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "routines";
+            referencedColumns: ["id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "routine_accounts_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      routine_slots: {
+        Row: {
+          account_id: string;
+          brief: Json | null;
+          build_at: string;
+          created_at: string;
+          id: string;
+          message: string | null;
+          position: number;
+          post_at: string;
+          post_id: string | null;
+          production_id: string | null;
+          retries: number;
+          routine_id: string;
+          status: string;
+          updated_at: string;
+          workspace_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          account_id: string;
+          brief?: Json | null;
+          build_at: string;
+          created_at?: string;
+          id?: string;
+          message?: string | null;
+          position: number;
+          post_at: string;
+          post_id?: string | null;
+          production_id?: string | null;
+          retries?: number;
+          routine_id: string;
+          status?: string;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          account_id?: string;
+          brief?: Json | null;
+          build_at?: string;
+          created_at?: string;
+          id?: string;
+          message?: string | null;
+          position?: number;
+          post_at?: string;
+          post_id?: string | null;
+          production_id?: string | null;
+          retries?: number;
+          routine_id?: string;
+          status?: string;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "routine_slots_account_id_workspace_id_fkey";
+            columns: ["account_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "social_accounts";
+            referencedColumns: ["id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "routine_slots_post_id_workspace_id_fkey";
+            columns: ["post_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "posts";
+            referencedColumns: ["id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "routine_slots_production_id_workspace_id_fkey";
+            columns: ["production_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "productions";
+            referencedColumns: ["id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "routine_slots_routine_id_workspace_id_fkey";
+            columns: ["routine_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "routines";
+            referencedColumns: ["id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "routine_slots_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      routine_templates: {
+        Row: {
+          config: NonNullable<Json>;
+          created_at: string;
+          description: string;
+          id: string;
+          name: string;
+          updated_at: string;
+          workspace_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          config?: NonNullable<Json>;
+          created_at?: string;
+          description?: string;
+          id?: string;
+          name: string;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          config?: NonNullable<Json>;
+          created_at?: string;
+          description?: string;
+          id?: string;
+          name?: string;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "routine_templates_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      routines: {
+        Row: {
+          approval: string;
+          approved_at: string | null;
+          budget_usd: number | null;
+          config: NonNullable<Json>;
+          created_at: string;
+          ends_at: string;
+          id: string;
+          lead_minutes: number;
+          max_parallel: number;
+          name: string;
+          plan_message: string | null;
+          plan_session_url: string | null;
+          planned_at: string | null;
+          posts_per_day: number;
+          starts_at: string;
+          status: string;
+          tags: string[];
+          template_id: string | null;
+          updated_at: string;
+          window_end: string;
+          window_start: string;
+          workspace_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          approval?: string;
+          approved_at?: string | null;
+          budget_usd?: number | null;
+          config?: NonNullable<Json>;
+          created_at?: string;
+          ends_at: string;
+          id?: string;
+          lead_minutes?: number;
+          max_parallel?: number;
+          name: string;
+          plan_message?: string | null;
+          plan_session_url?: string | null;
+          planned_at?: string | null;
+          posts_per_day: number;
+          starts_at: string;
+          status?: string;
+          tags?: string[];
+          template_id?: string | null;
+          updated_at?: string;
+          window_end?: string;
+          window_start?: string;
+          workspace_id: string;
+        };
+        Update: {
+          approval?: string;
+          approved_at?: string | null;
+          budget_usd?: number | null;
+          config?: NonNullable<Json>;
+          created_at?: string;
+          ends_at?: string;
+          id?: string;
+          lead_minutes?: number;
+          max_parallel?: number;
+          name?: string;
+          plan_message?: string | null;
+          plan_session_url?: string | null;
+          planned_at?: string | null;
+          posts_per_day?: number;
+          starts_at?: string;
+          status?: string;
+          tags?: string[];
+          template_id?: string | null;
+          updated_at?: string;
+          window_end?: string;
+          window_start?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "routines_template_id_workspace_id_fkey";
+            columns: ["template_id", "workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "routine_templates";
+            referencedColumns: ["id", "workspace_id"];
+          },
+          {
+            foreignKeyName: "routines_workspace_id_fkey";
             columns: ["workspace_id"];
             isOneToOne: false;
             referencedRelation: "workspaces";

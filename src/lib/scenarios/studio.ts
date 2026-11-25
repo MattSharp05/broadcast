@@ -1,6 +1,7 @@
 import { FAKE_INTENTS, fakeReply } from "@/lib/domain/factory/events";
 import { frameAt, type NoteKind } from "@/lib/domain/factory/notes";
 import { stableUuid } from "@/lib/hash";
+import { FAKE_PERMALINK_BASE } from "@/lib/providers/fake";
 import { HOUR_MS, addProduction, baseSeed } from "./factory";
 import type { SandboxSeed, Scenario } from "./types";
 
@@ -295,6 +296,143 @@ export const factoryBoard: Scenario = {
   build: ({ now }) => boardSeed("factory-board", now),
 };
 
+/**
+ * Six videos across the studio list's filters: a step waiting, a render running, answers to read
+ * (the tides video, v3), a pack ready to post, one scheduled and one posted.
+ */
+export function studioListSeed(name: string, now: Date): SandboxSeed {
+  const seed = studioSeed(name, now, "batch-answered");
+  const id = (...parts: string[]) => stableUuid(name, ...parts);
+  const at = (h: number) => new Date(now.getTime() - h * HOUR_MS).toISOString();
+  addProduction(seed, id, now, {
+    key: "wait",
+    idea: "Why the sky is blue",
+    style: "luminous-3d",
+    account: "cj",
+    done: ["idea"],
+    current: { step: "script", status: "waiting" },
+    status: "waiting",
+    hoursAgo: 2,
+  });
+  addProduction(seed, id, now, {
+    key: "render",
+    idea: "How a git merge works",
+    style: "motion-graphics",
+    account: "cj",
+    done: ["idea", "script", "style", "visuals"],
+    current: {
+      step: "render",
+      status: "running",
+      progress: 40,
+      message: "Rendering scene 2 of 5.",
+    },
+    status: "running",
+    hoursAgo: 5,
+  });
+  const done = ["idea", "script", "style", "visuals", "render"] as const;
+  const withVersion = (key: string, idea: string, hoursAgo: number) => {
+    const pid = addProduction(seed, id, now, {
+      key,
+      idea,
+      style: "editorial-collage",
+      account: "maya",
+      done: [...done],
+      status: "ready",
+      hoursAgo,
+    });
+    const vid = id("version", key, "1");
+    seed.factory.versions.push({
+      id: vid,
+      production_id: pid,
+      number: 1,
+      media_id: id("media", key),
+      proxy_path: "/factory/fake/version-1.mp4",
+      duration_s: 60,
+      fps: 30,
+      width: 1080,
+      height: 1920,
+      bytes: 12_000_000,
+      git_sha: "d41e7a0",
+      made_by: "render",
+      intent: "First render.",
+      loudness_lufs: -14,
+      true_peak_db: -1.5,
+      created_at: at(hoursAgo - 1),
+    });
+    seed.factory.events.push({
+      production_id: pid,
+      actor: "session",
+      step: "render",
+      intent: `Rendered ${idea.toLowerCase()}.`,
+      created_at: at(hoursAgo - 1),
+    });
+    return { pid, vid };
+  };
+  const ready = withVersion("ready", "How clouds float", 8);
+  seed.factory.packs.push({
+    production_id: ready.pid,
+    version_id: ready.vid,
+    cover_path: "/factory/fake/still-1.svg",
+    cover_t_s: 1,
+    caption: "Clouds are heavier than you think.",
+    hashtags: ["clouds"],
+    ready_at: at(7),
+  });
+  const post = (key: string, idea: string, hoursAgo: number, published: boolean) => {
+    const v = withVersion(key, idea, hoursAgo);
+    const postId = id("post", key);
+    const when = published
+      ? at(hoursAgo - 2)
+      : new Date(now.getTime() + 20 * HOUR_MS).toISOString();
+    if (published) {
+      seed.fakeContainers.push({
+        id: `fake-container-${key}`,
+        account_id: id("account", "maya"),
+        video_url: `sandbox://${name}/${postId}.mp4`,
+        caption: idea,
+        status_checks: 2,
+        media_id: `fake-media-${key}`,
+        permalink: `${FAKE_PERMALINK_BASE}/maya.explains/${key}`,
+        published_at: when,
+      });
+    }
+    seed.posts.push({
+      id: postId,
+      account_id: id("account", "maya"),
+      media_id: id("media", key),
+      caption: idea,
+      timing: "queue",
+      scheduled_at: when,
+      status: published ? "published" : "queued",
+      ...(published
+        ? {
+            published_at: when,
+            attempts: 1,
+            container_id: `fake-container-${key}`,
+            media_ig_id: `fake-media-${key}`,
+            permalink: `${FAKE_PERMALINK_BASE}/maya.explains/${key}`,
+          }
+        : {}),
+    });
+    const p = seed.factory.productions.find((x) => x.id === v.pid);
+    if (p) {
+      p.post_id = postId;
+      p.status = "scheduled";
+    }
+  };
+  post("sched", "Why ice floats", 12, false);
+  post("posted", "How rainbows form", 40, true);
+  return seed;
+}
+
+export const factoryStudioList: Scenario = {
+  name: "factory-studio-list",
+  page: "/factory",
+  description:
+    "Six videos across the studio list: a step waiting, a render running, answers to read, one ready to post, one scheduled, one posted.",
+  build: ({ now }) => studioListSeed("factory-studio-list", now),
+};
+
 export const STUDIO_SCENARIOS: readonly Scenario[] = [
   factoryVersions,
   factoryBatchSent,
@@ -302,4 +440,5 @@ export const STUDIO_SCENARIOS: readonly Scenario[] = [
   factoryReadyToPost,
   factoryReadyFailing,
   factoryBoard,
+  factoryStudioList,
 ];

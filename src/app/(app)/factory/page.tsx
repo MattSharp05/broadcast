@@ -5,6 +5,9 @@ import { PageHeader } from "@/components/PageHeader";
 import { FactoryList } from "@/features/factory/FactoryList";
 import { NewVideoButton } from "@/features/factory/NewVideoButton";
 import { loadFactoryList } from "@/lib/db/factory-page";
+import { createServerSupabase } from "@/lib/db/server";
+import { currentWorkspace } from "@/lib/db/workspace";
+import { loadStudioList } from "@/lib/factory/list";
 import { usd } from "@/lib/domain/factory/budget";
 
 export const metadata: Metadata = {
@@ -15,7 +18,18 @@ export const dynamic = "force-dynamic";
 
 /** The Content Factory: every video being made, whatever its kind (ADR 0007). */
 export default async function FactoryPage() {
-  const data = await loadFactoryList();
+  const workspace = await currentWorkspace();
+  const db = await createServerSupabase();
+  const [data, cards, accounts] = await Promise.all([
+    loadFactoryList(),
+    loadStudioList(),
+    db
+      .from("social_accounts")
+      .select("id, handle")
+      .eq("workspace_id", workspace.id)
+      .order("created_at"),
+  ]);
+  if (accounts.error) throw new Error(`Reading the accounts failed: ${accounts.error.message}`);
   const inProduction = data.videos.filter((v) => ["running", "waiting"].includes(v.status)).length;
   const ready = data.videos.filter((v) => v.status === "ready").length;
   return (
@@ -45,7 +59,7 @@ export default async function FactoryPage() {
           </>
         }
       />
-      <FactoryList videos={data.videos} />
+      <FactoryList videos={cards} accounts={accounts.data} />
     </>
   );
 }

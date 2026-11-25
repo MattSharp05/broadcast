@@ -13,7 +13,7 @@ import { CAPTION_MAX } from "@/lib/domain/factory/captions";
 import { faceModel, isSelectable } from "@/lib/domain/factory/models";
 import { isReworkTarget } from "@/lib/domain/factory/rework";
 import { isStep, parseModes } from "@/lib/domain/factory/steps";
-import { stylePack } from "@/lib/domain/factory/styles";
+import { STYLE_PACKS, stylePack } from "@/lib/domain/factory/styles";
 import {
   approveStep,
   createProduction,
@@ -88,6 +88,65 @@ export async function newVideo(input: { idea?: unknown; remakeOf?: unknown; acco
     const remakeOf = input.remakeOf ? checkId(input.remakeOf) : null;
     const accountId = input.accountId ? checkId(input.accountId) : null;
     return createProduction(ctx, { idea, remakeOf, accountId });
+  });
+}
+
+/**
+ * The studio list's prompt box (BC-42): a new video from one line, started at once. What isn't
+ * picked comes from the last video (voice, music, style), else the first in each library; the
+ * video page changes everything except the style once started.
+ */
+export async function startFromPrompt(input: {
+  prompt?: unknown;
+  accountId?: unknown;
+  style?: unknown;
+}) {
+  return guard(async () => {
+    const ctx = await engine();
+    const idea = typeof input.prompt === "string" ? input.prompt.trim().slice(0, 2000) : "";
+    if (!idea) throw new FactoryError("no_idea", "Say what the video is about first.");
+    const accountId = input.accountId ? checkId(input.accountId) : null;
+    if (accountId) {
+      const a = await ctx.db
+        .from("social_accounts")
+        .select("id")
+        .eq("workspace_id", ctx.workspaceId)
+        .eq("id", accountId)
+        .maybeSingle();
+      if (!a.data) throw new FactoryError("bad_account", "Unknown account.");
+    }
+    if (input.style && (typeof input.style !== "string" || !stylePack(input.style)))
+      throw new FactoryError("bad_style", "Unknown style.");
+    const [last, voice, music] = await Promise.all([
+      ctx.db
+        .from("productions")
+        .select("style, voice_key, music_key")
+        .eq("workspace_id", ctx.workspaceId)
+        .not("voice_key", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      ctx.db.from("factory_voices").select("key").order("sort").limit(1).maybeSingle(),
+      ctx.db.from("factory_music").select("key").order("sort").limit(1).maybeSingle(),
+    ]);
+    const id = await createProduction(ctx, { idea, accountId });
+    try {
+      await updateProduction(ctx.db, ctx.workspaceId, id, {
+        style:
+          (typeof input.style === "string" ? input.style : null) ??
+          last.data?.style ??
+          STYLE_PACKS[0]?.key ??
+          null,
+        voice_key: last.data?.voice_key ?? voice.data?.key ?? null,
+        music_key: last.data?.music_key ?? music.data?.key ?? null,
+      });
+      const outcome = await startProduction(ctx, id);
+      return { id, outcome };
+    } catch (err) {
+      // Nothing started: no half-made draft is left behind for each retry.
+      await ctx.db.from("productions").delete().eq("workspace_id", ctx.workspaceId).eq("id", id);
+      throw err;
+    }
   });
 }
 

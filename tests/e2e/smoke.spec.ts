@@ -86,6 +86,10 @@ test("/dev lists every scenario and each link loads it", async ({ page }) => {
     "factory-style-compare",
     "factory-pack-ready",
     "factory-scheduled-cover",
+    "routine-template",
+    "routine-draft",
+    "routine-planned",
+    "routine-running",
     "posts-table",
   ]);
   await expect(page.getByRole("link", { name: "Canvas engine demo" })).toHaveAttribute(
@@ -124,6 +128,10 @@ test("/dev lists every scenario and each link loads it", async ({ page }) => {
     "factory-style-compare": 2,
     "factory-pack-ready": 2,
     "factory-scheduled-cover": 2,
+    "routine-template": 2,
+    "routine-draft": 2,
+    "routine-planned": 2,
+    "routine-running": 2,
     "posts-table": 2,
   };
   for (const [name, accounts] of Object.entries(expected)) {
@@ -134,11 +142,13 @@ test("/dev lists every scenario and each link loads it", async ({ page }) => {
     const path =
       name === "posts-table"
         ? /\/posts$/
-        : name === "avatar-studio"
-          ? /\/factory\/avatars$/
-          : name.startsWith("factory-") && name !== "factory-scheduled-cover"
-            ? /\/factory(\/[0-9a-f-]{36})?$/
-            : /\/workflow$/;
+        : name.startsWith("routine-")
+          ? /\/routines(\/[0-9a-f-]{36})?$/
+          : name === "avatar-studio"
+            ? /\/factory\/avatars$/
+            : name.startsWith("factory-") && name !== "factory-scheduled-cover"
+              ? /\/factory(\/[0-9a-f-]{36})?$/
+              : /\/workflow$/;
     await expect(page).toHaveURL(path);
     await expect(marker(page)).toBeVisible();
     const debug = await sandboxDebug(page);

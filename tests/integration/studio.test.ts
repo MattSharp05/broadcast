@@ -607,8 +607,21 @@ describe("importing a video-editor project (BC-44)", () => {
         "render",
       ]);
 
-      const again = await importPost(key, { project_slug: "moon-tides-01", title: "x", idea: "y" });
-      expect(again.status).toBe(409);
+      // Before v1 arrives, importing again gives a fresh token (a lost or expired one).
+      const resumed = await importPost(key, {
+        project_slug: "moon-tides-01",
+        title: "x",
+        idea: "y",
+      });
+      expect(resumed.status).toBe(200);
+      expect(await resumed.json()).toMatchObject({ video_id, resumed: true });
+      expect(
+        (await importPost(key, { project_slug: "bad slug", title: "x", idea: "y" })).status,
+      ).toBe(422);
+      expect(
+        (await importPost(key, { project_slug: "x-01", title: "x", idea: "y", style: "nope" }))
+          .status,
+      ).toBe(422);
 
       const file = await upload(video_id, token);
       const v1 = await call(versionsPost, { id: video_id }, token, {
@@ -626,13 +639,14 @@ describe("importing a video-editor project (BC-44)", () => {
         .eq("media_id", version?.media_id ?? "");
       expect(posts.data).toEqual([]);
 
-      // A video that wasn't imported can't take a version without a batch.
-      const pipelineToken = await mintFactoryToken(ctx, video_id);
-      const refused = await call(versionsPost, { id: video_id }, pipelineToken, {
+      // v1 is in: another version without a batch is refused, and importing again is too.
+      const refused = await call(versionsPost, { id: video_id }, token, {
         upload: file,
         git_sha: "9a8b7c6",
       });
-      expect(refused.status).toBe(409);
+      expect(refused.status).toBe(422);
+      const again = await importPost(key, { project_slug: "moon-tides-01", title: "x", idea: "y" });
+      expect(again.status).toBe(409);
     } finally {
       await admin.from("api_keys").delete().eq("name", "BC-44 test");
     }

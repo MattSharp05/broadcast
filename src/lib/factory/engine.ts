@@ -1,11 +1,6 @@
 import "server-only";
 import { configuredAppOrigin } from "@/lib/app-url";
 import {
-  FACTORY_TOKEN_TTL_MS,
-  generateFactoryToken,
-  hashFactoryToken,
-} from "@/lib/auth/factory-tokens";
-import {
   FactoryError,
   avatarCap,
   avatarGeneration,
@@ -154,19 +149,8 @@ function slugFor(p: ProductionRow): string {
   return `${base || "video"}-${p.id.slice(0, 6)}`;
 }
 
-/** Mints a factory token for one production (only its hash is stored). */
-export async function mintFactoryToken(ctx: EngineContext, productionId: string): Promise<string> {
-  const token = generateFactoryToken(workspaceKindOf(ctx.workspaceId));
-  const { error } = await ctx.db.from("factory_tokens").insert({
-    workspace_id: ctx.workspaceId,
-    production_id: productionId,
-    token_hash: hashFactoryToken(token),
-    // Real time, never the Sandbox clock: the session runs now.
-    expires_at: new Date(Date.now() + FACTORY_TOKEN_TTL_MS).toISOString(),
-  });
-  if (error) fail("saving the session token", error);
-  return token;
-}
+export { mintFactoryToken } from "./tokens";
+import { mintFactoryToken } from "./tokens";
 
 /** Runs one step: the fake runner in the Sandbox, else a routine fire (or a prompt to paste). */
 export async function fireStep(

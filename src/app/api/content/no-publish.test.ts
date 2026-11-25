@@ -8,7 +8,12 @@ import { describe, expect, it } from "vitest";
 
 const ROOT = process.cwd();
 const SRC = join(ROOT, "src");
-const ENTRIES = ["src/app/api/content/route.ts", "src/app/api/content/uploads/route.ts"];
+const ENTRIES = [
+  "src/app/api/content/route.ts",
+  "src/app/api/content/uploads/route.ts",
+  // The factory import (BC-44) also takes the content API key.
+  "src/app/api/factory/import/route.ts",
+];
 const FORBIDDEN = [
   "src/lib/providers/",
   "src/lib/scheduler/",
@@ -23,6 +28,7 @@ function resolveImport(from: string, spec: string): string | null {
   if (spec.startsWith("@/")) base = join(SRC, spec.slice(2));
   else if (spec.startsWith(".")) base = resolve(dirname(from), spec);
   else return null; // a package
+  if (base.endsWith(".json") && existsSync(base)) return null; // data, no imports
   for (const candidate of [base, `${base}.ts`, `${base}.tsx`, join(base, "index.ts")]) {
     if (existsSync(candidate) && /\.tsx?$/.test(candidate)) return candidate;
   }

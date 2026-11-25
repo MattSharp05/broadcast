@@ -4,7 +4,13 @@ import type { NoteAnswer } from "@/lib/domain/factory/notes";
 import { getSteps } from "@/lib/db/factory";
 import type { Json } from "@/lib/db/types";
 import { recordCheckpoint } from "@/lib/factory/engine";
-import { applyRevision, isImportSteps, listVersions, prepareRevision } from "@/lib/factory/studio";
+import { isImportSteps } from "@/lib/factory/import";
+import {
+  applyRevision,
+  listVersions,
+  logSessionIntent,
+  prepareRevision,
+} from "@/lib/factory/studio";
 import { apiError, errorResponse, factoryRequest, type FactoryRequest } from "../../shared";
 import { checkProxy, storeRender } from "../../uploads";
 
@@ -102,8 +108,14 @@ async function importVersion(id: string, req: FactoryRequest) {
     if (!isImportSteps(steps))
       return apiError(422, "bad_batch", "batch_id is the BATCH= line you were started with.");
     const render = steps.find((s) => s.step === "render");
-    if (render?.status !== "running" && render?.status !== "failed")
-      return apiError(409, "not_running", "This video's imported version is already in.");
+    const versions = await listVersions(ctx.db, ctx.workspaceId, id);
+    // Import brings v1 only; anything later answers a batch of notes.
+    if (versions.length || (render?.status !== "running" && render?.status !== "failed"))
+      return apiError(
+        422,
+        "bad_batch",
+        "This video's v1 is in: a new version answers a batch (send its BATCH= line as batch_id).",
+      );
     if (typeof body.git_sha !== "string" || !body.git_sha.trim())
       return apiError(
         422,
@@ -116,23 +128,36 @@ async function importVersion(id: string, req: FactoryRequest) {
     }
     const stored = await storeRender(ctx, id, body.upload);
     if (!stored.ok) return stored.response;
-    await recordCheckpoint(
-      ctx,
-      id,
-      "render",
-      {
-        upload: body.upload as Json,
-        proxy: typeof body.proxy === "string" ? body.proxy : null,
-        git_sha: body.git_sha.trim(),
-        fps: num(body.fps),
-        loudness_lufs: num(body.loudness_lufs),
-        true_peak_db: num(body.true_peak_db),
-        duration_s: Math.round(stored.value.info.durationS * 1000) / 1000,
-        face_share: null,
-        imagery_credits: Array.isArray(body.imagery_credits) ? (body.imagery_credits as Json) : [],
-      },
-      { mediaId: stored.value.mediaId, intent: body.intent, madeBy: "import" },
-    );
+    try {
+      await recordCheckpoint(
+        ctx,
+        id,
+        "render",
+        {
+          upload: body.upload as Json,
+          proxy: typeof body.proxy === "string" ? body.proxy : null,
+          git_sha: body.git_sha.trim(),
+          fps: num(body.fps),
+          loudness_lufs: num(body.loudness_lufs),
+          true_peak_db: num(body.true_peak_db),
+          duration_s: Math.round(stored.value.info.durationS * 1000) / 1000,
+          face_share: null,
+          imagery_credits: Array.isArray(body.imagery_credits)
+            ? (body.imagery_credits as Json)
+            : [],
+        },
+        { mediaId: stored.value.mediaId, intent: body.intent, madeBy: "import" },
+      );
+    } catch (err) {
+      // Nothing points at the stored render: drop its row (the session can post again).
+      await ctx.db
+        .from("media_assets")
+        .delete()
+        .eq("workspace_id", ctx.workspaceId)
+        .eq("id", stored.value.mediaId);
+      throw err;
+    }
+    await logSessionIntent(ctx, id, "render", body.intent);
     const [v] = await listVersions(ctx.db, ctx.workspaceId, id);
     return NextResponse.json({ version: v?.id ?? null, number: v?.number ?? 1 }, { status: 201 });
   } catch (err) {

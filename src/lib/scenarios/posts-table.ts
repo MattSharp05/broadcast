@@ -137,7 +137,7 @@ export const POSTS_TABLE_POSTS: readonly PostSpec[] = [
 
 export const POSTS_TABLE_ROUTINE = "Trip weekend";
 
-/** The videos the routine made (linked once routine seeding exists). */
+/** The videos the routine made. */
 export const POSTS_TABLE_ROUTINE_POSTS = POSTS_TABLE_POSTS.filter((p) => p.video?.routine).map(
   (p) => p.key,
 );
@@ -160,8 +160,25 @@ export const postsTable: Scenario = {
     "Posts tab: six posts on two accounts with genres, styles, voices, songs, a routine, the Trip tag and stats at several ages. Filter by Trip, sort by views, tag a post.",
   build: ({ now }) => {
     const { seed, id } = baseSeed(NAME, now);
-    // The "Trip weekend" routine (paris, tokyo, rome) is added by the routines work: it seeds
-    // routines after productions, so it links them with an update (ADR 0009).
+    // The "Trip weekend" routine that made paris, tokyo and rome (ADR 0009; loaded before videos).
+    const routineId = id("routine", "trip");
+    seed.factory.routines.push({
+      id: routineId,
+      name: POSTS_TABLE_ROUTINE,
+      status: "done",
+      starts_at: new Date(now.getTime() - 8 * DAY_MS).toISOString(),
+      ends_at: new Date(now.getTime() - 5 * DAY_MS).toISOString(),
+      posts_per_day: 2,
+      approval: "auto",
+      tags: ["Trip"],
+    });
+    for (const account of new Set(
+      POSTS_TABLE_POSTS.filter((p) => p.video?.routine).map((p) => p.account),
+    ))
+      seed.factory.routineAccounts.push({
+        routine_id: routineId,
+        account_id: id("account", account),
+      });
     for (const spec of POSTS_TABLE_POSTS) {
       const postId = id("post", spec.key);
       const mediaId = id("media", spec.key);
@@ -251,6 +268,7 @@ export const postsTable: Scenario = {
           caption: spec.caption,
           media_id: mediaId,
           post_id: postId,
+          routine_id: v.routine ? routineId : null,
         });
       }
       for (const [offset, views] of Object.entries(spec.views) as [StatOffset, number][]) {

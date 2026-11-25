@@ -23,7 +23,9 @@ describe("posts table (Sandbox scenario)", () => {
       genre: "explainer",
       voice: "design-m2",
       tags: ["Trip"],
+      routineName: "Trip weekend",
     });
+    expect(rows.filter((r) => r.routineName === "Trip weekend")).toHaveLength(3);
     expect(paris?.voiceLabel).toContain("American male");
     expect(paris?.script).toHaveLength(3);
     if (!paris) throw new Error("no Paris post");

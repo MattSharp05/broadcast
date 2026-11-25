@@ -494,15 +494,21 @@ export async function skipSlot(ctx: BuilderCtx, slotId: string): Promise<void> {
   if (!data.length) throw new FactoryError("final", "This slot is already scheduled or finished.");
 }
 
-/** Cancel: every slot not scheduled yet is skipped. Scheduled posts stay on the canvas. */
+/**
+ * Cancel: every slot not scheduled yet is skipped (videos already started stay in the Content
+ * Factory). Scheduled posts stay on the canvas.
+ */
 export async function cancelRoutine(ctx: BuilderCtx, routineId: string): Promise<void> {
   const ws = ctx.workspaceId;
   const { error } = await ctx.db
     .from("routine_slots")
-    .update({ status: "skipped", message: "The routine was cancelled." })
+    .update({
+      status: "skipped",
+      message: "The routine was cancelled. A video it started stays in the Content Factory.",
+    })
     .eq("workspace_id", ws)
     .eq("routine_id", routineId)
-    .in("status", ["open", "planned", "review"]);
+    .in("status", ["open", "planned", "building", "review"]);
   if (error) throw new Error(`Cancelling the routine failed: ${error.message}`);
   await updateRoutine(ctx.db, ws, routineId, { status: "cancelled" });
 }

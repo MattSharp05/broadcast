@@ -163,6 +163,15 @@ export async function scheduleVersion(
     if (claim.error) fail("saving the schedule", claim.error);
     throw new FactoryError("scheduled", "This video was just scheduled. Reload to see where.");
   }
+  // The video's campaign tags go with its post, so they survive if the video is deleted.
+  if (p.tags.length) {
+    const tagged = await ctx.db
+      .from("posts")
+      .update({ tags: p.tags })
+      .eq("workspace_id", ws)
+      .eq("id", post.id);
+    if (tagged.error) fail("tagging the post", tagged.error);
+  }
 
   const when = post.scheduledAt
     ? whenLabel(post.scheduledAt, ctx.now, input.timezone)

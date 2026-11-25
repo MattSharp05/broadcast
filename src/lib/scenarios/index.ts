@@ -5,6 +5,7 @@ import { empty } from "./empty";
 import { FACTORY_SCENARIOS } from "./factory";
 import { noAccounts } from "./no-accounts";
 import { postFailed } from "./post-failed";
+import { postsTable } from "./posts-table";
 import { publishDueNow } from "./publish-due-now";
 import { publishContainerError, publishQuotaExhausted } from "./publish-failures";
 import { statsDue } from "./stats-due";
@@ -29,6 +30,7 @@ export const SCENARIOS: readonly Scenario[] = [
   postFailed,
   ...FACTORY_SCENARIOS,
   ...STUDIO_SCENARIOS,
+  postsTable,
 ];
 
 export function getScenario(name: string): Scenario | undefined {

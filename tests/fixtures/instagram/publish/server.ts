@@ -51,6 +51,8 @@ export interface FixtureContainer {
   mediaType: string;
   shareToFeed: string | null;
   isAiGenerated: string | null;
+  /** `cover_url` as sent (BC-43), null when absent. */
+  coverUrl: string | null;
   checks: number;
   /** Set once published. */
   mediaId: string | null;
@@ -190,6 +192,7 @@ export function createPublishFixture(opts: PublishFixtureOptions = {}): PublishF
         mediaType: form.get("media_type") ?? "",
         shareToFeed: form.get("share_to_feed"),
         isAiGenerated: form.get("is_ai_generated"),
+        coverUrl: form.get("cover_url"),
         checks: 0,
         mediaId: null,
       });

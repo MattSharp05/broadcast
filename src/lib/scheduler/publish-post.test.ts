@@ -63,7 +63,9 @@ interface Stored extends PublishPost {
   permalink: string | null;
 }
 
-function setup(opts: PublishFixtureOptions & { aiGenerated?: boolean } = {}) {
+function setup(
+  opts: PublishFixtureOptions & { aiGenerated?: boolean; coverUrl?: string | null } = {},
+) {
   let now = NOW;
   const ig: PublishFixture = createPublishFixture({ now: () => now, ...opts });
   server.use(...ig.handlers);
@@ -101,6 +103,7 @@ function setup(opts: PublishFixtureOptions & { aiGenerated?: boolean } = {}) {
       },
       action,
       videoUrl: () => Promise.resolve(VIDEO_URL),
+      coverUrl: () => Promise.resolve(opts.coverUrl ?? null),
       quotaWait: () => quotaWait({ slots: SLOTS, timezone: TIMEZONE, now }),
     });
     if (!outcome) return { outcome, result: null };
@@ -125,6 +128,21 @@ function setup(opts: PublishFixtureOptions & { aiGenerated?: boolean } = {}) {
 }
 
 describe("publishing a Reel to Instagram", () => {
+  it("sends the studio cover as cover_url (BC-43)", async () => {
+    const cover = "https://storage.test/videos/ws/covers/v3.jpg?token=s";
+    const { ig, tick } = setup({ coverUrl: cover });
+    expect((await tick()).outcome).toMatchObject({ kind: "container_created" });
+    const [container] = [...ig.containers.values()];
+    expect(container?.coverUrl).toBe(cover);
+  });
+
+  it("sends no cover_url without a cover: Instagram picks a frame", async () => {
+    const { ig, tick } = setup();
+    await tick();
+    const [container] = [...ig.containers.values()];
+    expect(container?.coverUrl).toBeNull();
+  });
+
   it("discloses an avatar video as AI on its container (is_ai_generated)", async () => {
     const { ig, tick } = setup({ aiGenerated: true });
     expect((await tick()).outcome).toMatchObject({ kind: "container_created" });

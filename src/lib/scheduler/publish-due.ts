@@ -49,7 +49,7 @@ export function publishPlatforms(input: {
 const POST_COLUMNS =
   "id, workspace_id, account_id, media_id, caption, is_ai_generated, status, container_id, container_created_at, attempts, " +
   "social_accounts(handle, platform, platform_user_id, status, status_reason, slots), " +
-  "media_assets(storage_path)";
+  "media_assets(storage_path, cover_path)";
 
 interface LoadedPost {
   id: string;
@@ -70,7 +70,7 @@ interface LoadedPost {
     status_reason: string | null;
     slots: string[];
   };
-  media_assets: { storage_path: string };
+  media_assets: { storage_path: string; cover_path: string | null };
 }
 
 export interface WorkspaceSettings {
@@ -245,6 +245,18 @@ export function createPublishDue(deps: PublishDeps = {}): Step {
               } catch (err) {
                 console.error(`publishDue: post ${post.id}:`, err);
                 throw VIDEO_URL_FAILED;
+              }
+            },
+            coverUrl: async () => {
+              const cover = post.media_assets.cover_path;
+              if (!cover) return null;
+              if (account.platform === "fake") return cover;
+              try {
+                return await sign(db, cover);
+              } catch (err) {
+                // A cover is optional: post with Instagram's own frame rather than not at all.
+                console.error(`publishDue: post ${post.id}: signing the cover failed:`, err);
+                return null;
               }
             },
             quotaWait: () =>

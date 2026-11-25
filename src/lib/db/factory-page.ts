@@ -14,10 +14,10 @@ import {
   type StepStatus,
 } from "@/lib/domain/factory/steps";
 import { ago, whenLabel } from "@/lib/domain/format";
-import { planQueue } from "@/lib/domain/queue";
 import { signOutputUrls, signedUrlFor } from "@/lib/factory/assets";
 import { MESH_MODELS, isMeshSelectable, meshOptions, meshPrice } from "@/lib/domain/factory/mesh";
 import { routineConfigured } from "@/lib/factory/runner";
+import { openSlotsByAccount } from "@/lib/factory/schedule";
 import { createAdminSupabase } from "./admin";
 import {
   avatarCap,
@@ -142,7 +142,7 @@ export interface MusicOption {
 export interface AccountOption {
   id: string;
   handle: string;
-  /** "Tomorrow, 13:00", or null without slots. */
+  /** The next free slot after the account's backlog ("Tomorrow, 13:00"), or null without slots. */
   nextSlot: string | null;
   aiLabelDone: boolean;
   aiBioDone: boolean;
@@ -312,6 +312,8 @@ export async function loadFactoryOptions(workspace?: Workspace): Promise<Factory
   for (const r of [voices, music, accounts, avatars, keys])
     if (r.error) fail("reading the options", r.error);
   const withKey = new Set((keys.data ?? []).map((k) => k.provider));
+  // Where "Next free slot" would put a video now: after each account's backlog (BC-43).
+  const openSlots = await openSlotsByAccount(db, ws, timezone, now, accounts.data ?? []);
   const avatarAccounts = new Set((avatars.data ?? []).map((a) => a.account_id).filter(Boolean));
   return {
     voices: (voices.data ?? []).map((v) => ({
@@ -335,7 +337,7 @@ export async function loadFactoryOptions(workspace?: Workspace): Promise<Factory
       mood: m.mood,
     })),
     accounts: (accounts.data ?? []).map((a) => {
-      const slot = firstSlot(a.slots, timezone, now);
+      const slot = openSlots.get(a.id) ?? null;
       return {
         id: a.id,
         handle: a.handle,
@@ -389,17 +391,6 @@ export async function loadFactoryOptions(workspace?: Workspace): Promise<Factory
     routineReady: w.kind === "sandbox" || routineConfigured(),
     timezone,
   };
-}
-
-/** The account's next slot after now (ignores its backlog: a hint, not the queue's answer). */
-function firstSlot(slots: readonly string[], timezone: string, now: Date): Date | null {
-  const planned = planQueue({
-    slots,
-    timezone,
-    now,
-    posts: [{ id: "probe", timing: "queue", queuePosition: 0, status: "queued" }],
-  });
-  return planned[0]?.scheduledAt ?? null;
 }
 
 export async function loadProductionPage(id: string): Promise<ProductionPage | null> {
@@ -487,15 +478,17 @@ export async function loadProductionPage(id: string): Promise<ProductionPage | n
       : [],
     mediaId: p.media_id,
     postId: p.post_id,
-    post: postRow
-      ? {
-          handle: postRow.social_accounts?.handle ?? "",
-          when: postRow.scheduled_at
-            ? whenLabel(new Date(postRow.scheduled_at), now, timezone)
-            : null,
-          status: postRow.status,
-        }
-      : null,
+    // A removed post no longer counts: the video can be scheduled again.
+    post:
+      postRow && postRow.status !== "removed"
+        ? {
+            handle: postRow.social_accounts?.handle ?? "",
+            when: postRow.scheduled_at
+              ? whenLabel(new Date(postRow.scheduled_at), now, timezone)
+              : null,
+            status: postRow.status,
+          }
+        : null,
     sessionUrl: p.session_url,
     projectSlug: p.project_slug,
     remakeOf: p.remake_of,

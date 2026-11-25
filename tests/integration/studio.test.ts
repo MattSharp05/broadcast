@@ -31,7 +31,10 @@ import {
   resolveNote,
   sendNotes,
 } from "@/lib/factory/studio";
+import { scheduleVersion } from "@/lib/factory/schedule";
 import { stableUuid } from "@/lib/hash";
+import { createPublishDue } from "@/lib/scheduler/publish-due";
+import { runTick } from "@/lib/scheduler/tick";
 import { getScenario } from "@/lib/scenarios";
 import { loadScenario } from "@/lib/scenarios/load";
 import { adminClient } from "./helpers";
@@ -715,5 +718,94 @@ describe("comparing styles (BC-41)", () => {
     };
     expect(brief.video.style_compare?.candidates).toEqual(["luminous-3d", "handmade-2d"]);
     expect(brief.video.style_compare?.options).toHaveLength(5);
+  });
+});
+
+describe("assign and schedule (BC-43)", () => {
+  const name = "factory-pack-ready";
+  const pid = stableUuid(name, "production", "tides");
+  const v3 = stableUuid(name, "version", "3");
+  const cj = stableUuid(name, "account", "cj");
+  const maya = stableUuid(name, "account", "maya");
+  const input = { productionId: pid, versionId: v3, timezone: "Europe/London" };
+
+  it("schedules the ready version once with the pack's caption; a second time is refused", async () => {
+    await load(name);
+    const out = await scheduleVersion(ctx, { ...input, accountId: cj, timing: { kind: "next" } });
+    expect(out.message).toMatch(/^v3 scheduled for @codingjourney, /);
+    const posts = await admin.from("posts").select("*").eq("workspace_id", SANDBOX);
+    const mine = (posts.data ?? []).filter(
+      (p) => p.media_id === stableUuid(name, "media", "tides"),
+    );
+    expect(mine).toHaveLength(1);
+    expect(mine[0]?.timing).toBe("pinned");
+    expect(mine[0]?.caption).toMatch(/#tides #moon$/);
+    const p = await admin.from("productions").select("*").eq("id", pid).single();
+    expect(p.data).toMatchObject({ post_id: out.postId, status: "scheduled", account_id: cj });
+    const events = await admin
+      .from("production_events")
+      .select("actor, intent")
+      .eq("production_id", pid)
+      .like("intent", "Scheduled v3%");
+    expect(events.data).toEqual([expect.objectContaining({ actor: "matthew" })]);
+
+    await expect(
+      scheduleVersion(ctx, { ...input, accountId: cj, timing: { kind: "queue" } }),
+    ).rejects.toMatchObject({ code: "scheduled" });
+    const again = await admin
+      .from("posts")
+      .select("id")
+      .eq("media_id", stableUuid(name, "media", "tides"));
+    expect(again.data).toHaveLength(1);
+  });
+
+  it("after its post is removed, the video can be scheduled again", async () => {
+    await load(name);
+    const first = await scheduleVersion(ctx, {
+      ...input,
+      accountId: cj,
+      timing: { kind: "queue" },
+    });
+    await admin.from("posts").update({ status: "removed" }).eq("id", first.postId);
+    const second = await scheduleVersion(ctx, {
+      ...input,
+      accountId: cj,
+      timing: { kind: "next" },
+    });
+    expect(second.postId).not.toBe(first.postId);
+  });
+
+  it("refuses another account (remake instead) and a version that isn't marked ready", async () => {
+    await load(name);
+    await expect(
+      scheduleVersion(ctx, { ...input, accountId: maya, timing: { kind: "next" } }),
+    ).rejects.toMatchObject({ code: "other_account" });
+    await load("factory-ready-to-post");
+    await expect(
+      scheduleVersion(ctx, {
+        productionId: stableUuid("factory-ready-to-post", "production", "tides"),
+        versionId: stableUuid("factory-ready-to-post", "version", "3"),
+        accountId: stableUuid("factory-ready-to-post", "account", "cj"),
+        timezone: "Europe/London",
+        timing: { kind: "next" },
+      }),
+    ).rejects.toMatchObject({ code: "not_ready" });
+  });
+
+  it("a tick at the slot hands the fake provider the cover", async () => {
+    await load("factory-scheduled-cover");
+    await runTick({
+      db: admin,
+      workspaceIds: [SANDBOX],
+      recordHeartbeat: false,
+      steps: [createPublishDue({})],
+    });
+    const containers = await admin
+      .from("fake_containers")
+      .select("cover_url, video_url")
+      .eq("workspace_id", SANDBOX);
+    expect(containers.data).toEqual([
+      expect.objectContaining({ cover_url: "/factory/fake/still-2.svg" }),
+    ]);
   });
 });

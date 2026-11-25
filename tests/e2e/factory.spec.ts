@@ -55,22 +55,30 @@ test("makes a free video from the idea to the queue", async ({ page, loadScenari
     await expect(row).toHaveAttribute("data-status", "approved");
   }
   await expect(page.getByTestId("recipe")).toContainText("realistic-3d");
-  // The caption drafts live on the Ready to post tab (BC-39).
-  await page.getByRole("tab", { name: "Ready to post" }).click();
+  // Scheduling lives on Ready to post (BC-43): the Make tab links there.
+  await page.getByRole("button", { name: "Open Ready to post" }).click();
   await expect(page.getByTestId("caption-options")).toContainText("CC BY 4.0");
-  await page.getByRole("tab", { name: "Make" }).click();
-
-  await page.getByRole("button", { name: "Add to queue" }).click();
-  await expect(page.getByTestId("toast")).toContainText("Added to 1 queue");
+  // A cover from a frame, the caption draft, the checks, Mark ready, then schedule.
+  const video = page.getByTestId("cover").locator("video");
+  await expect.poll(() => video.evaluate((v: HTMLVideoElement) => v.readyState)).toBeGreaterThan(1);
+  await page.getByRole("button", { name: "Use this frame" }).click();
+  await expect(page.getByTestId("cover-image")).toBeVisible();
+  // The first caption draft is already in place, credits included.
+  await expect(page.getByTestId("caption-options").getByRole("radio").first()).toBeChecked();
+  await page.getByRole("button", { name: "Mark ready" }).click();
+  await expect(page.getByTestId("ready")).toContainText("Ready since");
+  await page.getByRole("button", { name: /^Schedule v1 for @codingjourney/ }).click();
+  await expect(page.getByTestId("toast")).toContainText("v1 scheduled for @codingjourney");
   await expect(page.getByTestId("scheduled")).toContainText("@codingjourney");
-  // The same video can't go to a second account: remake it instead.
+  // The same video can't go to a second account: the Make tab offers a remake instead.
+  await page.getByRole("tab", { name: "Make" }).click();
   await expect(page.getByRole("button", { name: /^Remake for @maya.explains/ })).toBeVisible();
 
   // On the Workflow canvas like any post, with its recipe in the drawer.
   await page.getByRole("link", { name: "Open the Workflow" }).click();
   const canvas = page.getByRole("region", { name: "Workflow canvas" });
   await expect(canvas).toHaveAttribute("data-ready", "true");
-  const card = page.locator('[data-column="codingjourney"] [data-kind="scheduled"]').first();
+  const card = page.locator('[data-column="codingjourney"] [data-kind="pinned"]').first();
   await card.focus();
   await page.keyboard.press("Enter");
   const recipe = page.getByRole("dialog").locator('[data-section="recipe"]');

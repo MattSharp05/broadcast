@@ -1,11 +1,10 @@
 "use client";
 
-import { ArrowLeft, ExternalLink, Play } from "lucide-react";
+import { ArrowLeft, ExternalLink } from "lucide-react";
 import { useCallback, useState, useTransition } from "react";
 import {
   newVideo,
   saveVideo,
-  scheduleVideo,
   type FactoryResult,
   type VideoPatch,
 } from "@/app/(app)/factory/actions";
@@ -237,7 +236,15 @@ export function ProductionView({
                     pick("ready");
                   }}
                 />
-                <ScheduleSection video={video} options={options} run={run} pending={pending} />
+                <ScheduleSection
+                  video={video}
+                  options={options}
+                  run={run}
+                  pending={pending}
+                  onOpenReady={() => {
+                    pick("ready");
+                  }}
+                />
               </div>
             </div>
           )}
@@ -413,147 +420,52 @@ function MusicSection({ video, options, save, pending }: OptionSectionProps) {
   );
 }
 
+/** The Make tab's last section: scheduling lives on Ready to post (BC-43); this links there. */
 function ScheduleSection({
   video,
   options,
   run,
   pending,
+  onOpenReady,
 }: {
   video: ProductionPage;
   options: FactoryOptions;
   run: ReturnType<typeof useFactoryAction>["run"];
   pending: boolean;
+  onOpenReady: () => void;
 }) {
-  const [accountId, setAccountId] = useState(video.accountId ?? options.accounts[0]?.id ?? "");
-  const [kind, setKind] = useState<"queue" | "pinned">("queue");
-  const [local, setLocal] = useState("");
-  const account = options.accounts.find((a) => a.id === accountId);
-  const ready = video.status === "ready" && video.mediaId;
-
   return (
     <section id="schedule" className={styles.section} aria-labelledby="schedule-h">
       <div className={styles.sectionHead}>
         <h2 id="schedule-h">9. Schedule</h2>
       </div>
       {video.post ? (
-        <>
-          <p className={styles.help} data-testid="scheduled">
-            Queued on <b>@{video.post.handle}</b>
-            {video.post.when ? (
-              <>
-                , <b>{video.post.when}</b>
-              </>
-            ) : (
-              ", waiting for a slot"
-            )}
-            . It shows on the Workflow canvas like any post.
-          </p>
-          <div className={styles.row}>
+        <p className={styles.help} data-testid="scheduled">
+          Queued on <b>@{video.post.handle}</b>
+          {video.post.when ? (
+            <>
+              , <b>{video.post.when}</b>
+            </>
+          ) : (
+            ", waiting for a slot"
+          )}
+          . It shows on the Workflow canvas like any post.
+        </p>
+      ) : (
+        <p className={styles.help}>
+          Pick a version, its cover and caption on Ready to post, mark it ready, then assign it to
+          an account and schedule it there.
+        </p>
+      )}
+      <div className={styles.row}>
+        <Button onClick={onOpenReady}>Open Ready to post</Button>
+        {video.post ? (
+          <>
             <ButtonLink href="/workflow">Open the Workflow</ButtonLink>
             <RemakeButton video={video} options={options} run={run} pending={pending} />
-          </div>
-        </>
-      ) : (
-        <>
-          <p className={styles.help}>
-            One video goes to one account. To post it on another account, remake it there (new
-            wording, hook and voice).
-          </p>
-          <div className={styles.row}>
-            <label className={styles.field} style={{ flex: "1 1 220px" }}>
-              Account
-              <select
-                className={styles.select}
-                value={accountId}
-                onChange={(e) => {
-                  setAccountId(e.target.value);
-                }}
-                disabled={pending}
-              >
-                {options.accounts.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    @{a.handle}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className={styles.field}>
-              When
-              <div className={styles.segmented}>
-                <button
-                  type="button"
-                  aria-pressed={kind === "queue"}
-                  onClick={() => {
-                    setKind("queue");
-                  }}
-                >
-                  Next open slot
-                </button>
-                <button
-                  type="button"
-                  aria-pressed={kind === "pinned"}
-                  onClick={() => {
-                    setKind("pinned");
-                  }}
-                >
-                  Pinned time
-                </button>
-              </div>
-            </div>
-            {kind === "pinned" ? (
-              <label className={styles.field}>
-                Time ({options.timezone})
-                <input
-                  className={styles.input}
-                  type="datetime-local"
-                  value={local}
-                  onChange={(e) => {
-                    setLocal(e.target.value);
-                  }}
-                />
-              </label>
-            ) : null}
-          </div>
-          {kind === "queue" && account ? (
-            <p className={styles.help}>
-              {account.nextSlot ? (
-                <>
-                  Next slot on @{account.handle}: {account.nextSlot} (after its backlog).
-                </>
-              ) : (
-                <>@{account.handle} has no slots yet: the post waits in the backlog.</>
-              )}
-            </p>
-          ) : null}
-          {video.useAvatar && account && !(account.aiLabelDone && account.aiBioDone) ? (
-            <div className={styles.notice} role="note">
-              Avatar videos are disclosed as AI. On @{account.handle}, turn on Instagram&apos;s
-              AI-generated profile label and add “AI creator” to the bio (Accounts → the account).
-              Posts from the factory are marked is_ai_generated.
-            </div>
-          ) : null}
-          <div className={styles.row}>
-            <Button
-              variant="primary"
-              disabled={!ready || !accountId || pending || (kind === "pinned" && !local)}
-              onClick={() => {
-                run(
-                  () =>
-                    scheduleVideo(video.id, {
-                      accountId,
-                      timing: kind === "queue" ? { kind } : { kind, local },
-                    }),
-                  (m) => m,
-                );
-              }}
-            >
-              <Play aria-hidden="true" />
-              Add to queue
-            </Button>
-            {!ready ? <span className={styles.meta}>Approve the render first.</span> : null}
-          </div>
-        </>
-      )}
+          </>
+        ) : null}
+      </div>
     </section>
   );
 }

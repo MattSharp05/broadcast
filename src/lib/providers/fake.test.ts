@@ -73,6 +73,23 @@ describe("fake provider: container progression", () => {
     expect(await provider.getContainerStatus(ctx, containerId)).toEqual({ state: "published" });
   });
 
+  it("records the cover it was handed (BC-43), null without one", async () => {
+    const { provider, store } = setup();
+    const withCover = await provider.createReelContainer(ctx, {
+      videoUrl: "https://v/1.mp4",
+      caption: "With a cover",
+      coverUrl: "/factory/fake/still-2.svg",
+    });
+    const without = await provider.createReelContainer(ctx, {
+      videoUrl: "https://v/1.mp4",
+      caption: "Without",
+    });
+    expect((await store.getContainer(withCover.containerId))?.coverUrl).toBe(
+      "/factory/fake/still-2.svg",
+    );
+    expect((await store.getContainer(without.containerId))?.coverUrl).toBeNull();
+  });
+
   it("refuses to publish a container that is still processing", async () => {
     const { provider } = setup();
     const { containerId } = await provider.createReelContainer(ctx, {

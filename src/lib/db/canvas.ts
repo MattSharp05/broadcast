@@ -58,6 +58,9 @@ function date(value: string | null): Date | null {
   return value ? new Date(value) : null;
 }
 
+/** Sandbox sample stills (public files): shown as they are, never signed. */
+const SAMPLE_PREFIX = "/factory/fake/";
+
 /** Signed URLs for thumbnails; a thumbnail that can't be signed falls back to the placeholder. */
 async function signThumbnails(
   db: SupabaseClient<Database>,
@@ -100,7 +103,7 @@ export async function loadWorkflow(): Promise<WorkflowData> {
     db
       .from("posts")
       .select(
-        "id, account_id, caption, timing, queue_position, status, scheduled_at, published_at, last_error, attempts, permalink, container_id, media_assets(duration_s, thumbnail_path, recipe)",
+        "id, account_id, caption, timing, queue_position, status, scheduled_at, published_at, last_error, attempts, permalink, container_id, media_assets(duration_s, thumbnail_path, cover_path, recipe)",
       )
       .eq("workspace_id", workspace.id)
       .or(`status.in.(queued,paused,publishing,failed),published_at.gte.${since}`)
@@ -162,10 +165,18 @@ export async function loadWorkflow(): Promise<WorkflowData> {
     }
   }
 
+  // A studio cover (BC-43) shows instead of the auto thumbnail.
+  const imageOf = (m: { thumbnail_path: string | null; cover_path: string | null }) =>
+    m.cover_path ?? m.thumbnail_path;
   const thumbPaths = posts.data
-    .map((p) => p.media_assets.thumbnail_path)
+    .map((p) => imageOf(p.media_assets))
     .filter((p): p is string => Boolean(p));
-  const thumbs = await signThumbnails(db, thumbPaths);
+  // Sandbox scenarios point covers at public sample files ("/factory/fake/…"): shown as they are.
+  const thumbs = await signThumbnails(
+    db,
+    thumbPaths.filter((path) => !path.startsWith(SAMPLE_PREFIX)),
+  );
+  for (const path of thumbPaths) if (path.startsWith(SAMPLE_PREFIX)) thumbs.set(path, path);
 
   const postInputs: CanvasPostInput[] = posts.data.map((p) => ({
     id: p.id,
@@ -178,9 +189,7 @@ export async function loadWorkflow(): Promise<WorkflowData> {
     publishedAt: date(p.published_at),
     lastError: p.last_error,
     durationS: p.media_assets.duration_s,
-    thumbnailUrl: p.media_assets.thumbnail_path
-      ? (thumbs.get(p.media_assets.thumbnail_path) ?? null)
-      : null,
+    thumbnailUrl: thumbs.get(imageOf(p.media_assets) ?? "") ?? null,
   }));
 
   const model = buildCanvas({

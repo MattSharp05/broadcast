@@ -8,6 +8,7 @@ import { Button } from "@/components/Button";
 import { TextArea } from "@/components/TextArea";
 import { CAPTION_MAX } from "@/lib/domain/factory/captions";
 import { deliveryChecks, deliveryReady, postedCaption } from "@/lib/domain/factory/delivery";
+import { AssignPanel } from "./AssignPanel";
 import { ChecksPanel } from "./ChecksPanel";
 import { CoverPicker } from "./CoverPicker";
 import { HashtagField } from "./HashtagField";
@@ -16,10 +17,10 @@ import styles from "./studio.module.css";
 
 /**
  * Ready to post (BC-39): prepare one version for Instagram: a cover from a frame, the caption with
- * its credit lines, hashtags, and the checks. Mark ready records the pack; scheduling it stays a
- * separate, deliberate click.
+ * its credit lines, hashtags, and the checks. Mark ready records the pack; Assign and schedule
+ * (BC-43) is the separate, deliberate click that queues it.
  */
-export function ReadyTab({ video, studio, run, notify, pending }: StudioTabProps) {
+export function ReadyTab({ video, options, studio, run, notify, pending }: StudioTabProps) {
   const versions = studio.versions.filter((v) => !v.pruned);
   const [versionId, setVersionId] = useState(versions[0]?.id ?? null);
   const version = versions.find((v) => v.id === versionId) ?? versions[0];
@@ -53,6 +54,7 @@ export function ReadyTab({ video, studio, run, notify, pending }: StudioTabProps
       <ReadyPanels
         key={version.id}
         video={video}
+        options={options}
         studio={studio}
         versionId={version.id}
         run={run}
@@ -65,12 +67,13 @@ export function ReadyTab({ video, studio, run, notify, pending }: StudioTabProps
 
 function ReadyPanels({
   video,
+  options,
   studio,
   versionId,
   run,
   notify,
   pending,
-}: Omit<StudioTabProps, "options"> & { versionId: string }) {
+}: StudioTabProps & { versionId: string }) {
   const router = useRouter();
   const version = studio.versions.find((v) => v.id === versionId);
   const pack = studio.packs.find((k) => k.versionId === versionId) ?? null;
@@ -204,6 +207,15 @@ function ReadyPanels({
           ) : null}
         </div>
       </section>
+
+      <AssignPanel
+        video={video}
+        options={options}
+        version={version}
+        pack={pack}
+        run={run}
+        pending={pending}
+      />
     </div>
   );
 }

@@ -55,7 +55,10 @@ test("makes a free video from the idea to the queue", async ({ page, loadScenari
     await expect(row).toHaveAttribute("data-status", "approved");
   }
   await expect(page.getByTestId("recipe")).toContainText("realistic-3d");
+  // The caption drafts live on the Ready to post tab (BC-39).
+  await page.getByRole("tab", { name: "Ready to post" }).click();
   await expect(page.getByTestId("caption-options")).toContainText("CC BY 4.0");
+  await page.getByRole("tab", { name: "Make" }).click();
 
   await page.getByRole("button", { name: "Add to queue" }).click();
   await expect(page.getByTestId("toast")).toContainText("Added to 1 queue");

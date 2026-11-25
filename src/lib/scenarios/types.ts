@@ -48,6 +48,8 @@ export interface FactorySeed {
   batches: Insert<"review_batches">[];
   notes: (Insert<"review_notes"> & { created_at?: string })[];
   events: (Insert<"production_events"> & { created_at?: string })[];
+  /** Delivery packs (BC-39), one per version. */
+  packs: Insert<"delivery_packs">[];
 }
 
 export function emptyFactory(): FactorySeed {
@@ -65,6 +67,7 @@ export function emptyFactory(): FactorySeed {
     batches: [],
     notes: [],
     events: [],
+    packs: [],
   };
 }
 

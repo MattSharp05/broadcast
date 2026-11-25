@@ -166,7 +166,8 @@
   cursor: crosshair;
 }
 
-.overlay[data-paused="false"] {
+.overlay[data-paused="false"],
+.overlay[data-notes="false"] {
   cursor: pointer;
 }
 
@@ -534,6 +535,272 @@
 
 @media (max-width: 760px) {
   .review {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ── Ready to post (BC-39) ── */
+
+.ready {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 16px;
+  max-width: 1100px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--ink-2);
+  min-width: 0;
+}
+
+.select {
+  height: 34px;
+  max-width: 320px;
+  padding: 0 10px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-s);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+}
+
+.readyGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.readyGrid > :first-child {
+  grid-column: 1 / -1;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  min-width: 0;
+}
+
+.coverGrid {
+  display: grid;
+  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.coverPlayer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.coverPreview {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.coverPreview figure {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+}
+
+.coverPreview img {
+  display: block;
+  border-radius: var(--r-s);
+  border: 1px solid var(--line);
+  object-fit: cover;
+  background: var(--surface-2);
+}
+
+.previewReel img {
+  width: 180px;
+  aspect-ratio: 9 / 16;
+}
+
+.previewCrops {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.previewSquare img {
+  width: 110px;
+  aspect-ratio: 1 / 1;
+}
+
+.previewPortrait img {
+  width: 110px;
+  aspect-ratio: 4 / 5;
+}
+
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.option {
+  display: flex;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-s);
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.option[data-selected="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.warn {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--warn-line);
+  border-radius: var(--r-s);
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.meta[data-over="true"] {
+  color: var(--bad);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  min-height: 34px;
+  padding: 4px 6px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-s);
+  background: var(--surface);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 22px;
+  padding: 0 2px 0 6px;
+  border-radius: var(--r-xs);
+  background: var(--hover);
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.chip button {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+
+.chip :global(svg.lucide) {
+  width: 12px;
+  height: 12px;
+}
+
+.chipInput {
+  flex: 1;
+  min-width: 120px;
+  height: 24px;
+  border: 0;
+  outline: none;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+}
+
+.checks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.checkItem {
+  display: flex;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.checkIcon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+}
+
+.checkItem[data-ok="true"] .checkIcon {
+  color: var(--good);
+}
+
+.checkItem[data-ok="false"] .checkIcon {
+  color: var(--bad);
+}
+
+.checkBody {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.checkWhy {
+  color: var(--bad);
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+
+.readyNote {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--good);
+  font-size: 13px;
+}
+
+.readyNote :global(svg.lucide) {
+  width: 16px;
+  height: 16px;
+}
+
+@media (max-width: 900px) {
+  .readyGrid,
+  .coverGrid {
     grid-template-columns: minmax(0, 1fr);
   }
 }

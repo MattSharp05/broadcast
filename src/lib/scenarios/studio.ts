@@ -207,8 +207,55 @@ export const factoryBatchAnswered: Scenario = {
   build: ({ now }) => studioSeed("factory-batch-answered", now, "batch-answered"),
 };
 
+/**
+ * v3 answered the notes and is the version to post. `failing`: v3 runs 95 s (Reels stop at 90) and
+ * the caption lost its music credit; a cover is already picked, so exactly those two checks fail.
+ */
+export function readySeed(name: string, now: Date, failing: boolean): SandboxSeed {
+  const seed = studioSeed(name, now, "batch-answered");
+  const p = seed.factory.productions[0];
+  const v3 = seed.factory.versions.find((v) => v.number === 3);
+  if (!p || !v3?.id) return seed;
+  if (!failing) return seed;
+  v3.duration_s = 95;
+  const media = seed.media.find((m) => m.id === v3.media_id);
+  if (media) media.duration_s = 95;
+  const caption = (p.caption ?? "")
+    .split("\n")
+    .filter((line) => !line.startsWith("Music:"))
+    .join("\n");
+  p.caption = caption;
+  seed.factory.packs.push({
+    production_id: p.id ?? "",
+    version_id: v3.id,
+    cover_path: "/factory/fake/still-2.svg",
+    cover_t_s: 2,
+    caption,
+    hashtags: ["tides", "moon"],
+  });
+  return seed;
+}
+
+export const factoryReadyToPost: Scenario = {
+  name: "factory-ready-to-post",
+  page: studioPage("factory-ready-to-post"),
+  description:
+    "v3 answered the notes and passes every check except the cover: pick a frame, add hashtags, Mark ready.",
+  build: ({ now }) => readySeed("factory-ready-to-post", now, false),
+};
+
+export const factoryReadyFailing: Scenario = {
+  name: "factory-ready-failing",
+  page: studioPage("factory-ready-failing"),
+  description:
+    "v3 is 95 s long and the caption lost its music credit: two checks fail and Mark ready is off.",
+  build: ({ now }) => readySeed("factory-ready-failing", now, true),
+};
+
 export const STUDIO_SCENARIOS: readonly Scenario[] = [
   factoryVersions,
   factoryBatchSent,
   factoryBatchAnswered,
+  factoryReadyToPost,
+  factoryReadyFailing,
 ];

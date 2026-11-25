@@ -3,6 +3,7 @@ import type { FactoryOptions, ProductionPage } from "@/lib/db/factory-page";
 import type { StudioData } from "@/lib/db/studio-page";
 import type { Notify } from "../ProductionView";
 import type { FactoryResult } from "@/app/(app)/factory/actions";
+import { ReadyTab } from "./ReadyTab";
 import { VersionsTab } from "./VersionsTab";
 
 /**
@@ -31,7 +32,8 @@ export interface StudioTab {
 export const STUDIO_TABS: readonly StudioTab[] = [
   { key: "make", label: "Make" },
   { key: "versions", label: "Versions", Panel: VersionsTab },
-  // Board (BC-40) and Ready to post (BC-39) go here.
+  // Board (BC-40) goes here.
+  { key: "ready", label: "Ready to post", Panel: ReadyTab },
 ];
 
 /** `?tab=` when it names a tab, else Versions once a version exists, else Make. */

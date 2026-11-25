@@ -86,7 +86,26 @@ export interface EventView {
   sessionUrl: string | null;
 }
 
+export interface CardView {
+  id: string;
+  position: number;
+  text: string;
+  seconds: number;
+  stillUrl: string | null;
+  sceneId: string | null;
+  status: string;
+}
+
+export interface BoardView {
+  cards: CardView[];
+  rev: number;
+  approvedWhen: string | null;
+  /** The visuals step's status: the board is editable while it waits. */
+  visuals: string | null;
+}
+
 export interface StudioData {
+  board: BoardView;
   versions: VersionView[];
   notes: NoteView[];
   /** The batch that is still with Claude, if any (one per video). */
@@ -112,11 +131,12 @@ export async function loadStudio(productionId: string): Promise<StudioData> {
   const timezone = workspace.timezone ?? "UTC";
   const production = await db
     .from("productions")
-    .select("id, use_avatar, voice_key, music_key")
+    .select("id, use_avatar, voice_key, music_key, board_rev, board_approved_at")
     .eq("workspace_id", ws)
     .eq("id", productionId)
     .single();
   if (production.error) fail("reading the video", production.error);
+  const board = await loadBoard(db, ws, productionId);
   const [versions, notes, batches, events, running, packs, credits] = await Promise.all([
     db
       .from("production_versions")
@@ -187,6 +207,24 @@ export async function loadStudio(productionId: string): Promise<StudioData> {
   const numberOf = new Map(vRows.map((v) => [v.id, v.number]));
   const open = bRows.find((b) => b.status === "sent" || b.status === "running") ?? null;
   return {
+    board: {
+      rev: production.data.board_rev,
+      approvedWhen: production.data.board_approved_at
+        ? whenLabel(new Date(production.data.board_approved_at), now, timezone)
+        : null,
+      visuals: board.visuals,
+      cards: await Promise.all(
+        board.cards.map(async (c) => ({
+          id: c.id,
+          position: c.position,
+          text: c.text,
+          seconds: c.seconds,
+          stillUrl: await sign(c.still_path),
+          sceneId: c.scene_id,
+          status: c.status,
+        })),
+      ),
+    },
     versions: await Promise.all(
       vRows.map(async (v) => ({
         id: v.id,
@@ -257,4 +295,29 @@ export async function loadStudio(productionId: string): Promise<StudioData> {
     credits,
     aiFlag: production.data.use_avatar,
   };
+}
+
+async function loadBoard(
+  db: Awaited<ReturnType<typeof createServerSupabase>>,
+  ws: string,
+  id: string,
+) {
+  const [cards, visuals] = await Promise.all([
+    db
+      .from("board_cards")
+      .select("*")
+      .eq("workspace_id", ws)
+      .eq("production_id", id)
+      .order("position"),
+    db
+      .from("production_steps")
+      .select("status")
+      .eq("workspace_id", ws)
+      .eq("production_id", id)
+      .eq("step", "visuals")
+      .maybeSingle(),
+  ]);
+  if (cards.error) fail("reading the board", cards.error);
+  if (visuals.error) fail("reading the visuals step", visuals.error);
+  return { cards: cards.data, visuals: visuals.data?.status ?? null };
 }

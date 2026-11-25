@@ -109,7 +109,7 @@ Outputs per step (extra fields are kept):
 | `idea` | `{"title", "brief", "audience", "hook"}` |
 | `script` | `{"version", "hook", "lines": [{"id", "text", "slot"?}]}` (`slot` marks avatar cut-in lines) |
 | `style` | `{"frames": [{"url", "caption"}]}` |
-| `visuals` | `{"stills": [{"url", "scene", "caption"}]}` (`scene` ids `s1`…, used by "redo a scene") |
+| `visuals` | `{"stills": [{"url", "scene", "caption"}], "cards"?: [{"scene", "text", "seconds", "still"}]}` (`scene` ids `s1`…, used by "redo a scene"; `cards` is the storyboard, below) |
 | `face_quote` | `{"model", "slots": [{"slot", "seconds"}], "quote": {"model", "seconds", "baseUsd", "rerollUsd", "totalUsd", "free"}}`, from `gen_face.py quote` |
 | `render` | `{"upload": "<path from /assets>", "proxy"?: "<path from /assets>", "git_sha", "duration_s", "fps"?, "loudness_lufs"?, "true_peak_db"?, "face_share", "imagery_credits": ["Earth imagery: NASA."], "caption_options"?: ["…"]}` |
 
@@ -121,6 +121,15 @@ film) and the optional `proxy` (a 720p MP4 ≤ 15 MB, also through `/assets`) ar
 version; `loudness_lufs` / `true_peak_db` come from `ffmpeg … ebur128` and feed the ready-to-post
 checks. Each render becomes a new numbered **version** (see below). Do **not** queue it: posting
 happens only from the dashboard.
+
+**Storyboard (`visuals.cards`, BC-40).** Send the board with the visuals step: one card per beat,
+in order, with what happens or is said (`text`, ≤ 280), its length (`seconds`), its scene id and a
+still (`url`/`storage:` path). Broadcast replaces the board with them (and bumps `board_rev`).
+Without `cards`, Broadcast estimates one card per still (text = caption, seconds = that scene's share
+of the script at 2.5 words/s, marked "estimated"). Matthew edits, reorders and approves the board on
+the Board tab; approving it approves the visuals step. The brief's `board` is
+`{"rev", "approved_at", "cards": [{"position", "scene", "text", "seconds", "still_url", "status"}]}`:
+render and revise sessions build from the approved board (Matthew's edits included).
 
 ### `POST /api/factory/{id}/fail`
 `{"step": "style", "message": "Remotion couldn't load the paper texture."}` → `204`. The page

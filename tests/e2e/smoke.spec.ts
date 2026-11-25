@@ -81,6 +81,7 @@ test("/dev lists every scenario and each link loads it", async ({ page }) => {
     "factory-batch-answered",
     "factory-ready-to-post",
     "factory-ready-failing",
+    "factory-board",
   ]);
   await expect(page.getByRole("link", { name: "Canvas engine demo" })).toHaveAttribute(
     "href",
@@ -113,6 +114,7 @@ test("/dev lists every scenario and each link loads it", async ({ page }) => {
     "factory-batch-answered": 2,
     "factory-ready-to-post": 2,
     "factory-ready-failing": 2,
+    "factory-board": 2,
   };
   for (const [name, accounts] of Object.entries(expected)) {
     await page.goto("/dev");

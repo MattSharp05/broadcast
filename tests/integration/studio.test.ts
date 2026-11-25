@@ -8,6 +8,7 @@ import { POST as checkpointPost } from "@/app/api/factory/[id]/checkpoint/route"
 import { POST as progressPost } from "@/app/api/factory/[id]/progress/route";
 import { POST as versionsPost } from "@/app/api/factory/[id]/versions/route";
 import { WORKSPACE_IDS } from "@/lib/db/workspaces";
+import { approveBoard, deleteCard, moveCard, redoCard, updateCard } from "@/lib/factory/board";
 import { createProduction, mintFactoryToken } from "@/lib/factory/engine";
 import {
   addNote,
@@ -471,5 +472,107 @@ describe("delivery packs (Ready to post)", () => {
     const { checks } = await packChecks(ctx, pid, v3);
     expect(checks.filter((c) => !c.ok).map((c) => c.key)).toEqual(["duration", "credits"]);
     await expect(markReady(ctx, pid, v3)).rejects.toMatchObject({ code: "not_ready" });
+  });
+});
+
+describe("storyboard (Board tab)", () => {
+  const pid = stableUuid("factory-board", "production", "tides");
+
+  it("estimates cards from the stills when a visuals checkpoint sends none, and bumps the rev", async () => {
+    await load("factory-board");
+    const token = await mintFactoryToken(ctx, pid);
+    await admin
+      .from("production_steps")
+      .update({ status: "running" })
+      .eq("production_id", pid)
+      .eq("step", "visuals");
+    const res = await call(checkpointPost, { id: pid }, token, {
+      step: "visuals",
+      intent: "Four stills, one per scene.",
+      output: {
+        stills: [1, 2, 3, 4].map((n) => ({
+          url: `/factory/fake/still-${n}.svg`,
+          scene: `s${n}`,
+          caption: `Scene ${n}`,
+        })),
+      },
+    });
+    expect(res.status).toBe(200);
+    const cards = await admin
+      .from("board_cards")
+      .select("position, text, scene_id, seconds")
+      .eq("production_id", pid)
+      .order("position");
+    expect(cards.data?.map((c) => c.scene_id)).toEqual(["s1", "s2", "s3", "s4"]);
+    expect(cards.data?.[0]?.text).toBe("Scene 1 (estimated)");
+    expect(cards.data?.every((c) => c.seconds > 0)).toBe(true);
+    const p = await admin.from("productions").select("board_rev").eq("id", pid).single();
+    expect(p.data?.board_rev).toBe(2);
+    const brief = (await (await call(briefGet, { id: pid }, token)).json()) as {
+      board: { rev: number; cards: unknown[] };
+    };
+    expect(brief.board.rev).toBe(2);
+    expect(brief.board.cards).toHaveLength(4);
+  });
+
+  it("moves, edits and deletes cards with contiguous positions; approving starts the next step", async () => {
+    await load("factory-board");
+    const card = (n: number) => stableUuid("factory-board", "card", String(n));
+    await moveCard(ctx, pid, card(4), 2);
+    await updateCard(ctx, pid, card(2), { seconds: 9 });
+    await deleteCard(ctx, pid, card(1));
+    const rows = await admin
+      .from("board_cards")
+      .select("id, position, seconds")
+      .eq("production_id", pid)
+      .order("position");
+    expect(rows.data?.map((r) => r.position)).toEqual([0, 1, 2, 3]);
+    expect(rows.data?.map((r) => r.id)).toEqual([card(2), card(4), card(3), card(5)]);
+    await approveBoard(ctx, pid);
+    const steps = await admin
+      .from("production_steps")
+      .select("step, status")
+      .eq("production_id", pid)
+      .in("step", ["visuals", "render"]);
+    expect(Object.fromEntries((steps.data ?? []).map((s) => [s.step, s.status]))).toEqual({
+      visuals: "approved",
+      render: "waiting",
+    });
+    await expect(updateCard(ctx, pid, card(2), { seconds: 3 })).rejects.toMatchObject({
+      code: "not_waiting",
+    });
+  });
+
+  it("redoing one card replaces only that scene's card and keeps the other edits", async () => {
+    await load("factory-board");
+    const card = (n: number) => stableUuid("factory-board", "card", String(n));
+    await updateCard(ctx, pid, card(1), { text: "My own opening line." });
+    await redoCard(ctx, pid, card(3), "Slower, so each label reads");
+    const rows = await admin
+      .from("board_cards")
+      .select("id, position, scene_id, text")
+      .eq("production_id", pid)
+      .order("position");
+    expect(rows.data?.map((r) => r.scene_id)).toEqual(["s1", "s2", "s3", "s4", "s5"]);
+    expect(rows.data?.[0]).toMatchObject({ id: card(1), text: "My own opening line." });
+    // s3 is a new card from the rerun; the others are the same rows.
+    expect(rows.data?.[2]?.id).not.toBe(card(3));
+    expect(rows.data?.[3]?.id).toBe(card(4));
+    const rework = await admin
+      .from("production_reworks")
+      .select("target, ref, note")
+      .eq("production_id", pid)
+      .single();
+    expect(rework.data).toEqual({
+      target: "scene",
+      ref: "s3",
+      note: "Slower, so each label reads",
+    });
+
+    await approveBoard(ctx, pid);
+    const approved = await admin.from("board_cards").select("status").eq("production_id", pid);
+    expect(approved.data?.every((c) => c.status === "approved")).toBe(true);
+    const p = await admin.from("productions").select("board_approved_at").eq("id", pid).single();
+    expect(p.data?.board_approved_at).not.toBeNull();
   });
 });

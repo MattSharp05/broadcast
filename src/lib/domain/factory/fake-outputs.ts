@@ -25,6 +25,8 @@ export interface FramesOutput {
 }
 export interface StillsOutput {
   stills: { url: string; scene: string; caption: string }[];
+  /** The storyboard (BC-40): optional; without it Broadcast estimates cards from the stills. */
+  cards?: { scene: string; text: string; seconds: number; still: string }[];
 }
 export interface QuoteOutput {
   model: string;
@@ -110,14 +112,29 @@ export function fakeOutput(step: FactoryStep, ctx: FakeContext): StepOutput {
       return {
         frames: [{ url: frame(ctx.style, 1), caption: "The hook beat in the chosen style." }],
       };
-    case "visuals":
+    case "visuals": {
+      const stills = [1, 2, 3, 4].map((n) => ({
+        url: frame(ctx.style, n + ctx.attempt),
+        scene: `s${n}`,
+        caption: ["Hook", "The cause", "The build-up", "The payoff"][n - 1] ?? `Scene ${n}`,
+      }));
+      const board: [string, number][] = [
+        ["Cold open: the claim, said straight to camera.", 6],
+        [`The setup: ${t.toLowerCase()}, drawn as a simple diagram.`, 14],
+        ["The cause, slowed down so each label reads.", 16],
+        ["The build-up: one day, then a month, sped up.", 14],
+        ["The payoff line, then the end card.", 10],
+      ];
       return {
-        stills: [1, 2, 3, 4].map((n) => ({
-          url: frame(ctx.style, n + ctx.attempt),
-          scene: `s${n}`,
-          caption: ["Hook", "The cause", "The build-up", "The payoff"][n - 1] ?? `Scene ${n}`,
+        stills,
+        cards: board.map(([text, seconds], i) => ({
+          scene: `s${i + 1}`,
+          text,
+          seconds,
+          still: frame(ctx.style, i + 1 + ctx.attempt),
         })),
       };
+    }
     case "face_quote":
       return {
         model: ctx.faceModel,

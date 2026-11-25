@@ -24,9 +24,15 @@ const BRIEF_URL_TTL_S = 2 * 60 * 60;
 export async function buildBrief(ctx: EngineContext, id: string) {
   const ws = ctx.workspaceId;
   const p = await getProduction(ctx.db, ws, id);
-  const [versions, batch] = await Promise.all([
+  const [versions, batch, cards] = await Promise.all([
     listVersions(ctx.db, ws, id),
     openBatch(ctx.db, ws, id),
+    ctx.db
+      .from("board_cards")
+      .select("position, scene_id, text, seconds, still_path, status")
+      .eq("workspace_id", ws)
+      .eq("production_id", id)
+      .order("position"),
   ]);
   const [steps, jobs, reworks, settings, spend, avatar, account, voice, music] = await Promise.all([
     getSteps(ctx.db, ws, id),
@@ -171,6 +177,21 @@ export async function buildBrief(ctx: EngineContext, id: string) {
       remaining_usd: checkBudget(0, spend, caps).remainingUsd,
     },
     versions: versionList,
+    // The storyboard Matthew approved (or is reviewing): render and revise build from it.
+    board: {
+      rev: p.board_rev,
+      approved_at: p.board_approved_at,
+      cards: await Promise.all(
+        (cards.data ?? []).map(async (c) => ({
+          position: c.position,
+          scene: c.scene_id,
+          text: c.text,
+          seconds: c.seconds,
+          still_url: await sign(c.still_path),
+          status: c.status,
+        })),
+      ),
+    },
     batch: batch
       ? {
           id: batch.id,

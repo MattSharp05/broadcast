@@ -3,6 +3,7 @@ import type { FactoryOptions, ProductionPage } from "@/lib/db/factory-page";
 import type { StudioData } from "@/lib/db/studio-page";
 import type { Notify } from "../ProductionView";
 import type { FactoryResult } from "@/app/(app)/factory/actions";
+import { BoardTab } from "./BoardTab";
 import { ReadyTab } from "./ReadyTab";
 import { VersionsTab } from "./VersionsTab";
 
@@ -32,7 +33,7 @@ export interface StudioTab {
 export const STUDIO_TABS: readonly StudioTab[] = [
   { key: "make", label: "Make" },
   { key: "versions", label: "Versions", Panel: VersionsTab },
-  // Board (BC-40) goes here.
+  { key: "board", label: "Board", Panel: BoardTab },
   { key: "ready", label: "Ready to post", Panel: ReadyTab },
 ];
 

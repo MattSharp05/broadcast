@@ -50,6 +50,8 @@ export interface FactorySeed {
   events: (Insert<"production_events"> & { created_at?: string })[];
   /** Delivery packs (BC-39), one per version. */
   packs: Insert<"delivery_packs">[];
+  /** Storyboard cards (BC-40). */
+  cards: Insert<"board_cards">[];
 }
 
 export function emptyFactory(): FactorySeed {
@@ -68,6 +70,7 @@ export function emptyFactory(): FactorySeed {
     notes: [],
     events: [],
     packs: [],
+    cards: [],
   };
 }
 

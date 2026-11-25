@@ -324,6 +324,10 @@ export async function recordCheckpoint(
   if (step === "idea" && !p.title && typeof out.title === "string") {
     await updateProduction(ctx.db, ws, id, { title: out.title.slice(0, 120) });
   }
+  if (step === "visuals") {
+    const { replaceBoard } = await import("./board");
+    await replaceBoard(ctx, id, out, p.script);
+  }
   if (step === "script") {
     const s = out as unknown as ScriptOutput;
     await updateProduction(ctx.db, ws, id, {

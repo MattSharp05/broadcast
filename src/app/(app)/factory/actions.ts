@@ -384,6 +384,75 @@ export async function markReady(id: unknown, versionId: unknown) {
   }, pid);
 }
 
+// ── Board (BC-40) ──
+
+const num = (v: unknown): number | undefined =>
+  typeof v === "number" && Number.isFinite(v) ? v : undefined;
+
+export async function updateCard(
+  id: unknown,
+  cardId: unknown,
+  patch: { text?: unknown; seconds?: unknown },
+) {
+  const pid = checkId(id);
+  return guard(async () => {
+    const { updateCard: update } = await import("@/lib/factory/board");
+    await update(await engine(), pid, checkId(cardId), {
+      text: typeof patch.text === "string" ? patch.text : undefined,
+      seconds: num(patch.seconds),
+    });
+    return null;
+  }, pid);
+}
+
+export async function moveCard(id: unknown, cardId: unknown, to: unknown) {
+  const pid = checkId(id);
+  return guard(async () => {
+    const { moveCard: move } = await import("@/lib/factory/board");
+    await move(await engine(), pid, checkId(cardId), num(to) ?? 0);
+    return null;
+  }, pid);
+}
+
+export async function deleteCard(id: unknown, cardId: unknown) {
+  const pid = checkId(id);
+  return guard(async () => {
+    const { deleteCard: remove } = await import("@/lib/factory/board");
+    await remove(await engine(), pid, checkId(cardId));
+    return null;
+  }, pid);
+}
+
+export async function addCard(id: unknown, input: { text?: unknown; seconds?: unknown }) {
+  const pid = checkId(id);
+  return guard(async () => {
+    const { addCard: add } = await import("@/lib/factory/board");
+    await add(await engine(), pid, {
+      text: typeof input.text === "string" ? input.text : "",
+      seconds: num(input.seconds) ?? 5,
+    });
+    return null;
+  }, pid);
+}
+
+export async function approveBoard(id: unknown) {
+  const pid = checkId(id);
+  return guard(async () => {
+    const { approveBoard: approveIt } = await import("@/lib/factory/board");
+    return approveIt(await engine(), pid);
+  }, pid);
+}
+
+export async function redoCard(id: unknown, cardId: unknown, note: unknown) {
+  const pid = checkId(id);
+  return guard(async () => {
+    const text = typeof note === "string" ? note.trim().slice(0, 1000) : "";
+    if (!text) throw new FactoryError("no_note", "Say what to change on this card.");
+    const { redoCard: redo } = await import("@/lib/factory/board");
+    return redo(await engine(), pid, checkId(cardId), text);
+  }, pid);
+}
+
 /** Queues the finished video on its one account: the next open slot or a pinned time. */
 export async function scheduleVideo(
   id: unknown,

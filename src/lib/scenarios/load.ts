@@ -138,7 +138,8 @@ export async function loadScenario(
         seed.factory.batches.length +
         seed.factory.notes.length +
         seed.factory.events.length +
-        seed.factory.packs.length,
+        seed.factory.packs.length +
+        seed.factory.cards.length,
     },
   };
 }
@@ -222,4 +223,5 @@ async function loadStudio(db: SupabaseClient<Database>, f: SandboxSeed["factory"
   await insert("review_notes", f.notes);
   await insert("production_events", f.events);
   await insert("delivery_packs", f.packs);
+  await insert("board_cards", f.cards);
 }

@@ -252,10 +252,54 @@ export const factoryReadyFailing: Scenario = {
   build: ({ now }) => readySeed("factory-ready-failing", now, true),
 };
 
+/** A video at the visuals step, waiting, with the fake runner's five board cards. */
+export function boardSeed(name: string, now: Date): SandboxSeed {
+  const { seed, id } = baseSeed(name, now);
+  const pid = addProduction(seed, id, now, {
+    key: KEY,
+    idea: IDEA,
+    style: "realistic-3d",
+    account: "cj",
+    done: ["idea", "script", "style"],
+    current: { step: "visuals", status: "waiting" },
+    status: "waiting",
+    hoursAgo: 3,
+  });
+  const visuals = seed.factory.steps.find((s) => s.step === "visuals");
+  const cards =
+    (
+      visuals?.output as
+        { cards?: { scene: string; text: string; seconds: number; still: string }[] } | undefined
+    )?.cards ?? [];
+  cards.forEach((c, i) => {
+    seed.factory.cards.push({
+      id: id("card", String(i + 1)),
+      production_id: pid,
+      position: i,
+      text: c.text,
+      seconds: c.seconds,
+      still_path: c.still,
+      scene_id: c.scene,
+    });
+  });
+  const p = seed.factory.productions[0];
+  if (p) p.board_rev = 1;
+  return seed;
+}
+
+export const factoryBoard: Scenario = {
+  name: "factory-board",
+  page: studioPage("factory-board"),
+  description:
+    "The visuals step waits with a five-card storyboard: edit, reorder, redo a card or approve the board.",
+  build: ({ now }) => boardSeed("factory-board", now),
+};
+
 export const STUDIO_SCENARIOS: readonly Scenario[] = [
   factoryVersions,
   factoryBatchSent,
   factoryBatchAnswered,
   factoryReadyToPost,
   factoryReadyFailing,
+  factoryBoard,
 ];

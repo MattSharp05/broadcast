@@ -804,3 +804,117 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* ── Board (BC-40) ── */
+
+.boardPage {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 16px;
+  max-width: 980px;
+}
+
+.boardHead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.over {
+  color: var(--bad);
+}
+
+.board {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.boardCard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  min-width: 0;
+}
+
+.boardCard[draggable="true"] {
+  cursor: grab;
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.grip {
+  width: 16px;
+  height: 16px;
+  color: var(--ink-3);
+}
+
+.cardBody {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.cardStill {
+  width: 72px;
+  aspect-ratio: 9 / 16;
+  border-radius: var(--r-xs);
+  border: 1px solid var(--line);
+  object-fit: cover;
+  background: var(--surface-2);
+}
+
+.noStill {
+  display: grid;
+  place-items: center;
+  color: var(--ink-3);
+  font-size: 12px;
+  text-align: center;
+}
+
+.cardFields {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.secondsField {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.secondsField input {
+  width: 72px;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-s);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+}
+
+.noteStatus[data-status="approved"] {
+  color: var(--good);
+}

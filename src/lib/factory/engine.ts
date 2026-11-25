@@ -315,7 +315,7 @@ export async function recordCheckpoint(
   id: string,
   step: FactoryStep,
   output: Json,
-  extra: { mediaId?: string | null; intent?: unknown } = {},
+  extra: { mediaId?: string | null; intent?: unknown; madeBy?: "render" | "import" } = {},
 ): Promise<void> {
   const ws = ctx.workspaceId;
   const p = await getProduction(ctx.db, ws, id);
@@ -355,7 +355,7 @@ export async function recordCheckpoint(
         mediaId,
         proxyPath: typeof out.proxy === "string" ? out.proxy : null,
         gitSha: typeof out.git_sha === "string" && out.git_sha.trim() ? out.git_sha.trim() : "",
-        madeBy: "render",
+        madeBy: extra.madeBy ?? "render",
         intent: extra.intent ?? out.intent,
         durationS: media.data.duration_s,
         fps: n("fps"),

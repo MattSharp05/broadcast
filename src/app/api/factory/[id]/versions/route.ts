@@ -1,8 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { FactoryError } from "@/lib/db/factory";
 import type { NoteAnswer } from "@/lib/domain/factory/notes";
-import { applyRevision, prepareRevision } from "@/lib/factory/studio";
-import { apiError, errorResponse, factoryRequest } from "../../shared";
+import { getSteps } from "@/lib/db/factory";
+import type { Json } from "@/lib/db/types";
+import { recordCheckpoint } from "@/lib/factory/engine";
+import { applyRevision, isImportSteps, listVersions, prepareRevision } from "@/lib/factory/studio";
+import { apiError, errorResponse, factoryRequest, type FactoryRequest } from "../../shared";
 import { checkProxy, storeRender } from "../../uploads";
 
 export const dynamic = "force-dynamic";
@@ -26,6 +29,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (!req.ok) return req.response;
   const { ctx, body } = req.value;
 
+  if (body.batch_id === undefined || body.batch_id === null) return importVersion(id, req.value);
   if (typeof body.batch_id !== "string" || !body.batch_id)
     return apiError(422, "bad_batch", "batch_id is the BATCH= line you were started with.");
   if (typeof body.git_sha !== "string" || !body.git_sha.trim())
@@ -83,6 +87,55 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   } catch (err) {
     if (err instanceof FactoryError && STATUS[err.code])
       return apiError(STATUS[err.code] ?? 409, err.code, err.message);
+    return errorResponse(err);
+  }
+}
+
+/**
+ * No batch: an imported project's v1 (made_by import). Only for imported videos (every step
+ * skipped but the render), and only while that render waits for it.
+ */
+async function importVersion(id: string, req: FactoryRequest) {
+  const { ctx, body } = req;
+  try {
+    const steps = await getSteps(ctx.db, ctx.workspaceId, id);
+    if (!isImportSteps(steps))
+      return apiError(422, "bad_batch", "batch_id is the BATCH= line you were started with.");
+    const render = steps.find((s) => s.step === "render");
+    if (render?.status !== "running" && render?.status !== "failed")
+      return apiError(409, "not_running", "This video's imported version is already in.");
+    if (typeof body.git_sha !== "string" || !body.git_sha.trim())
+      return apiError(
+        422,
+        "missing_git_sha",
+        "git_sha is required: send `git rev-parse HEAD` of the project's film.",
+      );
+    if (body.proxy !== undefined && body.proxy !== null) {
+      const proxyError = await checkProxy(ctx, id, body.proxy);
+      if (proxyError) return proxyError;
+    }
+    const stored = await storeRender(ctx, id, body.upload);
+    if (!stored.ok) return stored.response;
+    await recordCheckpoint(
+      ctx,
+      id,
+      "render",
+      {
+        upload: body.upload as Json,
+        proxy: typeof body.proxy === "string" ? body.proxy : null,
+        git_sha: body.git_sha.trim(),
+        fps: num(body.fps),
+        loudness_lufs: num(body.loudness_lufs),
+        true_peak_db: num(body.true_peak_db),
+        duration_s: Math.round(stored.value.info.durationS * 1000) / 1000,
+        face_share: null,
+        imagery_credits: Array.isArray(body.imagery_credits) ? (body.imagery_credits as Json) : [],
+      },
+      { mediaId: stored.value.mediaId, intent: body.intent, madeBy: "import" },
+    );
+    const [v] = await listVersions(ctx.db, ctx.workspaceId, id);
+    return NextResponse.json({ version: v?.id ?? null, number: v?.number ?? 1 }, { status: 201 });
+  } catch (err) {
     return errorResponse(err);
   }
 }

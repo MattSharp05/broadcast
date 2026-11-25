@@ -1053,3 +1053,64 @@ export async function markReady(
     intent: `Marked ${versionLabel(version.number)} ready to post.`,
   });
 }
+
+// ───────────────────────────── imports (BC-44) ─────────────────────────────
+
+/** An imported video: every step skipped except the render that brings its v1. */
+export function isImportSteps(steps: readonly { step: string; status: string }[]): boolean {
+  return (
+    steps.length > 0 &&
+    steps.every((s) => (s.step === "render" ? s.status !== "skipped" : s.status === "skipped"))
+  );
+}
+
+/**
+ * A video-editor project brought into the studio (POST /api/factory/import): a production with
+ * the project's slug, title, style and brief, no account yet, every step skipped but the render,
+ * which waits for the session's v1. Returns the id, or the existing one for a slug imported before.
+ */
+export async function importProduction(
+  ctx: EngineContext,
+  input: { projectSlug: string; title: string; idea: string; style: string | null },
+): Promise<{ id: string; existing: boolean }> {
+  const ws = ctx.workspaceId;
+  const { data: found, error: findError } = await ctx.db
+    .from("productions")
+    .select("id")
+    .eq("workspace_id", ws)
+    .eq("project_slug", input.projectSlug)
+    .maybeSingle();
+  if (findError) fail("reading the videos", findError);
+  if (found) return { id: found.id, existing: true };
+  const { data, error } = await ctx.db
+    .from("productions")
+    .insert({
+      workspace_id: ws,
+      project_slug: input.projectSlug,
+      title: input.title.slice(0, 120),
+      idea: input.idea.slice(0, 2000),
+      style: input.style,
+      status: "running",
+    })
+    .select("id")
+    .single();
+  if (error) fail("importing the video", error);
+  const { stepsFor } = await import("@/lib/domain/factory/steps");
+  const { error: stepsError } = await ctx.db.from("production_steps").insert(
+    stepsFor(false).map((step) => ({
+      workspace_id: ws,
+      production_id: data.id,
+      step,
+      status: step === "render" ? ("running" as const) : ("skipped" as const),
+      message: step === "render" ? "Waiting for the imported render (v1)." : null,
+      started_at: step === "render" ? ctx.now.toISOString() : null,
+    })),
+  );
+  if (stepsError) fail("importing the video's steps", stepsError);
+  await logEvent(ctx, data.id, {
+    actor: "system",
+    step: "render",
+    intent: `Imported from video-editor projects/${input.projectSlug}; waiting for its render as v1.`,
+  });
+  return { id: data.id, existing: false };
+}

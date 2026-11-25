@@ -228,7 +228,12 @@ export function ProductionView({
                 />
                 <HeroSection video={video} options={options} run={run} pending={pending} />
                 <ReworkSection video={video} run={run} pending={pending} />
-                <CaptionSection video={video} save={save} pending={pending} />
+                <CaptionSection
+                  video={video}
+                  onOpenReady={() => {
+                    pick("ready");
+                  }}
+                />
                 <ScheduleSection video={video} options={options} run={run} pending={pending} />
               </div>
             </div>

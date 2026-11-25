@@ -15,6 +15,13 @@ import {
   type NoteBox,
   type NoteKind,
 } from "@/lib/domain/factory/notes";
+import { CAPTION_MAX, creditLines } from "@/lib/domain/factory/captions";
+import {
+  HASHTAGS_MAX,
+  addHashtags,
+  deliveryChecks,
+  postedCaption,
+} from "@/lib/domain/factory/delivery";
 import {
   nextVersionNumber,
   pruneSelection,
@@ -800,5 +807,204 @@ export async function reopenNote(
     box: (note.box as NoteBox | null) ?? null,
     text: note.text,
     cropPath: null,
+  });
+}
+
+// ───────────────────────────── delivery packs (Ready to post, BC-39) ─────────────────────────────
+
+/** Where a version's cover lives: next to the videos, so the scheduler can sign it for Instagram. */
+export function coverPathFor(workspaceId: string, versionId: string): string {
+  return `${workspaceId}/covers/${versionId}.jpg`;
+}
+
+async function upsertPack(
+  ctx: EngineContext,
+  productionId: string,
+  versionId: string,
+  patch: Partial<Database["public"]["Tables"]["delivery_packs"]["Insert"]>,
+): Promise<void> {
+  const ws = ctx.workspaceId;
+  const { data: existing, error: readError } = await ctx.db
+    .from("delivery_packs")
+    .select("id")
+    .eq("workspace_id", ws)
+    .eq("version_id", versionId)
+    .maybeSingle();
+  if (readError) fail("reading the pack", readError);
+  // Any change unmarks it: the checks are run again on Mark ready.
+  const row = { ...patch, ready_at: null };
+  if (existing) {
+    const { error } = await ctx.db
+      .from("delivery_packs")
+      .update(row)
+      .eq("workspace_id", ws)
+      .eq("id", existing.id);
+    if (error) fail("saving the pack", error);
+    return;
+  }
+  const p = await getProduction(ctx.db, ws, productionId);
+  const { error } = await ctx.db.from("delivery_packs").insert({
+    workspace_id: ws,
+    production_id: productionId,
+    version_id: versionId,
+    caption: p.caption ?? "",
+    ...row,
+  });
+  if (error) fail("saving the pack", error);
+}
+
+/** The cover frame Matthew picked (already uploaded to coverPathFor). */
+export async function saveCover(
+  ctx: EngineContext,
+  productionId: string,
+  versionId: string,
+  tS: number,
+): Promise<void> {
+  const ws = ctx.workspaceId;
+  const version = await getVersion(ctx.db, ws, productionId, versionId);
+  const path = coverPathFor(ws, version.id);
+  await upsertPack(ctx, productionId, version.id, {
+    cover_path: path,
+    cover_t_s: Math.max(0, Math.round(tS * 1000) / 1000),
+  });
+  if (version.media_id) {
+    const { error } = await ctx.db
+      .from("media_assets")
+      .update({ cover_path: path })
+      .eq("workspace_id", ws)
+      .eq("id", version.media_id);
+    if (error) fail("saving the cover", error);
+  }
+}
+
+export async function savePack(
+  ctx: EngineContext,
+  productionId: string,
+  versionId: string,
+  input: { caption: string; hashtags: string[] },
+): Promise<void> {
+  const version = await getVersion(ctx.db, ctx.workspaceId, productionId, versionId);
+  if (input.caption.length > CAPTION_MAX) {
+    throw new FactoryError(
+      "caption_too_long",
+      `The caption is ${input.caption.length} characters. Instagram allows ${CAPTION_MAX}.`,
+    );
+  }
+  const hashtags = addHashtags([], input.hashtags.join(" "));
+  if (hashtags.length > HASHTAGS_MAX) {
+    throw new FactoryError("hashtags", `Instagram allows ${HASHTAGS_MAX} hashtags.`);
+  }
+  await upsertPack(ctx, productionId, version.id, { caption: input.caption, hashtags });
+  // The video's caption follows the pack (the Make tab and older flows read it).
+  await updateProduction(ctx.db, ctx.workspaceId, productionId, { caption: input.caption });
+}
+
+/** Everything the checks need for one version, read on the server. */
+export async function packChecks(ctx: EngineContext, productionId: string, versionId: string) {
+  const ws = ctx.workspaceId;
+  const version = await getVersion(ctx.db, ws, productionId, versionId);
+  const p = await getProduction(ctx.db, ws, productionId);
+  const [pack, render, voice, music] = await Promise.all([
+    ctx.db
+      .from("delivery_packs")
+      .select("*")
+      .eq("workspace_id", ws)
+      .eq("version_id", version.id)
+      .maybeSingle(),
+    ctx.db
+      .from("production_steps")
+      .select("output")
+      .eq("workspace_id", ws)
+      .eq("production_id", productionId)
+      .eq("step", "render")
+      .maybeSingle(),
+    p.voice_key
+      ? ctx.db.from("factory_voices").select("credit").eq("key", p.voice_key).maybeSingle()
+      : Promise.resolve({ data: null }),
+    p.music_key
+      ? ctx.db.from("factory_music").select("credit, licence").eq("key", p.music_key).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+  if (pack.error) fail("reading the pack", pack.error);
+  const imagery = (render.data?.output as { imagery_credits?: unknown } | null)?.imagery_credits;
+  const credits = creditLines({
+    musicCredit: music.data?.credit ?? null,
+    musicLicence: music.data?.licence ?? null,
+    voiceCredit: voice.data?.credit ?? null,
+    avatar: p.use_avatar,
+    imagery: Array.isArray(imagery)
+      ? imagery.filter((c): c is string => typeof c === "string")
+      : [],
+  });
+  const caption = pack.data?.caption ?? p.caption ?? "";
+  const hashtags = pack.data?.hashtags ?? [];
+  const checks = deliveryChecks({
+    width: version.width ?? 0,
+    height: version.height ?? 0,
+    durationS: version.duration_s ?? 0,
+    bytes: version.bytes ?? 0,
+    loudnessLufs: version.loudness_lufs,
+    truePeakDb: version.true_peak_db,
+    caption,
+    credits,
+    hashtags,
+    avatar: p.use_avatar,
+    aiFlag: p.use_avatar,
+    coverChosen: Boolean(pack.data?.cover_path),
+  });
+  return { version, production: p, pack: pack.data, caption, hashtags, checks };
+}
+
+/** Mark ready: only when every check passes. Writes the manifest; posting stays Matthew's click. */
+export async function markReady(
+  ctx: EngineContext,
+  productionId: string,
+  versionId: string,
+): Promise<void> {
+  const ws = ctx.workspaceId;
+  const { version, pack, caption, hashtags, checks } = await packChecks(
+    ctx,
+    productionId,
+    versionId,
+  );
+  const failing = checks.filter((c) => !c.ok);
+  if (!pack || failing.length) {
+    throw new FactoryError(
+      "not_ready",
+      failing.length ? failing.map((c) => c.message).join(" ") : "Pick a cover first.",
+    );
+  }
+  const recipe = version.media_id
+    ? ((
+        await ctx.db
+          .from("media_assets")
+          .select("recipe")
+          .eq("workspace_id", ws)
+          .eq("id", version.media_id)
+          .maybeSingle()
+      ).data?.recipe ?? null)
+    : null;
+  const { error } = await ctx.db
+    .from("delivery_packs")
+    .update({
+      checks: checks as unknown as NonNullable<Json>,
+      manifest: {
+        version: version.number,
+        git_sha: version.git_sha,
+        recipe,
+        cover: { path: pack.cover_path, t_s: pack.cover_t_s },
+        caption,
+        hashtags,
+        posted_caption: postedCaption(caption, hashtags),
+        checks,
+      } as unknown as NonNullable<Json>,
+      ready_at: new Date().toISOString(),
+    })
+    .eq("workspace_id", ws)
+    .eq("id", pack.id);
+  if (error) fail("marking the pack ready", error);
+  await logEvent(ctx, productionId, {
+    actor: "matthew",
+    intent: `Marked ${versionLabel(version.number)} ready to post.`,
   });
 }

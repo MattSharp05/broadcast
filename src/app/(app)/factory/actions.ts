@@ -28,6 +28,9 @@ import {
   deleteNote as deleteDraftNote,
   editNote as editDraftNote,
   logEvent,
+  markReady as markPackReady,
+  saveCover as savePackCover,
+  savePack as savePackText,
   reopenNote as reopenAnsweredNote,
   resolveNote as resolveAnsweredNote,
   sendNotes as sendBatch,
@@ -343,6 +346,42 @@ export async function resolveNote(id: unknown, noteId: unknown) {
 export async function reopenNote(id: unknown, noteId: unknown) {
   const pid = checkId(id);
   return guard(async () => reopenAnsweredNote(await engine(), pid, checkId(noteId)), pid);
+}
+
+/** The cover frame for a version (the JPEG is already uploaded through /api/factory/{id}/cover). */
+export async function saveCover(id: unknown, versionId: unknown, tS: unknown) {
+  const pid = checkId(id);
+  return guard(async () => {
+    const t = typeof tS === "number" && Number.isFinite(tS) && tS >= 0 ? tS : 0;
+    await savePackCover(await engine(), pid, checkId(versionId), t);
+    return null;
+  }, pid);
+}
+
+/** A version's caption and hashtags (the Ready to post tab). */
+export async function savePack(
+  id: unknown,
+  versionId: unknown,
+  input: { caption: unknown; hashtags: unknown },
+) {
+  const pid = checkId(id);
+  return guard(async () => {
+    const caption = typeof input.caption === "string" ? input.caption : "";
+    const hashtags = Array.isArray(input.hashtags)
+      ? input.hashtags.filter((t): t is string => typeof t === "string").slice(0, 60)
+      : [];
+    await savePackText(await engine(), pid, checkId(versionId), { caption, hashtags });
+    return null;
+  }, pid);
+}
+
+/** Mark ready: the server runs every check again; refused unless all pass. */
+export async function markReady(id: unknown, versionId: unknown) {
+  const pid = checkId(id);
+  return guard(async () => {
+    await markPackReady(await engine(), pid, checkId(versionId));
+    return null;
+  }, pid);
 }
 
 /** Queues the finished video on its one account: the next open slot or a pinned time. */

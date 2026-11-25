@@ -20,7 +20,8 @@ export type DeliveryCheckKey =
   | "hashtags"
   | "ai_flag"
   | "loudness"
-  | "true_peak";
+  | "true_peak"
+  | "cover";
 
 export interface DeliveryCheck {
   key: DeliveryCheckKey;
@@ -45,6 +46,46 @@ export interface DeliveryInput {
   avatar: boolean;
   /** The post will be flagged as AI-generated (posts.is_ai_generated). */
   aiFlag: boolean;
+  /** A cover frame was picked (the Ready to post tab); left out, no cover check. */
+  coverChosen?: boolean;
+}
+
+/** What each check is about, for the checks panel. */
+export const CHECK_LABELS: Record<DeliveryCheckKey, string> = {
+  aspect: "9:16",
+  size: "File size",
+  duration: "Length",
+  caption_length: "Caption length",
+  credits: "Credits in the caption",
+  hashtags: "Hashtags",
+  ai_flag: "AI label",
+  loudness: "Loudness",
+  true_peak: "True peak",
+  cover: "Cover",
+};
+
+/**
+ * A hashtag as stored: without `#`, letters, digits and underscores only (Instagram stops a tag at
+ * anything else). Null when nothing usable is left.
+ */
+export function normaliseHashtag(raw: string): string | null {
+  const tag = raw.trim().replace(/^#+/, "");
+  if (!tag || !/^[\p{L}\p{N}_]+$/u.test(tag)) return null;
+  return tag.slice(0, 100);
+}
+
+/** Adds tags from typed text (spaces, commas or # separate them); duplicates and junk dropped. */
+export function addHashtags(existing: readonly string[], typed: string): string[] {
+  const out = [...existing];
+  const seen = new Set(out.map((t) => t.toLowerCase()));
+  for (const part of typed.split(/[\s,#]+/)) {
+    const tag = normaliseHashtag(part);
+    if (tag && !seen.has(tag.toLowerCase())) {
+      seen.add(tag.toLowerCase());
+      out.push(tag);
+    }
+  }
+  return out;
 }
 
 /** Hashtags in the pack plus any written in the caption, counted once each (case-insensitive). */
@@ -166,6 +207,9 @@ export function deliveryChecks(input: DeliveryInput): DeliveryCheck[] {
           )
         : pass("true_peak"),
     );
+  }
+  if (input.coverChosen !== undefined) {
+    checks.push(input.coverChosen ? pass("cover") : fail("cover", "Pick a frame for the cover."));
   }
   return checks;
 }

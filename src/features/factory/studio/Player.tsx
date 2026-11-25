@@ -23,6 +23,8 @@ interface PlayerProps {
   /** The box of the note being written, drawn until it's added or cancelled. */
   pendingBox: NoteBox | null;
   videoRef: RefObject<HTMLVideoElement | null>;
+  /** False: the frame only plays (the cover picker); no notes are taken on it. */
+  notesOn?: boolean;
 }
 
 /**
@@ -38,6 +40,7 @@ export function Player({
   onGesture,
   pendingBox,
   videoRef,
+  notesOn = true,
 }: PlayerProps) {
   const [playing, setPlaying] = useState(false);
   const [drag, setDrag] = useState<{ start: Point; end: Point; rect: DOMRect } | null>(null);
@@ -149,11 +152,20 @@ export function Player({
         ) : null}
         <div
           className={styles.overlay}
-          data-testid="frame"
+          data-testid={notesOn ? "frame" : "cover-frame"}
+          data-notes={notesOn}
           data-paused={!playing}
           role="application"
-          aria-label="Frame: pause, then click for a moment note or drag for a region note"
+          aria-label={
+            notesOn
+              ? "Frame: pause, then click for a moment note or drag for a region note"
+              : "Frame: click to play or pause"
+          }
           onPointerDown={(e) => {
+            if (!notesOn) {
+              toggle();
+              return;
+            }
             if (playing) {
               toggle();
               return;

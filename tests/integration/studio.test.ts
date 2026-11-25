@@ -15,6 +15,10 @@ import {
   deleteNote,
   editNote,
   fakeVersionMedia,
+  markReady,
+  packChecks,
+  saveCover,
+  savePack,
   reopenNote,
   resolveNote,
   sendNotes,
@@ -422,5 +426,50 @@ describe("notes on a version (the Versions tab)", () => {
     });
     const resolved = await admin.from("review_notes").select("status").eq("id", note(1)).single();
     expect(resolved.data?.status).toBe("resolved");
+  });
+});
+
+describe("delivery packs (Ready to post)", () => {
+  it("refuses Mark ready while a check fails, then saves the pack, the cover and the manifest", async () => {
+    await load("factory-ready-to-post");
+    const pid = stableUuid("factory-ready-to-post", "production", "tides");
+    const v3 = stableUuid("factory-ready-to-post", "version", "3");
+    await expect(markReady(ctx, pid, v3)).rejects.toMatchObject({ code: "not_ready" });
+    await saveCover(ctx, pid, v3, 2.5);
+    await savePack(ctx, pid, v3, {
+      caption:
+        (await admin.from("productions").select("caption").eq("id", pid).single()).data?.caption ??
+        "",
+      hashtags: ["#Tides", "moon", "tides", "two words"],
+    });
+    await markReady(ctx, pid, v3);
+    const pack = await admin.from("delivery_packs").select("*").eq("version_id", v3).single();
+    expect(pack.data?.hashtags).toEqual(["Tides", "moon", "two", "words"]);
+    expect(pack.data?.ready_at).not.toBeNull();
+    expect(pack.data?.cover_path).toBe(`${SANDBOX}/covers/${v3}.jpg`);
+    expect(pack.data?.manifest).toMatchObject({ version: 3, git_sha: "c52e118" });
+    const media = await admin
+      .from("media_assets")
+      .select("cover_path")
+      .eq("id", stableUuid("factory-ready-to-post", "media", "tides"))
+      .single();
+    expect(media.data?.cover_path).toBe(`${SANDBOX}/covers/${v3}.jpg`);
+    // Any change unmarks it.
+    await savePack(ctx, pid, v3, { caption: "Changed", hashtags: [] });
+    const after = await admin
+      .from("delivery_packs")
+      .select("ready_at")
+      .eq("version_id", v3)
+      .single();
+    expect(after.data?.ready_at).toBeNull();
+  });
+
+  it("names the failing checks for a 95 s version without its music credit", async () => {
+    await load("factory-ready-failing");
+    const pid = stableUuid("factory-ready-failing", "production", "tides");
+    const v3 = stableUuid("factory-ready-failing", "version", "3");
+    const { checks } = await packChecks(ctx, pid, v3);
+    expect(checks.filter((c) => !c.ok).map((c) => c.key)).toEqual(["duration", "credits"]);
+    await expect(markReady(ctx, pid, v3)).rejects.toMatchObject({ code: "not_ready" });
   });
 });

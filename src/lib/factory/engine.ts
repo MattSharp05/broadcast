@@ -73,7 +73,7 @@ function sandbox(ctx: EngineContext): boolean {
 /** Everything a production needs before its first step can run; the message says what's missing. */
 export function missingForStart(p: ProductionRow): string | null {
   if (!p.idea.trim()) return "Write the idea first.";
-  if (!p.style) return "Pick a style.";
+  if (!p.style && !p.compare_styles) return "Pick a style, or compare styles.";
   if (p.use_avatar && !p.avatar_id) return "Pick an avatar, or switch the UGC avatar off.";
   if (!p.voice_key) return "Pick a voice.";
   if (!p.music_key) return "Pick a music track.";
@@ -97,6 +97,8 @@ export async function createProduction(
       idea: input.idea ?? base.idea ?? "",
       title: input.title ?? (base.title ? `${base.title} (remake)` : ""),
       style: base.style ?? null,
+      // No style yet: the style step shows the same beat in 2–3 styles to pick from (BC-41).
+      compare_styles: !base.style,
       music_key: base.music_key ?? null,
       remake_of: input.remakeOf ?? null,
       account_id: input.accountId ?? null,
@@ -212,6 +214,7 @@ async function runFake(ctx: EngineContext, id: string, step: FactoryStep, attemp
   const output = fakeOutput(step, {
     idea: p.idea,
     style: p.style,
+    compare: p.compare_styles ? p.style_candidates : null,
     useAvatar: p.use_avatar,
     faceModel,
     scriptVersion: script?.version ?? 0,
@@ -373,11 +376,13 @@ export async function recordCheckpoint(
     remainingUsd = checkBudget(0, spend, capsFor(settings.caps, avatarCap(avatar))).remainingUsd;
   }
   const decision = decideCheckpoint({ step, mode, quoteUsd, remainingUsd });
-  if (decision.approve) {
+  // Compared styles wait for Matthew's pick even on autopilot: there is no style to go on with.
+  const unpicked = step === "style" && p.compare_styles && !p.style;
+  if (decision.approve && !unpicked) {
     await approveStep(ctx, id, step, { auto: true });
     return;
   }
-  if (decision.reason === "over_cap") {
+  if (!decision.approve && decision.reason === "over_cap") {
     await updateStep(ctx.db, ws, id, step, { message: decision.message });
   }
   await refreshStatus(ctx, id);
@@ -476,6 +481,12 @@ export async function approveStep(
   const row = steps.find((s) => s.step === step);
   if (row?.status !== "waiting") {
     throw new FactoryError("not_waiting", "That step isn't waiting for approval.");
+  }
+  if (step === "style" && !p.style) {
+    throw new FactoryError(
+      "no_style",
+      "Pick one of the styles first: Use this style under the frame you want.",
+    );
   }
   if (step === "face_quote" && !opts.auto) {
     // Approving pays: check the quote against the caps first.

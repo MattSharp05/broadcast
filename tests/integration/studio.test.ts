@@ -11,7 +11,12 @@ import { POST as importRoute } from "@/app/api/factory/import/route";
 import { createApiKey } from "@/lib/db/api-keys";
 import { WORKSPACE_IDS } from "@/lib/db/workspaces";
 import { approveBoard, deleteCard, moveCard, redoCard, updateCard } from "@/lib/factory/board";
-import { createProduction, mintFactoryToken } from "@/lib/factory/engine";
+import {
+  approveStep,
+  createProduction,
+  mintFactoryToken,
+  startProduction,
+} from "@/lib/factory/engine";
 import {
   addNote,
   addVersion,
@@ -671,3 +676,44 @@ function importPost(key: string, body: unknown) {
     }),
   );
 }
+describe("comparing styles (BC-41)", () => {
+  it("starts without a style when comparing, and the brief lists the candidates", async () => {
+    await load("factory-new");
+    const id = await createProduction(ctx, { idea: "Why the sea is salty" });
+    const p = await admin.from("productions").select("compare_styles").eq("id", id).single();
+    expect(p.data?.compare_styles).toBe(true);
+    const voice = await admin.from("factory_voices").select("key").limit(1).single();
+    const music = await admin.from("factory_music").select("key").limit(1).single();
+    await admin
+      .from("productions")
+      .update({
+        voice_key: voice.data?.key,
+        music_key: music.data?.key,
+        style_candidates: ["luminous-3d", "handmade-2d"],
+      })
+      .eq("id", id);
+    await startProduction(ctx, id);
+    // The fake runner goes on to the style step once idea and script are approved.
+    await approveStep(ctx, id, "idea");
+    await approveStep(ctx, id, "script");
+    const style = await admin
+      .from("production_steps")
+      .select("status, output")
+      .eq("production_id", id)
+      .eq("step", "style")
+      .single();
+    expect(style.data?.status).toBe("waiting");
+    const frames = (style.data?.output as { frames: { style: string; recommended?: boolean }[] })
+      .frames;
+    expect(frames.map((f) => f.style)).toEqual(["luminous-3d", "handmade-2d"]);
+    expect(frames.filter((f) => f.recommended)).toHaveLength(1);
+    await expect(approveStep(ctx, id, "style")).rejects.toMatchObject({ code: "no_style" });
+
+    const token = await mintFactoryToken(ctx, id);
+    const brief = (await (await call(briefGet, { id }, token)).json()) as {
+      video: { style_compare: { candidates: string[]; options: unknown[] } | null };
+    };
+    expect(brief.video.style_compare?.candidates).toEqual(["luminous-3d", "handmade-2d"]);
+    expect(brief.video.style_compare?.options).toHaveLength(5);
+  });
+});

@@ -1,0 +1,92 @@
+[
+  {
+    "key": "handmade-2d",
+    "label": "Handmade 2D",
+    "name": "Handmade 2D: paper, ink, held drawings",
+    "suits": "Personal stories, warmth, charm",
+    "signature": "Grain, irregular edges, line boil on twos",
+    "typical_failure": "A texture filter over clean vectors",
+    "has_pack": true
+  },
+  {
+    "key": "editorial-collage",
+    "label": "Editorial collage",
+    "name": "Editorial collage: clippings, cut paper, halftone (Vox, Johnny Harris)",
+    "suits": "Investigations, history, money, politics",
+    "signature": "Cutouts on a paper board, marker circles and arrows, typed labels, 12 fps",
+    "typical_failure": "A slideshow of clip-art on beige",
+    "has_pack": true
+  },
+  {
+    "key": "motion-graphics",
+    "label": "Motion graphics",
+    "name": "Flat infographic, kinetic type, product UI film (Kurzgesagt, Apple, Linear)",
+    "suits": "Data, processes, quotes, software launches",
+    "signature": "A strict system of type, shape and colour; type that moves with meaning; the real interface",
+    "typical_failure": "Icons in coloured circles; invented UI; motion that makes words harder to read",
+    "has_pack": true
+  },
+  {
+    "key": "luminous-3d",
+    "label": "Luminous 3D",
+    "name": "Luminous 3D: dark space, light-emitting data, real depth",
+    "suits": "Systems, infrastructure, science, scale",
+    "signature": "Emissive accents, fog, a camera travelling macro to micro",
+    "typical_failure": "Glowing shapes on a flat dark field",
+    "has_pack": true
+  },
+  {
+    "key": "realistic-3d",
+    "label": "Realistic 3D",
+    "name": "Realistic 3D: a photoreal or physically detailed world",
+    "suits": "Places, machines, nature, anything that must read as real",
+    "signature": "Real scale, materials, sky light, air, weighted motion",
+    "typical_failure": "Reads as CGI: one-plane light, pillow rocks, sliding contacts",
+    "has_pack": true
+  },
+  {
+    "key": "character-cartoon",
+    "label": "Character cartoon",
+    "name": "Character cartoon, stick-figure doodle (CGP Grey, xkcd)",
+    "suits": "Stories with a protagonist; opinion, humour, fast series",
+    "signature": "A rigged cast acting; minimal figures with jokes in the drawing",
+    "typical_failure": "Limbs lost in crops, a cast that changes scale; figures that stand still while the voice works",
+    "has_pack": false
+  },
+  {
+    "key": "line-art-draw-on",
+    "label": "Line-art draw-on",
+    "name": "Line-art draw-on (whiteboard)",
+    "suits": "Step-by-step teaching",
+    "signature": "Strokes that draw themselves in narration order, a pull-back to the whole sketch",
+    "typical_failure": "Clip-art icons, a pasted hand, one drawing speed",
+    "has_pack": false
+  },
+  {
+    "key": "map-documentary",
+    "label": "Map documentary",
+    "name": "Map documentary (RealLifeLore, Wendover)",
+    "suits": "Geography, logistics, trade",
+    "signature": "An accurate map, routes drawing on, a camera flying between places",
+    "typical_failure": "A wrong map, or a static map with arrows",
+    "has_pack": false
+  },
+  {
+    "key": "retro-analog",
+    "label": "Retro analog",
+    "name": "Retro analog: VHS, CRT, early web, film",
+    "suits": "Nostalgia, internet history",
+    "signature": "Period type and UI, scanlines, chroma bleed, tape glitches on cuts",
+    "typical_failure": "An overlay over modern design",
+    "has_pack": false
+  },
+  {
+    "key": "others",
+    "label": "Others",
+    "name": "Others: isometric, pixel art, painterly, clay look",
+    "suits": "When the brief or a reference points there",
+    "signature": "",
+    "typical_failure": "",
+    "has_pack": false
+  }
+]

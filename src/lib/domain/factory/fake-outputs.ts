@@ -1,7 +1,7 @@
 import { estimateFaceClips, type Estimate, type SlotPlan } from "./budget";
 import type { ScriptLine } from "./rework";
 import type { FactoryStep } from "./steps";
-import { stylePack } from "./styles";
+import { STYLE_PACKS, stylePack } from "./styles";
 
 /**
  * Canned checkpoint outputs for the fake runner (Sandbox, scenarios, e2e): what a Claude session
@@ -21,7 +21,8 @@ export interface ScriptOutput {
   lines: ScriptLine[];
 }
 export interface FramesOutput {
-  frames: { url: string; caption: string }[];
+  /** One frame, or the same beat in 2–3 styles when comparing (`style`, one `recommended`). */
+  frames: { url: string; caption: string; style?: string; recommended?: boolean }[];
 }
 export interface StillsOutput {
   stills: { url: string; scene: string; caption: string }[];
@@ -47,6 +48,8 @@ export type StepOutput =
 export interface FakeContext {
   idea: string;
   style: string | null;
+  /** Comparing styles: the ticked candidates (empty: the runner picks). Null: one style. */
+  compare?: readonly string[] | null;
   useAvatar: boolean;
   faceModel: string;
   /** Script version so far (a script rework bumps it). */
@@ -108,10 +111,26 @@ export function fakeOutput(step: FactoryStep, ctx: FakeContext): StepOutput {
       ];
       return { version: v, hook: lines[0]?.text ?? "", lines };
     }
-    case "style":
+    case "style": {
+      if (ctx.compare) {
+        const picks = (
+          ctx.compare.length
+            ? [...ctx.compare]
+            : STYLE_PACKS.filter((p) => p.example).map((p) => p.key)
+        ).slice(0, 3);
+        return {
+          frames: picks.map((key, i) => ({
+            url: frame(key, 1),
+            caption: `The hook beat in ${stylePack(key)?.label ?? key}.`,
+            style: key,
+            ...(i === 0 ? { recommended: true } : {}),
+          })),
+        };
+      }
       return {
         frames: [{ url: frame(ctx.style, 1), caption: "The hook beat in the chosen style." }],
       };
+    }
     case "visuals": {
       const stills = [1, 2, 3, 4].map((n) => ({
         url: frame(ctx.style, n + ctx.attempt),

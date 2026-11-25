@@ -11,6 +11,7 @@ import {
 } from "@/lib/db/factory";
 import { capsFor, checkBudget } from "@/lib/domain/factory/budget";
 import { faceModel } from "@/lib/domain/factory/models";
+import { STYLE_PACKS } from "@/lib/domain/factory/styles";
 import { VIDEOS_BUCKET } from "@/lib/db/videos";
 import { signedUrlFor } from "./assets";
 import type { EngineContext } from "./engine";
@@ -148,6 +149,18 @@ export async function buildBrief(ctx: EngineContext, id: string) {
           }
         : null,
       script: p.script,
+      // Comparing styles (BC-41): the style step shows the same beat in 2–3 of these.
+      style_compare: p.compare_styles
+        ? {
+            candidates: p.style_candidates,
+            options: STYLE_PACKS.map((s) => ({
+              key: s.key,
+              label: s.label,
+              suits: s.suits,
+              signature: s.signature,
+            })),
+          }
+        : null,
     },
     step: current
       ? {

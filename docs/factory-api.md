@@ -56,7 +56,8 @@ Everything the step needs:
     "face_model": { "key": "fal-kling-avatar-std", "fallback": "placeholder", "price_usd_per_s": 0.0562, "max_s": 300 },
     "voice": { "key": "design-m2", "label": "…", "model": "Qwen3-TTS-12Hz-1.7B-Base", "sample_url": "https://…/factory/voices/design-m2.mp3", "credit": "Voice: AI (Qwen3-TTS)" },
     "music": { "key": "floating-cities", "title": "Floating Cities", "artist": "Kevin MacLeod", "licence": "CC BY 4.0", "credit": "Music: …", "source_url": "https://incompetech.com/…" },
-    "script": { "version": 2, "hook": "…", "lines": [{ "id": "l1", "text": "…", "slot": "hook" }] }
+    "script": { "version": 2, "hook": "…", "lines": [{ "id": "l1", "text": "…", "slot": "hook" }] },
+    "style_compare": { "candidates": ["luminous-3d"], "options": [{ "key": "luminous-3d", "label": "Luminous 3D", "suits": "…", "signature": "…" }] }
   },
   "step": { "name": "render", "attempt": 2, "note": "warmer voice" },
   "outputs": { "idea": { }, "script": { }, "style": { }, "visuals": { }, "face_quote": { } },
@@ -108,7 +109,7 @@ Outputs per step (extra fields are kept):
 |---|---|
 | `idea` | `{"title", "brief", "audience", "hook"}` |
 | `script` | `{"version", "hook", "lines": [{"id", "text", "slot"?}]}` (`slot` marks avatar cut-in lines) |
-| `style` | `{"frames": [{"url", "caption"}]}` |
+| `style` | `{"frames": [{"url", "caption", "style"?, "recommended"?}]}`: one frame, or when comparing (`video.style_compare`) the **same beat** in 2–3 styles, one frame each with its `style` key and one `recommended` |
 | `visuals` | `{"stills": [{"url", "scene", "caption"}], "cards"?: [{"scene", "text", "seconds", "still"}]}` (`scene` ids `s1`…, used by "redo a scene"; `cards` is the storyboard, below) |
 | `face_quote` | `{"model", "slots": [{"slot", "seconds"}], "quote": {"model", "seconds", "baseUsd", "rerollUsd", "totalUsd", "free"}}`, from `gen_face.py quote` |
 | `render` | `{"upload": "<path from /assets>", "proxy"?: "<path from /assets>", "git_sha", "duration_s", "fps"?, "loudness_lufs"?, "true_peak_db"?, "face_share", "imagery_credits": ["Earth imagery: NASA."], "caption_options"?: ["…"]}` |
@@ -121,6 +122,13 @@ film) and the optional `proxy` (a 720p MP4 ≤ 15 MB, also through `/assets`) ar
 version; `loudness_lufs` / `true_peak_db` come from `ffmpeg … ebur128` and feed the ready-to-post
 checks. Each render becomes a new numbered **version** (see below). Do **not** queue it: posting
 happens only from the dashboard.
+
+**Comparing styles (BC-41).** `video.style_compare` is set when Matthew asked to compare styles
+(the default for a video with no style yet): `style` is then null and the style step shows the same
+beat in 2–3 styles that genuinely differ, chosen from `options` (the packs mirrored from
+video-editor's styles README), or exactly the `candidates` he ticked. Recommend one from the brief.
+He picks with "Use this style" (approves the step) or "Use this, but …", which reruns the style step
+for that one style with `NOTE=Use <style>, but <note>`.
 
 **Storyboard (`visuals.cards`, BC-40).** Send the board with the visuals step: one card per beat,
 in order, with what happens or is said (`text`, ≤ 280), its length (`seconds`), its scene id and a

@@ -14,6 +14,8 @@ import { faceModel, isSelectable } from "@/lib/domain/factory/models";
 import { isReworkTarget } from "@/lib/domain/factory/rework";
 import { isStep, parseModes } from "@/lib/domain/factory/steps";
 import { STYLE_PACKS, stylePack } from "@/lib/domain/factory/styles";
+import { cleanGenre } from "@/lib/domain/genres";
+import { cleanTags } from "@/lib/domain/tags";
 import {
   approveStep,
   createProduction,
@@ -241,6 +243,10 @@ export interface VideoPatch {
   compareStyles?: boolean;
   /** Styles ticked to compare (empty: the session picks from the brief). */
   styleCandidates?: string[];
+  /** Explainer, brainteaser… (null clears it). Editable at any time. */
+  genre?: string | null;
+  /** Campaign tags. Editable at any time; the Posts tab filters on them. */
+  tags?: string[];
 }
 
 /** Saves the dashboard-side choices (idea, style, avatar, voice, music, account, caption). */
@@ -346,6 +352,12 @@ export async function saveVideo(id: unknown, patch: VideoPatch) {
         if (!a.data) throw new FactoryError("bad_account", "Unknown account.");
       }
       update.account_id = raw.accountId;
+    }
+    if (raw.genre === null || typeof raw.genre === "string") {
+      update.genre = cleanGenre(raw.genre);
+    }
+    if (Array.isArray(raw.tags)) {
+      update.tags = cleanTags(raw.tags.filter((t): t is string => typeof t === "string"));
     }
     if (typeof raw.caption === "string") {
       if (raw.caption.length > CAPTION_MAX)

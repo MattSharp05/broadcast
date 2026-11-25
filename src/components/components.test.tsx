@@ -13,7 +13,13 @@ vi.mock("next/navigation", () => ({ usePathname: () => pathname.current }));
 
 describe("nav", () => {
   it("lists the three tabs in order", () => {
-    expect(NAV_ITEMS.map((i) => i.href)).toEqual(["/workflow", "/accounts", "/factory"]);
+    expect(NAV_ITEMS.map((i) => i.href)).toEqual([
+      "/workflow",
+      "/accounts",
+      "/factory",
+      "/posts",
+      "/routines",
+    ]);
   });
 
   it("marks a tab active on its route and sub-routes only", () => {
@@ -25,7 +31,7 @@ describe("nav", () => {
 });
 
 describe("AppRail", () => {
-  it.each(["/workflow", "/accounts", "/factory"])(
+  it.each(["/workflow", "/accounts", "/factory", "/posts", "/routines"])(
     "highlights only %s with aria-current",
     (path) => {
       pathname.current = path;

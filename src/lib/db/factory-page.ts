@@ -175,6 +175,10 @@ export interface ProductionPage {
   id: string;
   title: string;
   idea: string;
+  /** Explainer, brainteaser… (src/lib/domain/genres.ts). */
+  genre: string | null;
+  /** Campaign tags ("Trip"); the Posts tab filters on them. */
+  tags: string[];
   style: string | null;
   /** Compare styles (BC-41) and the styles ticked for it. */
   compareStyles: boolean;
@@ -459,6 +463,8 @@ export async function loadProductionPage(id: string): Promise<ProductionPage | n
     id: p.id,
     title: p.title,
     idea: p.idea,
+    genre: p.genre,
+    tags: p.tags,
     style: p.style,
     compareStyles: p.compare_styles,
     styleCandidates: p.style_candidates,

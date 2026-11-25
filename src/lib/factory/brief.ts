@@ -11,13 +11,23 @@ import {
 } from "@/lib/db/factory";
 import { capsFor, checkBudget } from "@/lib/domain/factory/budget";
 import { faceModel } from "@/lib/domain/factory/models";
+import { VIDEOS_BUCKET } from "@/lib/db/videos";
+import { signedUrlFor } from "./assets";
 import type { EngineContext } from "./engine";
 import { faceModelFor } from "./engine";
+import { listVersions, notesOfBatch, openBatch } from "./studio";
+
+/** Version and crop links in the brief stay valid for 2 hours (a revise session's length). */
+const BRIEF_URL_TTL_S = 2 * 60 * 60;
 
 /** GET /api/factory/{id}/brief (docs/factory-api.md): everything a step needs. */
 export async function buildBrief(ctx: EngineContext, id: string) {
   const ws = ctx.workspaceId;
   const p = await getProduction(ctx.db, ws, id);
+  const [versions, batch] = await Promise.all([
+    listVersions(ctx.db, ws, id),
+    openBatch(ctx.db, ws, id),
+  ]);
   const [steps, jobs, reworks, settings, spend, avatar, account, voice, music] = await Promise.all([
     getSteps(ctx.db, ws, id),
     jobsFor(ctx.db, ws, id),
@@ -53,6 +63,39 @@ export async function buildBrief(ctx: EngineContext, id: string) {
   const abs = (u: string | null | undefined) =>
     u && u.startsWith("/") && ctx.appUrl ? `${ctx.appUrl}${u}` : (u ?? null);
   const keptSlots = new Set<string>();
+  const sign = async (value: string | null | undefined): Promise<string | null> => {
+    if (!value) return null;
+    if (value.startsWith("storage:")) return signedUrlFor(ctx.db, value, ws, BRIEF_URL_TTL_S);
+    if (value.startsWith(`${ws}/`)) {
+      const { data } = await ctx.db.storage
+        .from(VIDEOS_BUCKET)
+        .createSignedUrl(value, BRIEF_URL_TTL_S);
+      return data?.signedUrl ?? null;
+    }
+    return abs(value);
+  };
+  const mediaPaths = new Map<string, string>();
+  const mediaIds = versions.map((v) => v.media_id).filter((m): m is string => Boolean(m));
+  if (mediaIds.length) {
+    const { data } = await ctx.db
+      .from("media_assets")
+      .select("id, storage_path")
+      .eq("workspace_id", ws)
+      .in("id", mediaIds);
+    for (const m of data ?? []) mediaPaths.set(m.id, m.storage_path);
+  }
+  const versionList = await Promise.all(
+    versions.map(async (v) => ({
+      id: v.id,
+      number: v.number,
+      url: await sign(v.proxy_path ?? (v.media_id ? mediaPaths.get(v.media_id) : null)),
+      duration_s: v.duration_s,
+      fps: v.fps,
+      git_sha: v.git_sha,
+      made_by: v.made_by,
+    })),
+  );
+  const batchNotes = batch ? await notesOfBatch(ctx.db, ws, batch.id) : [];
   return {
     video: {
       id: p.id,
@@ -127,5 +170,24 @@ export async function buildBrief(ctx: EngineContext, id: string) {
       cap_month_usd: caps.monthlyUsd,
       remaining_usd: checkBudget(0, spend, caps).remainingUsd,
     },
+    versions: versionList,
+    batch: batch
+      ? {
+          id: batch.id,
+          version_number: versions.find((v) => v.id === batch.version_id)?.number ?? null,
+          notes: await Promise.all(
+            batchNotes.map(async (n) => ({
+              id: n.id,
+              number: n.number,
+              kind: n.kind,
+              t_s: n.t_s,
+              frame: n.frame,
+              box: n.box,
+              text: n.text,
+              crop_url: await sign(n.crop_path),
+            })),
+          ),
+        }
+      : null,
   };
 }

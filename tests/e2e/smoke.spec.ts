@@ -76,6 +76,9 @@ test("/dev lists every scenario and each link loads it", async ({ page }) => {
     "factory-hero-proposal",
     "factory-hero-compare",
     "factory-hero-history",
+    "factory-versions",
+    "factory-batch-sent",
+    "factory-batch-answered",
   ]);
   await expect(page.getByRole("link", { name: "Canvas engine demo" })).toHaveAttribute(
     "href",
@@ -103,16 +106,19 @@ test("/dev lists every scenario and each link loads it", async ({ page }) => {
     "factory-hero-proposal": 2,
     "factory-hero-compare": 2,
     "factory-hero-history": 2,
+    "factory-versions": 2,
+    "factory-batch-sent": 2,
+    "factory-batch-answered": 2,
   };
   for (const [name, accounts] of Object.entries(expected)) {
     await page.goto("/dev");
     await page.getByRole("link", { name, exact: true }).click();
-    // Factory scenarios open the Content Factory; the others the Workflow tab.
+    // Factory scenarios open the Content Factory (studio ones their video); the others the Workflow tab.
     const path =
       name === "avatar-studio"
         ? /\/factory\/avatars$/
         : name.startsWith("factory-")
-          ? /\/factory$/
+          ? /\/factory(\/[0-9a-f-]{36})?$/
           : /\/workflow$/;
     await expect(page).toHaveURL(path);
     await expect(marker(page)).toBeVisible();

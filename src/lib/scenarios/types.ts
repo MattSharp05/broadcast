@@ -43,6 +43,11 @@ export interface FactorySeed {
   genJobs: (Insert<"gen_jobs"> & { created_at?: string })[];
   heroProposals: Insert<"hero_proposals">[];
   heroDecisions: Insert<"hero_decisions">[];
+  /** Studio rows (BC-36). Versions with a `batch_id` are loaded after the batches. */
+  versions: (Insert<"production_versions"> & { created_at?: string })[];
+  batches: Insert<"review_batches">[];
+  notes: (Insert<"review_notes"> & { created_at?: string })[];
+  events: (Insert<"production_events"> & { created_at?: string })[];
 }
 
 export function emptyFactory(): FactorySeed {
@@ -56,6 +61,10 @@ export function emptyFactory(): FactorySeed {
     genJobs: [],
     heroProposals: [],
     heroDecisions: [],
+    versions: [],
+    batches: [],
+    notes: [],
+    events: [],
   };
 }
 

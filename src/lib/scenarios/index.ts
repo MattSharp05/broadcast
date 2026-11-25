@@ -8,6 +8,7 @@ import { postFailed } from "./post-failed";
 import { publishDueNow } from "./publish-due-now";
 import { publishContainerError, publishQuotaExhausted } from "./publish-failures";
 import { statsDue } from "./stats-due";
+import { STUDIO_SCENARIOS } from "./studio";
 import { tokenExpiring } from "./token-expiring";
 import type { Scenario } from "./types";
 
@@ -27,6 +28,7 @@ export const SCENARIOS: readonly Scenario[] = [
   tokenExpiring,
   postFailed,
   ...FACTORY_SCENARIOS,
+  ...STUDIO_SCENARIOS,
 ];
 
 export function getScenario(name: string): Scenario | undefined {

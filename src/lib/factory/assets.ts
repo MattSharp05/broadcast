@@ -80,11 +80,16 @@ export async function signAssetUpload(db: Db, a: AssetRef): Promise<string> {
 }
 
 /** A short-lived download URL for a stored asset; anything that isn't a storage ref is returned as is. */
-export async function signedUrlFor(db: Db, value: string, workspaceId: string): Promise<string> {
+export async function signedUrlFor(
+  db: Db,
+  value: string,
+  workspaceId: string,
+  ttlS: number = SIGNED_TTL_S,
+): Promise<string> {
   if (!value.startsWith("storage:")) return value;
   const a = parseRef(value, workspaceId);
   if (!a) return value;
-  const { data, error } = await db.storage.from(a.bucket).createSignedUrl(a.path, SIGNED_TTL_S);
+  const { data, error } = await db.storage.from(a.bucket).createSignedUrl(a.path, ttlS);
   if (error) return value;
   return data.signedUrl;
 }

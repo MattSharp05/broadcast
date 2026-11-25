@@ -17,12 +17,17 @@ export const ROUTINE_FIRE_URL = "https://api.anthropic.com/v1/claude_code/routin
 export const ROUTINE_BETA = "experimental-cc-routine-2026-04-01";
 export const ROUTINE_API_VERSION = "2023-06-01";
 
+/** A pipeline step, or `revise`: answer a batch of Matthew's notes with a new version (BC-36). */
+export type FireStep = FactoryStep | "revise";
+
 export interface FirePayload {
   productionId: string;
-  step: FactoryStep;
+  step: FireStep;
   appUrl: string;
   token: string;
   note: string | null;
+  /** The review batch a `revise` session answers (`BATCH=<id>`). */
+  batchId?: string | null;
 }
 
 export type FireResult =
@@ -38,6 +43,7 @@ export function firePayloadText(p: FirePayload): string {
     `BROADCAST_TOKEN=${p.token}`,
     `BROADCAST_VIDEO_ID=${p.productionId}`,
     `STEP=${p.step}`,
+    ...(p.batchId ? [`BATCH=${p.batchId}`] : []),
     ...(p.note ? [`NOTE=${p.note.replace(/\s+/g, " ").slice(0, 2000)}`] : []),
   ].join("\n");
 }

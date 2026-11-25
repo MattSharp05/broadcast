@@ -1,6 +1,7 @@
 import { type NextRequest } from "next/server";
 import { isStep } from "@/lib/domain/factory/steps";
 import { recordProgress } from "@/lib/factory/engine";
+import { logSessionIntent } from "@/lib/factory/studio";
 import { apiError, errorResponse, factoryRequest } from "../../shared";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +11,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const { id } = await params;
   const req = await factoryRequest(request, id, { body: true });
   if (!req.ok) return req.response;
-  const { step, progress, message } = req.value.body;
+  const { step, progress, message, intent } = req.value.body;
   if (!isStep(step))
     return apiError(
       422,
@@ -27,6 +28,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       progress,
       typeof message === "string" ? message.slice(0, 300) : null,
     );
+    await logSessionIntent(req.value.ctx, id, step, intent);
     return new Response(null, { status: 204 });
   } catch (err) {
     return errorResponse(err);

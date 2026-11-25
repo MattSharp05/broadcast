@@ -45,8 +45,11 @@ import {
   type FactoryStep,
   type ProductionStatus,
 } from "@/lib/domain/factory/steps";
+import { FAKE_INTENTS } from "@/lib/domain/factory/events";
+import { nextVersionNumber } from "@/lib/domain/factory/versions";
 import { submitFaceJob } from "./gen";
 import { fireRoutine, type FireResult } from "./runner";
+import { FAKE_GIT_SHA, addVersion, fakeProxy, listVersions, logEvent } from "./studio";
 
 /**
  * The production engine: starts steps, records checkpoints, applies "Wait for me" / "Autopilot",
@@ -255,7 +258,17 @@ async function runFake(ctx: EngineContext, id: string, step: FactoryStep, attemp
       }
     }
   }
-  await recordCheckpoint(ctx, id, step, output as unknown as Json);
+  await logEvent(ctx, id, { actor: "session", step, intent: FAKE_INTENTS[step] });
+  const out = output as unknown as Record<string, Json>;
+  if (step === "render") {
+    const number = nextVersionNumber(await listVersions(ctx.db, ctx.workspaceId, id));
+    out.git_sha = FAKE_GIT_SHA;
+    out.proxy = fakeProxy(number);
+    out.fps = 30;
+    out.loudness_lufs = -14;
+    out.true_peak_db = -1.5;
+  }
+  await recordCheckpoint(ctx, id, step, out);
 }
 
 export async function faceModelFor(ctx: EngineContext, p: ProductionRow): Promise<string> {
@@ -302,7 +315,7 @@ export async function recordCheckpoint(
   id: string,
   step: FactoryStep,
   output: Json,
-  extra: { mediaId?: string | null } = {},
+  extra: { mediaId?: string | null; intent?: unknown } = {},
 ): Promise<void> {
   const ws = ctx.workspaceId;
   const p = await getProduction(ctx.db, ws, id);
@@ -322,6 +335,31 @@ export async function recordCheckpoint(
     if (mediaId) {
       await attachRender(ctx, p, mediaId, out);
       out.media_id = mediaId;
+      // Every render is kept as the next numbered version (ADR 0008); older drafts are pruned.
+      const media = await ctx.db
+        .from("media_assets")
+        .select("duration_s, width, height, bytes")
+        .eq("workspace_id", ws)
+        .eq("id", mediaId)
+        .single();
+      if (media.error) fail("reading the render", media.error);
+      const n = (k: string) => (typeof out[k] === "number" ? out[k] : null);
+      const version = await addVersion(ctx, id, {
+        mediaId,
+        proxyPath: typeof out.proxy === "string" ? out.proxy : null,
+        gitSha: typeof out.git_sha === "string" && out.git_sha.trim() ? out.git_sha.trim() : "",
+        madeBy: "render",
+        intent: extra.intent ?? out.intent,
+        durationS: media.data.duration_s,
+        fps: n("fps"),
+        width: media.data.width,
+        height: media.data.height,
+        bytes: media.data.bytes,
+        loudnessLufs: n("loudness_lufs"),
+        truePeakDb: n("true_peak_db"),
+      });
+      out.version_id = version.id;
+      out.version = version.number;
     }
   }
 
@@ -417,10 +455,6 @@ async function attachRender(
     .eq("id", mediaId);
   if (error) fail("saving the recipe", error);
 
-  // The previous render goes when nothing posted it.
-  if (p.media_id && p.media_id !== mediaId && !p.post_id) {
-    await ctx.db.from("media_assets").delete().eq("workspace_id", ws).eq("id", p.media_id);
-  }
   const credits = creditLines({
     musicCredit: music.data?.credit ?? null,
     musicLicence: music.data?.licence ?? null,
@@ -432,8 +466,8 @@ async function attachRender(
     Array.isArray(p.caption_options) && p.caption_options.length
       ? p.caption_options
       : draftCaptions({ title: p.title, idea: p.idea, hook: script?.hook ?? null, credits });
+  // media_id (the version for posting) is set by addVersion, unless a version is already posted.
   await updateProduction(ctx.db, ws, p.id, {
-    media_id: mediaId,
     caption_options: options,
     caption: p.caption ?? (typeof options[0] === "string" ? options[0] : null),
   });

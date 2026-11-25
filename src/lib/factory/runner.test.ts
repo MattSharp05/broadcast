@@ -68,6 +68,14 @@ describe("routines trigger", () => {
     });
   });
 
+  it("names the batch on a revise (STEP=revise, BATCH=<id>) and leaves it out otherwise", () => {
+    const text = firePayloadText({ ...payload, step: "revise", note: null, batchId: "b-7" });
+    expect(text).toContain("STEP=revise");
+    expect(text).toContain("BATCH=b-7");
+    expect(text).not.toContain("NOTE=");
+    expect(firePayloadText(payload)).not.toContain("BATCH=");
+  });
+
   it("explains a refused fire", async () => {
     server.use(
       http.post(`${ROUTINE_FIRE_URL}/trig_123/fire`, () =>

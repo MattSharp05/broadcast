@@ -14,7 +14,7 @@ import { emptySeed, type SandboxSeed, type Scenario } from "./types";
  */
 
 const TIMEZONE = "Europe/London";
-const HOUR_MS = 3_600_000;
+export const HOUR_MS = 3_600_000;
 const PAGE = "/factory";
 
 type Id = (...parts: string[]) => string;
@@ -49,7 +49,11 @@ export function mayaProfile(
   };
 }
 
-function baseSeed(name: string, now: Date, accounts = ACCOUNTS): { seed: SandboxSeed; id: Id } {
+export function baseSeed(
+  name: string,
+  now: Date,
+  accounts = ACCOUNTS,
+): { seed: SandboxSeed; id: Id } {
   const seed = emptySeed(TIMEZONE);
   const id: Id = (...parts) => stableUuid(name, ...parts);
   accounts.forEach((spec, index) => {
@@ -95,7 +99,7 @@ function addMaya(seed: SandboxSeed, id: Id, now: Date, faceModel = "fal-kling-av
   return avatarId;
 }
 
-interface ProductionSpec {
+export interface ProductionSpec {
   key: string;
   idea: string;
   style: string;
@@ -110,7 +114,7 @@ interface ProductionSpec {
   autopilot?: boolean;
 }
 
-function addProduction(seed: SandboxSeed, id: Id, now: Date, spec: ProductionSpec) {
+export function addProduction(seed: SandboxSeed, id: Id, now: Date, spec: ProductionSpec) {
   const pid = id("production", spec.key);
   const useAvatar = Boolean(spec.avatar);
   const faceModel = spec.faceModel ?? "fal-kling-avatar-std";

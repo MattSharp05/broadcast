@@ -1,4 +1,6 @@
+import type { Json } from "@/lib/db/types";
 import { FAKE_INTENTS, fakeReply } from "@/lib/domain/factory/events";
+import { fakeOutput } from "@/lib/domain/factory/fake-outputs";
 import { frameAt, type NoteKind } from "@/lib/domain/factory/notes";
 import { stableUuid } from "@/lib/hash";
 import { FAKE_PERMALINK_BASE } from "@/lib/providers/fake";
@@ -433,6 +435,47 @@ export const factoryStudioList: Scenario = {
   build: ({ now }) => studioListSeed("factory-studio-list", now),
 };
 
+/** Comparing styles (BC-41): the style step waits with the hook beat in three styles. */
+export function styleCompareSeed(name: string, now: Date): SandboxSeed {
+  const { seed, id } = baseSeed(name, now);
+  const pid = addProduction(seed, id, now, {
+    key: KEY,
+    idea: IDEA,
+    style: "realistic-3d",
+    account: "cj",
+    done: ["idea", "script"],
+    current: { step: "style", status: "waiting" },
+    status: "waiting",
+    hoursAgo: 2,
+  });
+  const p = seed.factory.productions.find((x) => x.id === pid);
+  if (p) {
+    p.style = null;
+    p.compare_styles = true;
+  }
+  const step = seed.factory.steps.find((x) => x.production_id === pid && x.step === "style");
+  if (step) {
+    step.output = fakeOutput("style", {
+      idea: IDEA,
+      style: null,
+      compare: [],
+      useAvatar: false,
+      faceModel: "placeholder",
+      scriptVersion: 1,
+      attempt: 0,
+    }) as unknown as NonNullable<Json>;
+  }
+  return seed;
+}
+
+export const factoryStyleCompare: Scenario = {
+  name: "factory-style-compare",
+  page: studioPage("factory-style-compare"),
+  description:
+    "The style step waits with the same hook beat in three styles, one recommended: use one, or use one but with a note.",
+  build: ({ now }) => styleCompareSeed("factory-style-compare", now),
+};
+
 export const STUDIO_SCENARIOS: readonly Scenario[] = [
   factoryVersions,
   factoryBatchSent,
@@ -441,4 +484,5 @@ export const STUDIO_SCENARIOS: readonly Scenario[] = [
   factoryReadyFailing,
   factoryBoard,
   factoryStudioList,
+  factoryStyleCompare,
 ];

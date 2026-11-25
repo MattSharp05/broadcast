@@ -91,6 +91,59 @@ export async function newVideo(input: { idea?: unknown; remakeOf?: unknown; acco
   });
 }
 
+/** Compared styles (BC-41): "Use this style" saves it and approves the style step. */
+export async function pickStyle(id: unknown, style: unknown) {
+  const pid = checkId(id);
+  return guard(async () => {
+    if (typeof style !== "string" || !stylePack(style))
+      throw new FactoryError("bad_style", "Unknown style.");
+    const ctx = await engine();
+    await chooseComparedStyle(ctx, pid, style);
+    const outcome = await approveStep(ctx, pid, "style");
+    await logEvent(ctx, pid, {
+      actor: "matthew",
+      step: "style",
+      intent: `Picked ${stylePack(style)?.label ?? style}.`,
+    });
+    return outcome;
+  }, pid);
+}
+
+/** "Use this, but …": keeps that style and redoes its frame with the note. */
+export async function pickStyleBut(id: unknown, style: unknown, note: unknown) {
+  const pid = checkId(id);
+  return guard(async () => {
+    if (typeof style !== "string" || !stylePack(style))
+      throw new FactoryError("bad_style", "Unknown style.");
+    const text = typeof note === "string" ? note.trim().slice(0, 1000) : "";
+    if (!text) throw new FactoryError("no_note", "Say what to change in this style.");
+    const ctx = await engine();
+    await chooseComparedStyle(ctx, pid, style);
+    const label = stylePack(style)?.label ?? style;
+    const outcome = await redoFrom(ctx, pid, "style", `Use ${label}, but ${text}`);
+    await logEvent(ctx, pid, {
+      actor: "matthew",
+      step: "style",
+      intent: `Use ${label}, but ${text}`,
+    });
+    return outcome;
+  }, pid);
+}
+
+async function chooseComparedStyle(ctx: EngineContext, pid: string, style: string) {
+  const p = await getProduction(ctx.db, ctx.workspaceId, pid);
+  const { data: row } = await ctx.db
+    .from("production_steps")
+    .select("status")
+    .eq("workspace_id", ctx.workspaceId)
+    .eq("production_id", pid)
+    .eq("step", "style")
+    .maybeSingle();
+  if (!p.compare_styles || row?.status !== "waiting")
+    throw new FactoryError("not_comparing", "There are no style frames waiting to pick from.");
+  await updateProduction(ctx.db, ctx.workspaceId, pid, { style, compare_styles: false });
+}
+
 /**
  * The studio list's prompt box (BC-42): a new video from one line, started at once. What isn't
  * picked comes from the last video (voice, music, style), else the first in each library; the
@@ -161,6 +214,10 @@ export interface VideoPatch {
   musicKey?: string;
   accountId?: string | null;
   caption?: string;
+  /** Compare styles (BC-41): the style step shows the same beat in 2–3 styles. */
+  compareStyles?: boolean;
+  /** Styles ticked to compare (empty: the session picks from the brief). */
+  styleCandidates?: string[];
 }
 
 /** Saves the dashboard-side choices (idea, style, avatar, voice, music, account, caption). */
@@ -182,6 +239,22 @@ export async function saveVideo(id: unknown, patch: VideoPatch) {
           "The style is set once the video has started. Remake it to change the style.",
         );
       update.style = raw.style;
+      // Picking a style decides it: nothing left to compare.
+      update.compare_styles = false;
+    }
+    if (typeof raw.compareStyles === "boolean") {
+      if (started && raw.compareStyles !== p.compare_styles)
+        throw new FactoryError("started", "Comparing styles is set before the video starts.");
+      update.compare_styles = raw.compareStyles;
+      if (raw.compareStyles) update.style = null;
+    }
+    if (Array.isArray(raw.styleCandidates)) {
+      const keys = raw.styleCandidates.filter(
+        (k): k is string => typeof k === "string" && Boolean(stylePack(k)),
+      );
+      if (keys.length > 3)
+        throw new FactoryError("too_many", "Tick up to three styles to compare.");
+      update.style_candidates = [...new Set(keys)];
     }
     if (typeof raw.useAvatar === "boolean") {
       if (started && raw.useAvatar !== p.use_avatar)

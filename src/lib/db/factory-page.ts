@@ -176,6 +176,9 @@ export interface ProductionPage {
   title: string;
   idea: string;
   style: string | null;
+  /** Compare styles (BC-41) and the styles ticked for it. */
+  compareStyles: boolean;
+  styleCandidates: string[];
   useAvatar: boolean;
   avatarId: string | null;
   avatarVersion: number | null;
@@ -466,6 +469,8 @@ export async function loadProductionPage(id: string): Promise<ProductionPage | n
     title: p.title,
     idea: p.idea,
     style: p.style,
+    compareStyles: p.compare_styles,
+    styleCandidates: p.style_candidates,
     useAvatar: p.use_avatar,
     avatarId: p.avatar_id,
     avatarVersion: p.avatar_version,

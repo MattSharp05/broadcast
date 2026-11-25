@@ -41,7 +41,7 @@ describe("Content Factory with the fake runner", () => {
 
   it("walks a free video from the idea to a render with a recipe, waiting for approval at each step", async () => {
     const id = await createProduction(ctx, { idea: "How the moon causes tides" });
-    await expect(startProduction(ctx, id)).rejects.toThrow(/Pick a style/);
+    await expect(startProduction(ctx, id)).rejects.toThrow(/Pick a voice/);
     await admin
       .from("productions")
       .update({ style: "realistic-3d", voice_key: "design-m2", music_key: "floating-cities" })

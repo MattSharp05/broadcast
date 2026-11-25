@@ -18,13 +18,13 @@ import type { StudioData } from "@/lib/db/studio-page";
 import { STUDIO_TABS } from "./studio/tabs";
 import studio from "./studio/studio.module.css";
 import { usd } from "@/lib/domain/factory/budget";
-import { STYLE_PACKS } from "@/lib/domain/factory/styles";
 import { AudioPlayButton } from "./AudioPlayButton";
 import { AvatarSection } from "./AvatarSection";
 import { PipelineSection } from "./PipelineSection";
 import { HeroSection } from "./HeroSection";
 import { ReworkSection } from "./ReworkSection";
 import { CaptionSection } from "./CaptionSection";
+import { StyleSection } from "./StyleSection";
 import { STATUS_TONE, STATUS_WORD } from "./status";
 import styles from "./factory.module.css";
 import { TextArea } from "@/components/TextArea";
@@ -197,7 +197,7 @@ export function ProductionView({
               </nav>
               <div className={styles.sections}>
                 <IdeaSection video={video} draft={draft} save={save} pending={pending} />
-                <StyleSection video={video} draft={draft} save={save} pending={pending} />
+                <StyleSection video={video} draft={draft} save={save} run={run} pending={pending} />
                 <AvatarSection
                   video={video}
                   options={options}
@@ -299,58 +299,6 @@ function IdeaSection({ video, save, pending }: SectionProps) {
         >
           Save idea
         </Button>
-      </div>
-    </section>
-  );
-}
-
-function StyleSection({ video, draft, save, pending }: SectionProps) {
-  return (
-    <section id="style" className={styles.section} aria-labelledby="style-h">
-      <div className={styles.sectionHead}>
-        <h2 id="style-h">2. Style</h2>
-        <span className={styles.meta}>The animated-video style packs</span>
-      </div>
-      <div className={styles.styles} role="radiogroup" aria-labelledby="style-h">
-        {STYLE_PACKS.map((s) => {
-          const selected = video.style === s.key;
-          const locked = !draft || pending;
-          return (
-            <label
-              key={s.key}
-              className={styles.card}
-              data-selected={selected}
-              aria-disabled={locked && !selected}
-              data-style={s.key}
-            >
-              <input
-                type="radio"
-                name="style"
-                value={s.key}
-                checked={selected}
-                disabled={locked}
-                onChange={() => {
-                  save({ style: s.key });
-                }}
-              />
-              {s.example ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  className={styles.frame}
-                  src={s.example}
-                  alt={`Example frame: ${s.exampleFrom ?? s.label}`}
-                  loading="lazy"
-                />
-              ) : (
-                <span className={`${styles.frame} ${styles.noFrame}`}>
-                  No past project in this style yet
-                </span>
-              )}
-              <strong>{s.label}</strong>
-              <span>{s.suits}</span>
-            </label>
-          );
-        })}
       </div>
     </section>
   );

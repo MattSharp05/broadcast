@@ -1657,6 +1657,7 @@ export type Database = {
           board_rev: number;
           caption: string | null;
           caption_options: NonNullable<Json>;
+          compare_styles: boolean;
           created_at: string;
           face_model: string | null;
           id: string;
@@ -1672,6 +1673,7 @@ export type Database = {
           status: Database["public"]["Enums"]["production_status"];
           step_modes: NonNullable<Json>;
           style: string | null;
+          style_candidates: string[];
           title: string;
           updated_at: string;
           use_avatar: boolean;
@@ -1687,6 +1689,7 @@ export type Database = {
           board_rev?: number;
           caption?: string | null;
           caption_options?: NonNullable<Json>;
+          compare_styles?: boolean;
           created_at?: string;
           face_model?: string | null;
           id?: string;
@@ -1702,6 +1705,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["production_status"];
           step_modes?: NonNullable<Json>;
           style?: string | null;
+          style_candidates?: string[];
           title?: string;
           updated_at?: string;
           use_avatar?: boolean;
@@ -1716,6 +1720,7 @@ export type Database = {
           board_rev?: number;
           caption?: string | null;
           caption_options?: NonNullable<Json>;
+          compare_styles?: boolean;
           created_at?: string;
           face_model?: string | null;
           id?: string;
@@ -1731,6 +1736,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["production_status"];
           step_modes?: NonNullable<Json>;
           style?: string | null;
+          style_candidates?: string[];
           title?: string;
           updated_at?: string;
           use_avatar?: boolean;

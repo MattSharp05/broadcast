@@ -43,6 +43,7 @@ src/
     drawers/              post / account / slot detail drawers
     factory/              Content Factory pages (studio, avatar studio, settings)
     posts/                Posts table: filters, sort, stats at an age, summary row, bulk tags
+    routines/             Routines: list, form, templates, the plan and its slots (ADR 0009)
   lib/
     domain/               pure logic (queue planner, publish machine, stats schedule)
     providers/            SocialProvider + instagram + fake

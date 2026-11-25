@@ -1,6 +1,7 @@
 # ADR 0008: Studio (versions, review notes, batches, delivery packs)
 
-Status: Accepted (2026-11-24, BC-34) · Tickets BC-34…BC-45 · Builds on [ADR 0007](0007-content-factory.md)
+Status: Accepted (2026-11-24, BC-34) · Tickets BC-34…BC-45 · Builds on [ADR 0007](0007-content-factory.md) ·
+Amended by [ADR 0009](0009-routines.md) (a routine with approval "auto" schedules its finished videos)
 
 ## Context
 The Content Factory (ADR 0007) keeps one render per video: `productions.media_id`, and

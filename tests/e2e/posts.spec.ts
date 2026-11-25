@@ -21,8 +21,8 @@ test("filtering by the Trip tag shows its posts and their totals", async ({
   await expect(rows(page)).toHaveCount(4);
   await expect(page).toHaveURL(/[?&]tag=Trip/);
   await expect(summary(page)).toContainText("4 posts");
-  // Latest views: 9,100 + 1,200 + 800 (the scheduled post has none yet).
-  await expect(summary(page).locator('[data-metric="views"] b')).toHaveText("11.1K");
+  // Latest views: 9,100 + 1,200 + 800 = 11,100, shown as 11K (the scheduled post has none yet).
+  await expect(summary(page).locator('[data-metric="views"] b')).toHaveText("11K");
 
   // The filtered view survives a reload (it lives in the URL).
   await page.reload();

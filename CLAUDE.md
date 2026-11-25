@@ -35,7 +35,8 @@ numerals, no monospace labels or all-caps eyebrows.
 - Never store social media passwords. Only OAuth tokens, encrypted server-side; the browser never
   sees them.
 - The content API only queues videos. Posting happens only through the scheduler and the
-  dashboard.
+  dashboard. Sessions never queue or post; a routine schedules its finished videos only when its
+  approval is "Post automatically", which Matthew chose when approving its plan (ADR 0009).
 - Never post the same queue item twice; check the account's Instagram quota before publishing.
 
 ## Stack
@@ -61,13 +62,14 @@ Playwright · MSW. Details and reasons: `docs/TDD.md`, ADRs in `docs/decisions/`
 - `node scripts/broadcast-upload.mjs --file x.mp4 --accounts a,b [--caption …] [--pin …]`: queues a
   video through the content API (`BROADCAST_URL` + `BROADCAST_API_KEY` from `/dev/api-keys`);
   see `docs/content-api.md`.
-- Content Factory sessions: `docs/factory-api.md` (factory API + `/api/gen/*` proxy, factory tokens);
+- Content Factory sessions: `docs/factory-api.md` (factory API + `/api/gen/*` proxy, factory tokens;
+  routines: the planner session `STEP=plan` and one session per video `STEP=all`, ADR 0009);
   the face and 3D model registries are mirrored from video-editor with `node scripts/sync-face-models.mjs` and `node scripts/sync-mesh-models.mjs`, and the style list with `node scripts/sync-style-packs.mjs [../video-editor]` (video-editor is the source of truth; sync after any price, status or style change there).
 - Scenarios: `/workflow?scenario=<name>[&now=ISO]` (signed in) resets the Sandbox and loads one;
   `/dev` lists them. Register new ones in `src/lib/scenarios/index.ts`.
 
 ## Structure
-`src/app` routes · `src/features/{canvas,accounts,content,drawers,factory,posts}` · `src/components` shared UI ·
+`src/app` routes · `src/features/{canvas,accounts,content,drawers,factory,posts,routines}` · `src/components` shared UI ·
 `src/lib/{domain,providers,db,crypto,scenarios}` · `src/styles/tokens.css` · `supabase/migrations` ·
 `tests/e2e` · `scripts/`. Full tree in `docs/TDD.md`.
 

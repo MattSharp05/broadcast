@@ -381,7 +381,7 @@ function SlotRows({
           {hm(at, timezone)}
         </td>
         <td className={styles.nowrap}>{s.account}</td>
-        <td>
+        <td className={styles.videoCell}>
           <div className={styles.title}>
             {s.productionId ? (
               <Link href={`/factory/${s.productionId}`}>{s.title || "Untitled"}</Link>

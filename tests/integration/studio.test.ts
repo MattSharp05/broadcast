@@ -9,7 +9,16 @@ import { POST as progressPost } from "@/app/api/factory/[id]/progress/route";
 import { POST as versionsPost } from "@/app/api/factory/[id]/versions/route";
 import { WORKSPACE_IDS } from "@/lib/db/workspaces";
 import { createProduction, mintFactoryToken } from "@/lib/factory/engine";
-import { addVersion, fakeVersionMedia, sendNotes } from "@/lib/factory/studio";
+import {
+  addNote,
+  addVersion,
+  deleteNote,
+  editNote,
+  fakeVersionMedia,
+  reopenNote,
+  resolveNote,
+  sendNotes,
+} from "@/lib/factory/studio";
 import { stableUuid } from "@/lib/hash";
 import { getScenario } from "@/lib/scenarios";
 import { loadScenario } from "@/lib/scenarios/load";
@@ -335,5 +344,83 @@ describe("revise batches", () => {
       .eq("production_id", pid)
       .eq("step", "revise");
     expect(feed.data?.map((e) => e.actor)).toEqual(expect.arrayContaining(["matthew", "session"]));
+  });
+});
+
+describe("notes on a version (the Versions tab)", () => {
+  const pid = stableUuid("factory-versions", "production", "tides");
+  const v2 = stableUuid("factory-versions", "version", "2");
+
+  it("adds, edits and deletes drafts with stable numbers and the frame at the version's fps", async () => {
+    await load("factory-versions");
+    const a = await addNote(ctx, pid, v2, {
+      kind: "moment",
+      tS: 3.2,
+      box: null,
+      text: "Title late",
+      cropPath: null,
+    });
+    const b = await addNote(ctx, pid, v2, {
+      kind: "region",
+      tS: 12.5,
+      box: { x: 0.1, y: 0.6, w: 0.4, h: 0.2 },
+      text: "Bigger label",
+      cropPath: `storage:factory/${SANDBOX}/${pid}/notes/x.jpg`,
+    });
+    expect([a.number, b.number]).toEqual([1, 2]);
+    await expect(
+      addNote(ctx, pid, v2, { kind: "region", tS: 1, box: null, text: "x", cropPath: null }),
+    ).rejects.toMatchObject({ code: "bad_note" });
+    await expect(
+      addNote(ctx, pid, v2, {
+        kind: "general",
+        tS: null,
+        box: null,
+        text: "x",
+        cropPath: `storage:factory/${SANDBOX}/another/x.jpg`,
+      }),
+    ).rejects.toMatchObject({ code: "bad_crop" });
+    await editNote(ctx, pid, a.id, "Title lands late");
+    await deleteNote(ctx, pid, a.id);
+    const c = await addNote(ctx, pid, v2, {
+      kind: "general",
+      tS: null,
+      box: null,
+      text: "Music",
+      cropPath: null,
+    });
+    expect(c.number).toBe(3);
+    const rows = await admin
+      .from("review_notes")
+      .select("number, frame, text")
+      .eq("version_id", v2)
+      .order("number");
+    expect(rows.data).toEqual([
+      { number: 2, frame: 375, text: "Bigger label" },
+      { number: 3, frame: null, text: "Music" },
+    ]);
+  });
+
+  it("refuses to change a sent note; resolves or reopens an answered one on the answering version", async () => {
+    await load("factory-batch-answered");
+    const pa = stableUuid("factory-batch-answered", "production", "tides");
+    const note = (n: number) => stableUuid("factory-batch-answered", "note", String(n));
+    await expect(editNote(ctx, pa, note(1), "changed")).rejects.toMatchObject({ code: "sent" });
+    await expect(deleteNote(ctx, pa, note(1))).rejects.toMatchObject({ code: "sent" });
+    await resolveNote(ctx, pa, note(1));
+    const reopened = await reopenNote(ctx, pa, note(2));
+    const row = await admin
+      .from("review_notes")
+      .select("version_id, status, kind, number")
+      .eq("id", reopened.id)
+      .single();
+    expect(row.data).toMatchObject({
+      version_id: stableUuid("factory-batch-answered", "version", "3"),
+      status: "draft",
+      kind: "region",
+      number: 1,
+    });
+    const resolved = await admin.from("review_notes").select("status").eq("id", note(1)).single();
+    expect(resolved.data?.status).toBe("resolved");
   });
 });

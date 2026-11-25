@@ -1,14 +1,19 @@
 import "server-only";
 import { FactoryError, fail, getProduction, updateProduction, type Db } from "@/lib/db/factory";
-import type { Database } from "@/lib/db/types";
+import type { Database, Json } from "@/lib/db/types";
 import { VIDEOS_BUCKET } from "@/lib/db/videos";
 import { workspaceKindOf } from "@/lib/db/workspaces";
 import { FAKE_INTENTS, clipIntent, fakeReply, type EventActor } from "@/lib/domain/factory/events";
 import {
   applyAnswers,
   batchFromDrafts,
+  frameAt,
+  nextNoteNumber,
+  noteError,
   type AnswerStatus,
   type NoteAnswer,
+  type NoteBox,
+  type NoteKind,
 } from "@/lib/domain/factory/notes";
 import {
   nextVersionNumber,
@@ -623,4 +628,158 @@ export async function fakeVersionMedia(
     .single();
   if (error) fail("saving the fake version", error);
   return data.id;
+}
+
+// ───────────────────────────── notes (the Versions tab, BC-37) ─────────────────────────────
+
+export interface NoteDraft {
+  kind: NoteKind;
+  tS: number | null;
+  box: NoteBox | null;
+  text: string;
+  cropPath: string | null;
+}
+
+async function getNote(db: Db, ws: string, productionId: string, noteId: string) {
+  const { data, error } = await db
+    .from("review_notes")
+    .select("*")
+    .eq("workspace_id", ws)
+    .eq("production_id", productionId)
+    .eq("id", noteId)
+    .maybeSingle();
+  if (error) fail("reading the note", error);
+  if (!data) throw new FactoryError("not_found", "That note isn't on this video.");
+  return data;
+}
+
+/** A draft note on a version, numbered after the version's last note (numbers stay stable). */
+export async function addNote(
+  ctx: EngineContext,
+  productionId: string,
+  versionId: string,
+  draft: NoteDraft,
+): Promise<{ id: string; number: number }> {
+  const ws = ctx.workspaceId;
+  const version = await getVersion(ctx.db, ws, productionId, versionId);
+  const tS = draft.kind === "general" ? null : draft.tS;
+  const box = draft.kind === "region" ? draft.box : null;
+  const problem = noteError({ kind: draft.kind, text: draft.text, tS, box }, version.duration_s);
+  if (problem) throw new FactoryError("bad_note", problem);
+  if (draft.cropPath && !parseRef(draft.cropPath, ws, productionId)) {
+    throw new FactoryError("bad_crop", "That frame image isn't this video's.");
+  }
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const { data: existing, error: readError } = await ctx.db
+      .from("review_notes")
+      .select("number")
+      .eq("workspace_id", ws)
+      .eq("version_id", version.id);
+    if (readError) fail("reading the notes", readError);
+    const number = nextNoteNumber(existing);
+    const { data, error } = await ctx.db
+      .from("review_notes")
+      .insert({
+        workspace_id: ws,
+        production_id: productionId,
+        version_id: version.id,
+        number,
+        kind: draft.kind,
+        t_s: tS,
+        frame: tS === null ? null : frameAt(tS, version.fps ?? 30),
+        box: box as unknown as Json,
+        text: draft.text.trim(),
+        crop_path: draft.cropPath,
+      })
+      .select("id, number")
+      .single();
+    if (!error) return data;
+    if (error.code !== "23505") fail("saving the note", error);
+  }
+  throw new FactoryError("note_race", "Two notes arrived at once. Try again.");
+}
+
+async function draftNote(ctx: EngineContext, productionId: string, noteId: string) {
+  const note = await getNote(ctx.db, ctx.workspaceId, productionId, noteId);
+  if (note.status !== "draft") {
+    throw new FactoryError("sent", "This note was sent to Claude, so it can't be changed now.");
+  }
+  return note;
+}
+
+export async function editNote(
+  ctx: EngineContext,
+  productionId: string,
+  noteId: string,
+  text: string,
+): Promise<void> {
+  const note = await draftNote(ctx, productionId, noteId);
+  const problem = noteError({
+    kind: note.kind as NoteKind,
+    text,
+    tS: note.t_s,
+    box: note.box as NoteBox | null,
+  });
+  if (problem) throw new FactoryError("bad_note", problem);
+  const { error } = await ctx.db
+    .from("review_notes")
+    .update({ text: text.trim() })
+    .eq("workspace_id", ctx.workspaceId)
+    .eq("id", note.id)
+    .eq("status", "draft");
+  if (error) fail("saving the note", error);
+}
+
+export async function deleteNote(
+  ctx: EngineContext,
+  productionId: string,
+  noteId: string,
+): Promise<void> {
+  const note = await draftNote(ctx, productionId, noteId);
+  const { error } = await ctx.db
+    .from("review_notes")
+    .delete()
+    .eq("workspace_id", ctx.workspaceId)
+    .eq("id", note.id)
+    .eq("status", "draft");
+  if (error) fail("deleting the note", error);
+  await removeFile(ctx.db, ctx.workspaceId, note.crop_path);
+}
+
+/** Matthew is happy with the answer. */
+export async function resolveNote(
+  ctx: EngineContext,
+  productionId: string,
+  noteId: string,
+): Promise<void> {
+  const note = await getNote(ctx.db, ctx.workspaceId, productionId, noteId);
+  if (note.status !== "answered" && note.status !== "not_changed") {
+    throw new FactoryError("not_answered", "Only an answered note can be resolved.");
+  }
+  const { error } = await ctx.db
+    .from("review_notes")
+    .update({ status: "resolved" })
+    .eq("workspace_id", ctx.workspaceId)
+    .eq("id", note.id);
+  if (error) fail("resolving the note", error);
+}
+
+/** Not happy: the same note again, as a new draft on the version that answered it. */
+export async function reopenNote(
+  ctx: EngineContext,
+  productionId: string,
+  noteId: string,
+): Promise<{ id: string; number: number }> {
+  const note = await getNote(ctx.db, ctx.workspaceId, productionId, noteId);
+  if (!note.answered_in_version) {
+    throw new FactoryError("not_answered", "Only an answered note can be reopened.");
+  }
+  const target = await getVersion(ctx.db, ctx.workspaceId, productionId, note.answered_in_version);
+  return addNote(ctx, productionId, target.id, {
+    kind: note.kind as NoteKind,
+    tS: note.kind === "general" ? null : Math.min(note.t_s ?? 0, target.duration_s ?? Infinity),
+    box: (note.box as NoteBox | null) ?? null,
+    text: note.text,
+    cropPath: null,
+  });
 }

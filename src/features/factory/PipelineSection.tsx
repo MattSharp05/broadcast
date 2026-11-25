@@ -150,7 +150,7 @@ export function PipelineSection({
   );
 }
 
-function PromptBox({
+export function PromptBox({
   prompt,
   notify,
 }: {

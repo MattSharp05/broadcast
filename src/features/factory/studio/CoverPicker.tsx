@@ -93,7 +93,11 @@ export function CoverPicker({
             videoRef={videoRef}
             notesOn={false}
           />
-          <Button variant="primary" disabled={busy || !version.url} onClick={() => void takeFrame()}>
+          <Button
+            variant="primary"
+            disabled={busy || !version.url}
+            onClick={() => void takeFrame()}
+          >
             <ImageIcon aria-hidden="true" />
             Use this frame
           </Button>

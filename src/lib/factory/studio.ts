@@ -1018,6 +1018,7 @@ export async function markReady(
   ctx: EngineContext,
   productionId: string,
   versionId: string,
+  opts: { actor?: EventActor } = {},
 ): Promise<void> {
   const ws = ctx.workspaceId;
   const { version, pack, caption, hashtags, checks } = await packChecks(
@@ -1062,7 +1063,7 @@ export async function markReady(
     .eq("id", pack.id);
   if (error) fail("marking the pack ready", error);
   await logEvent(ctx, productionId, {
-    actor: "matthew",
+    actor: opts.actor ?? "matthew",
     intent: `Marked ${versionLabel(version.number)} ready to post.`,
   });
 }

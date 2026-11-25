@@ -67,6 +67,8 @@ export async function scheduleVersion(
     accountId: string;
     timing: ScheduleTiming;
     timezone: string;
+    /** Who scheduled it, for the activity feed: Matthew's click, or an approved routine. */
+    actor?: "matthew" | "system";
   },
 ): Promise<{ postId: string; scheduledAt: Date | null; message: string }> {
   const ws = ctx.workspaceId;
@@ -168,7 +170,7 @@ export async function scheduleVersion(
     ? whenLabel(post.scheduledAt, ctx.now, input.timezone)
     : "when a slot opens";
   await logEvent(ctx, p.id, {
-    actor: "matthew",
+    actor: input.actor ?? "matthew",
     intent: `Scheduled ${versionLabel(version.number)} for @${account.data.handle}, ${when}.`,
   });
   return {

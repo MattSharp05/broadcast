@@ -21,13 +21,13 @@ export interface RoutineAuth {
   routineId: string;
 }
 
-type TokenRow = {
+interface TokenRow {
   id: string;
   workspace_id: string;
   production_id: string | null;
   routine_id: string | null;
   kind: WorkspaceKind;
-};
+}
 
 async function checkToken(admin: Db, header: string | null, now: Date): Promise<TokenRow | null> {
   const token = bearerToken(header);
@@ -72,5 +72,10 @@ export async function authenticateRoutineToken(
 ): Promise<RoutineAuth | null> {
   const row = await checkToken(admin, header, now);
   if (!row?.routine_id) return null;
-  return { tokenId: row.id, workspaceId: row.workspace_id, kind: row.kind, routineId: row.routine_id };
+  return {
+    tokenId: row.id,
+    workspaceId: row.workspace_id,
+    kind: row.kind,
+    routineId: row.routine_id,
+  };
 }

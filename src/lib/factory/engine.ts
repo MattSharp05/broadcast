@@ -182,7 +182,16 @@ export async function fireStep(
 
   const token = await mintFactoryToken(ctx, id);
   const appUrl = ctx.appUrl ?? configuredAppOrigin() ?? "http://localhost:3000";
-  const result: FireResult = await fireRoutine({ productionId: id, step, appUrl, token, note });
+  // A routine's video (ADR 0009): one session runs every step, from the first.
+  const p = await getProduction(ctx.db, ws, id);
+  const whole = p.run_mode === "one_session" && step === "idea" && !note;
+  const result: FireResult = await fireRoutine({
+    productionId: id,
+    step: whole ? "all" : step,
+    appUrl,
+    token,
+    note,
+  });
   if (result.kind === "session") {
     await updateStep(ctx.db, ws, id, step, {
       session_id: result.sessionId,
@@ -513,7 +522,24 @@ export async function approveStep(
   const next = nextStep(step, p.use_avatar);
   if (next) {
     const nextRow = steps.find((s) => s.step === next);
-    if (nextRow && nextRow.status !== "approved") return fireStep(ctx, id, next, null);
+    if (nextRow && nextRow.status !== "approved") {
+      // One session runs the whole video: it goes straight on with the next step (no new fire).
+      if (p.run_mode === "one_session" && opts.auto && !sandbox(ctx)) {
+        await updateStep(ctx.db, ws, id, next, {
+          status: "running",
+          progress: 0,
+          message: "The video's session goes on with this step.",
+          attempt: nextRow.attempt + 1,
+          started_at: ctx.now.toISOString(),
+          finished_at: null,
+          session_id: p.session_id,
+          session_url: p.session_url,
+        });
+        await refreshStatus(ctx, id);
+        return { kind: "session", sessionUrl: p.session_url ?? "" };
+      }
+      return fireStep(ctx, id, next, null);
+    }
   }
   await refreshStatus(ctx, id);
   return null;
@@ -533,6 +559,10 @@ export async function redoFrom(
       "scheduled",
       "This video is already queued. Remove the post first, or remake it.",
     );
+  }
+  // A redo runs in its own session, and every step after it too.
+  if (p.run_mode === "one_session") {
+    await updateProduction(ctx.db, ws, id, { run_mode: "per_step" });
   }
   const order = stepsFor(p.use_avatar);
   const later = order.slice(order.indexOf(step) + 1);

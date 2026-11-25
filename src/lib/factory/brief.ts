@@ -12,6 +12,7 @@ import {
 import { capsFor, checkBudget } from "@/lib/domain/factory/budget";
 import { faceModel } from "@/lib/domain/factory/models";
 import { STYLE_PACKS } from "@/lib/domain/factory/styles";
+import { parseConfig } from "@/lib/domain/routines";
 import { VIDEOS_BUCKET } from "@/lib/db/videos";
 import { signedUrlFor } from "./assets";
 import type { EngineContext } from "./engine";
@@ -105,6 +106,7 @@ export async function buildBrief(ctx: EngineContext, id: string) {
     })),
   );
   const batchNotes = batch ? await notesOfBatch(ctx.db, ws, batch.id) : [];
+  const routine = await routineBrief(ctx, p.id, p.routine_id);
   return {
     video: {
       id: p.id,
@@ -149,6 +151,9 @@ export async function buildBrief(ctx: EngineContext, id: string) {
           }
         : null,
       script: p.script,
+      genre: p.genre,
+      tags: p.tags,
+      run_mode: p.run_mode,
       // Comparing styles (BC-41): the style step shows the same beat in 2–3 of these.
       style_compare: p.compare_styles
         ? {
@@ -207,6 +212,8 @@ export async function buildBrief(ctx: EngineContext, id: string) {
         })),
       ),
     },
+    // A routine's video (ADR 0009): made with no one watching; see docs/factory-api.md → Routines.
+    routine,
     batch: batch
       ? {
           id: batch.id,
@@ -225,5 +232,46 @@ export async function buildBrief(ctx: EngineContext, id: string) {
           ),
         }
       : null,
+  };
+}
+
+/** The routine a video belongs to: its rules, references and the slot's brief. */
+async function routineBrief(ctx: EngineContext, productionId: string, routineId: string | null) {
+  if (!routineId) return null;
+  const ws = ctx.workspaceId;
+  const [routine, slot] = await Promise.all([
+    ctx.db
+      .from("routines")
+      .select("id, name, approval, config")
+      .eq("workspace_id", ws)
+      .eq("id", routineId)
+      .maybeSingle(),
+    ctx.db
+      .from("routine_slots")
+      .select("id, position, post_at, brief")
+      .eq("workspace_id", ws)
+      .eq("production_id", productionId)
+      .maybeSingle(),
+  ]);
+  if (!routine.data) return null;
+  const config = parseConfig(routine.data.config);
+  return {
+    id: routine.data.id,
+    name: routine.data.name,
+    approval: routine.data.approval,
+    autonomous: true,
+    references: config.references,
+    rules: config.rules,
+    slot: slot.data
+      ? {
+          id: slot.data.id,
+          position: slot.data.position,
+          post_at: slot.data.post_at,
+          brief: slot.data.brief,
+        }
+      : null,
+    // What a routine's render checkpoint must carry, since no one approves the steps.
+    render_must_include: ["review", "cover", "cover_t_s", "caption", "hashtags"],
+    hero_assets: false,
   };
 }

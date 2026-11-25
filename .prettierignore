@@ -6,3 +6,4 @@ pnpm-lock.yaml
 next-env.d.ts
 docs/
 *.md
+.claude/worktrees

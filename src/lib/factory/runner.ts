@@ -17,8 +17,11 @@ export const ROUTINE_FIRE_URL = "https://api.anthropic.com/v1/claude_code/routin
 export const ROUTINE_BETA = "experimental-cc-routine-2026-04-01";
 export const ROUTINE_API_VERSION = "2023-06-01";
 
-/** A pipeline step, or `revise`: answer a batch of Matthew's notes with a new version (BC-36). */
-export type FireStep = FactoryStep | "revise";
+/**
+ * A pipeline step; `revise`: answer a batch of Matthew's notes with a new version (BC-36); `all`:
+ * one session runs every step in order (a routine's video, ADR 0009).
+ */
+export type FireStep = FactoryStep | "revise" | "all";
 
 export interface FirePayload {
   productionId: string;
@@ -57,7 +60,37 @@ export async function fireRoutine(
   env: Record<string, string | undefined> = process.env,
   fetchImpl: typeof fetch = fetch,
 ): Promise<FireResult> {
-  const text = firePayloadText(payload);
+  return fireText(firePayloadText(payload), env, fetchImpl);
+}
+
+/** What a routine's planner session gets (docs/factory-api.md → Routines). */
+export function plannerPayloadText(p: {
+  routineId: string;
+  appUrl: string;
+  token: string;
+}): string {
+  return [
+    "Broadcast routine plan. Follow .claude/skills/broadcast-factory/SKILL.md (Routines: plan).",
+    `BROADCAST_URL=${p.appUrl}`,
+    `BROADCAST_TOKEN=${p.token}`,
+    `BROADCAST_ROUTINE_ID=${p.routineId}`,
+    "STEP=plan",
+  ].join("\n");
+}
+
+export async function firePlanner(
+  payload: { routineId: string; appUrl: string; token: string },
+  env: Record<string, string | undefined> = process.env,
+  fetchImpl: typeof fetch = fetch,
+): Promise<FireResult> {
+  return fireText(plannerPayloadText(payload), env, fetchImpl);
+}
+
+async function fireText(
+  text: string,
+  env: Record<string, string | undefined>,
+  fetchImpl: typeof fetch,
+): Promise<FireResult> {
   if (!routineConfigured(env)) {
     return {
       kind: "manual",

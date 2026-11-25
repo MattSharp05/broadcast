@@ -2,6 +2,7 @@ import type { Json } from "@/lib/db/types";
 import { collectStats } from "./collect-stats";
 import { publishDue } from "./publish-due";
 import { refreshTokens } from "./refresh-tokens";
+import { advanceRoutines } from "@/lib/routines/builder";
 import type { Db, Step, StepSummary } from "./types";
 
 export type { Step, StepSummary, TickContext } from "./types";
@@ -10,10 +11,11 @@ export type { Step, StepSummary, TickContext } from "./types";
 export const TICK_BUDGET_MS = 20_000;
 
 /**
- * The steps every tick runs, in order: publishing first, then stats (BC-21), then token refresh and
- * connection checks (BC-19), each in what is left of the budget.
+ * The steps every tick runs, in order: publishing first, then routines (ADR 0009: start, finish
+ * and schedule their videos), then stats (BC-21), then token refresh and connection checks
+ * (BC-19), each in what is left of the budget.
  */
-export const STEPS: readonly Step[] = [publishDue, collectStats, refreshTokens];
+export const STEPS: readonly Step[] = [publishDue, advanceRoutines, collectStats, refreshTokens];
 
 export interface TickOptions {
   db: Db;

@@ -23,6 +23,7 @@ import { PipelineSection } from "./PipelineSection";
 import { HeroSection } from "./HeroSection";
 import { ReworkSection } from "./ReworkSection";
 import { CaptionSection } from "./CaptionSection";
+import { GenreTagsField } from "./GenreTagsField";
 import { StyleSection } from "./StyleSection";
 import { STATUS_TONE, STATUS_WORD } from "./status";
 import styles from "./factory.module.css";
@@ -307,6 +308,7 @@ function IdeaSection({ video, save, pending }: SectionProps) {
           Save idea
         </Button>
       </div>
+      <GenreTagsField genre={video.genre} tags={video.tags} save={save} pending={pending} />
     </section>
   );
 }

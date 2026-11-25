@@ -52,6 +52,11 @@ export interface FactorySeed {
   packs: Insert<"delivery_packs">[];
   /** Storyboard cards (BC-40). */
   cards: Insert<"board_cards">[];
+  /** Routines (ADR 0009): loaded before productions (a video names its routine), slots after. */
+  routineTemplates: Insert<"routine_templates">[];
+  routines: Insert<"routines">[];
+  routineAccounts: Insert<"routine_accounts">[];
+  routineSlots: Insert<"routine_slots">[];
 }
 
 export function emptyFactory(): FactorySeed {
@@ -71,6 +76,10 @@ export function emptyFactory(): FactorySeed {
     events: [],
     packs: [],
     cards: [],
+    routineTemplates: [],
+    routines: [],
+    routineAccounts: [],
+    routineSlots: [],
   };
 }
 

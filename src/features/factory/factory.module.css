@@ -706,3 +706,12 @@
     grid-auto-columns: 78%;
   }
 }
+
+/* Genre and tags under the idea (the Posts tab filters on them). */
+.genreField {
+  width: 220px;
+}
+
+.tagAdd {
+  width: 200px !important;
+}

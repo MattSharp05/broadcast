@@ -5,10 +5,12 @@ Broadcast is Matthew's own system for posting short videos to social media autom
 backlog of videos. A scheduler publishes due posts through the platforms' official APIs
 (Instagram Reels in the MVP, TikTok in v1) and collects stats afterwards. Videos arrive through
 the dashboard's **Add content** or `POST /api/content` (used by video-editor sessions). The
-dashboard has three tabs: Workflow (a pan/zoom canvas of every account's timeline around "now"),
-Accounts (a table with tags, descriptions and the Add account wizard) and Content Factory (one page
+dashboard has five tabs: Workflow (a pan/zoom canvas of every account's timeline around "now"),
+Accounts (a table with tags, descriptions and the Add account wizard), Content Factory (one page
 per video: idea → style → avatar → voice → music → render → rework → caption → schedule, run by
-Claude sessions; ADR 0007).
+Claude sessions; ADR 0007), Posts (every post with its video's genre, style, voice, song, routine,
+tags and stats; filter, sort and compare at the same age; bulk tags such as "Trip") and Routines
+(videos made and scheduled automatically over a time frame; ADR 0009).
 
 ## Workflow
 Follows the `dev-workflow` skill (ticket-driven: Notion → branch → PR → QA → merge).
@@ -33,7 +35,8 @@ numerals, no monospace labels or all-caps eyebrows.
 - Never store social media passwords. Only OAuth tokens, encrypted server-side; the browser never
   sees them.
 - The content API only queues videos. Posting happens only through the scheduler and the
-  dashboard.
+  dashboard. Sessions never queue or post; a routine schedules its finished videos only when its
+  approval is "Post automatically", which Matthew chose when approving its plan (ADR 0009).
 - Never post the same queue item twice; check the account's Instagram quota before publishing.
 
 ## Stack
@@ -59,13 +62,14 @@ Playwright · MSW. Details and reasons: `docs/TDD.md`, ADRs in `docs/decisions/`
 - `node scripts/broadcast-upload.mjs --file x.mp4 --accounts a,b [--caption …] [--pin …]`: queues a
   video through the content API (`BROADCAST_URL` + `BROADCAST_API_KEY` from `/dev/api-keys`);
   see `docs/content-api.md`.
-- Content Factory sessions: `docs/factory-api.md` (factory API + `/api/gen/*` proxy, factory tokens);
+- Content Factory sessions: `docs/factory-api.md` (factory API + `/api/gen/*` proxy, factory tokens;
+  routines: the planner session `STEP=plan` and one session per video `STEP=all`, ADR 0009);
   the face and 3D model registries are mirrored from video-editor with `node scripts/sync-face-models.mjs` and `node scripts/sync-mesh-models.mjs`, and the style list with `node scripts/sync-style-packs.mjs [../video-editor]` (video-editor is the source of truth; sync after any price, status or style change there).
 - Scenarios: `/workflow?scenario=<name>[&now=ISO]` (signed in) resets the Sandbox and loads one;
   `/dev` lists them. Register new ones in `src/lib/scenarios/index.ts`.
 
 ## Structure
-`src/app` routes · `src/features/{canvas,accounts,content,drawers}` · `src/components` shared UI ·
+`src/app` routes · `src/features/{canvas,accounts,content,drawers,factory,posts,routines}` · `src/components` shared UI ·
 `src/lib/{domain,providers,db,crypto,scenarios}` · `src/styles/tokens.css` · `supabase/migrations` ·
 `tests/e2e` · `scripts/`. Full tree in `docs/TDD.md`.
 

@@ -26,3 +26,6 @@ tests/e2e/.auth/
 .supabase/
 .DS_Store
 *.log
+
+# Agent worktrees
+.claude/worktrees/

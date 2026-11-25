@@ -1,0 +1,392 @@
+/* The Posts tab: same table look as Accounts (docs/DESIGN.md → Layout → Accounts). */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.toolbar,
+.bulk {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 14px var(--gutter);
+  padding-left: max(var(--gutter), env(safe-area-inset-left, 0px));
+  padding-right: max(var(--gutter), env(safe-area-inset-right, 0px));
+}
+
+.bulk {
+  margin: 0 var(--gutter) 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--accent-soft);
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  min-width: 0;
+  padding: 0 10px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-s);
+  background: var(--surface);
+  color: var(--ink-3);
+  box-shadow: var(--shadow);
+}
+
+.search:focus-within,
+.tagInput:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.search :global(svg.lucide) {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+.search input {
+  width: 240px;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: none;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.tagInput {
+  height: 34px;
+  width: 180px;
+  padding: 0 10px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-s);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+}
+
+/* ── table ── */
+
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 var(--gutter) 40px;
+  padding-left: max(var(--gutter), env(safe-area-inset-left, 0px));
+  padding-right: max(var(--gutter), env(safe-area-inset-right, 0px));
+}
+
+.tablewrap {
+  position: relative;
+  overflow-x: auto;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: var(--shadow);
+}
+
+.table {
+  width: 100%;
+  min-width: 1500px;
+  border-collapse: collapse;
+}
+
+.table thead th {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--ink-3);
+  font-size: 12.5px;
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.table .num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.table a {
+  color: var(--accent-ink);
+  text-decoration: none;
+}
+
+.table a:hover {
+  text-decoration: underline;
+}
+
+.sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: inherit;
+  font-weight: inherit;
+  border-radius: var(--r-xs);
+}
+
+.sort:hover,
+.sort[data-active] {
+  color: var(--ink);
+}
+
+.sort :global(svg.lucide) {
+  width: 13px;
+  height: 13px;
+}
+
+.summary th,
+.summary td {
+  background: var(--surface) !important;
+  color: var(--ink) !important;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.summary td b {
+  display: block;
+  font-weight: 600;
+}
+
+.row:hover td {
+  background: var(--surface-2);
+}
+
+.check {
+  width: 36px;
+  padding-right: 0 !important;
+}
+
+.check input {
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+  accent-color: var(--accent);
+}
+
+.video {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 220px;
+  max-width: 300px;
+}
+
+.expand {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--r-xs);
+  color: var(--ink-3);
+}
+
+.expand:hover,
+.expand:focus-visible {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.expand :global(svg.lucide) {
+  width: 16px;
+  height: 16px;
+}
+
+.thumb {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 27px;
+  height: 48px;
+  overflow: hidden;
+  border-radius: var(--r-xs);
+  background: var(--hover);
+  color: var(--ink-3);
+}
+
+.thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.thumb :global(svg.lucide) {
+  width: 14px;
+  height: 14px;
+}
+
+.title {
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.table .title a {
+  color: var(--ink);
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+/* Long voice and song names: two lines, the full name in the tooltip. */
+.clip {
+  min-width: 120px;
+  max-width: 170px;
+}
+
+.clip > span {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.status {
+  display: block;
+}
+
+.status[data-status="failed"] {
+  color: var(--bad);
+}
+
+.status[data-status="paused"] {
+  color: var(--warn);
+}
+
+.status[data-status="queued"],
+.status[data-status="publishing"] {
+  color: var(--accent-ink);
+}
+
+.small {
+  display: block;
+  color: var(--ink-3);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.summary th .small {
+  display: inline;
+}
+
+.muted {
+  color: var(--ink-3);
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 100px;
+}
+
+.hook {
+  min-width: 200px;
+  max-width: 280px;
+  color: var(--ink-2) !important;
+}
+
+.detailRow td {
+  background: var(--surface-2);
+}
+
+.detail {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr);
+  gap: 8px 14px;
+  max-width: 860px;
+  margin: 0;
+}
+
+.detail dt {
+  color: var(--ink-3);
+  font-size: 12.5px;
+}
+
+.detail dd {
+  margin: 0;
+  color: var(--ink);
+  line-height: 1.45;
+}
+
+.detail a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.detail a :global(svg.lucide) {
+  width: 14px;
+  height: 14px;
+}
+
+.script {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.caption {
+  white-space: pre-wrap;
+}
+
+.none {
+  padding: 28px !important;
+  color: var(--ink-3) !important;
+  text-align: center;
+}
+
+.empty {
+  padding: 56px 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: var(--ink-2);
+  text-align: center;
+}
+
+.empty p {
+  margin: 0;
+}
+
+@media (max-width: 760px) {
+  .toolbar,
+  .scroll {
+    --gutter: 16px;
+  }
+
+  .bulk {
+    margin: 0 16px 12px;
+  }
+
+  .search input {
+    width: 140px;
+  }
+}

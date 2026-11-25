@@ -20,8 +20,9 @@ NOTE=shorter hook            (only on a redo)
 BATCH=<review batch id>      (only on STEP=revise)
 ```
 
-`STEP` is one of the pipeline steps below, or `revise`: answer a batch of Matthew's notes on a
-version with a new version (see "Versions and revise").
+`STEP` is one of the pipeline steps below; `revise`: answer a batch of Matthew's notes on a
+version with a new version (see "Versions and revise"); or, for a routine (ADR 0009), `all` (run
+every step of the video) or `plan` (write a routine's briefs). See "Routines".
 
 `BROADCAST_TOKEN` is a **factory token**: scoped to this one video, valid for 24 hours, stored by
 Broadcast as a hash only. It is not the content API key and never a provider key (fal and the
@@ -262,6 +263,68 @@ GET  /api/gen/mesh-jobs/{job_id} -> {"status","output_url" (Broadcast's copy of 
   rebuilt from the registry; the client's `fal_input` and `quote_usd` are advisory.
 - A result without a `.glb` fails the job. A finished `.glb` is copied into Broadcast's storage, so
   the URL outlives fal's.
+
+## Routines (ADR 0009)
+A routine makes many videos over a time frame with no one approving steps. Two kinds of session
+take part; the video-editor skill handles both.
+
+### The planner (`STEP=plan`)
+"Plan videos" on the routine's page fires:
+
+```
+Broadcast routine plan. Follow .claude/skills/broadcast-factory/SKILL.md (Routines: plan).
+BROADCAST_URL=https://broadcast-iota-murex.vercel.app
+BROADCAST_TOKEN=bcf_live_…          a token for this one routine (24 h); a video's token is refused
+BROADCAST_ROUTINE_ID=<routine id>
+STEP=plan
+```
+
+```
+GET  /api/routines/{id}/brief
+  -> {"routine": {"name","starts_at","ends_at","timezone","posts_per_day","cadence","approval","tags",
+                  "references":[{"url","note"}],"rules","use_avatar","genre_mix":[{"genre","weight"}],
+                  "genre_targets":{"brainteaser":8,"explainer":12}},
+      "accounts": [{"id","handle","description","tags"}],
+      "slots": [{"id","position","account","post_at"}],
+      "allowed": {"styles":[{"key","label","suits"}],"voices":[{"key","label","description"}],
+                  "music":[{"key","title","artist","mood","bpm"}]},
+      "past_videos": [{"title","idea","hook","genre","style","voice","music","account","views_24h","source"}]}
+POST /api/routines/{id}/plan
+  {"slots": [{"slot_id","title","idea","genre","hook","style","voice_key","music_key","notes"}]}
+  -> 200 {"status":"planned","slots":20}
+  -> 422 {"error":"plan_issues","issues":[{"slot_id","message"}]}   nothing saved; fix and post all again
+POST /api/routines/{id}/fail  {"message"} -> 204                       the routine goes back to draft
+```
+
+- One brief per slot, every slot. `style`, `voice_key` and `music_key` must come from `allowed`;
+  `genre` from `genre_mix` when it has one (meet `genre_targets`, and spread genres out).
+- **Never repeat an idea** from `past_videos` (made, or planned by another routine) or from
+  another slot: the same title, or most words in common, is refused. `views_24h` shows what did
+  well; lean on what worked without copying it.
+- Follow `rules` (they often ask for an experiment, e.g. rotating voices or hook styles) and say in
+  `notes` which experiment a slot belongs to. `idea` is what the video shows (20+ characters);
+  `hook` is its first line.
+
+### A routine's video (`STEP=all`)
+Each slot's video starts `lead_minutes` before it posts, as a production with every step on
+autopilot, fired once with `STEP=all`. The session runs `idea → script → style → visuals →
+(face_quote) → render` itself: post each step's checkpoint as usual; the response says
+`{"status":"approved","next_step":"script"}`, so go straight on with `next_step` (no new session
+comes). If a step answers `"waiting"`, stop: the routine reports what it waits for.
+
+The brief's `routine` block has the routine's `rules`, `references`, the slot's `brief` (title,
+idea, genre, hook, style, voice, music) and `post_at`; `video.genre` and `video.tags` are set.
+`hero_assets` is false: don't propose hero 3D assets. With no one watching, the **render**
+checkpoint carries four more fields:
+
+| Field | |
+|---|---|
+| `review` | `{"passed": true|false, "notes": ["…"]}`: your own check of the render (watch the contact sheet: text cut off, wrong order, silence, a frame that breaks the style). `false` redoes the render once with your notes as `NOTE`. |
+| `cover`, `cover_t_s` | a 1080×1920 JPEG of the best frame, uploaded through `/assets` (`image/jpeg`), and its time. Required: no cover, no post. |
+| `caption`, `hashtags` | the caption (≤ 2200 with hashtags; credit lines are added if missing) and up to 30 hashtags. |
+
+Broadcast then saves the pack, runs the ready-to-post checks and, depending on the routine's
+approval, schedules the video at its slot or leaves it for Matthew. Still never queue it yourself.
 
 ## Sandbox
 In the Sandbox workspace no session runs: a fake runner posts canned outputs (and a canned intent)

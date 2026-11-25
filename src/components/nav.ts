@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { LayoutGrid, Lightbulb, Users } from "lucide-react";
+import { LayoutGrid, Lightbulb, Repeat, Table2, Users } from "lucide-react";
 
 export interface NavItem {
   href: string;
@@ -13,6 +13,8 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { href: "/workflow", label: "Workflow", icon: LayoutGrid },
   { href: "/accounts", label: "Accounts", icon: Users },
   { href: "/factory", label: "Content Factory", icon: Lightbulb, marker: "v1" },
+  { href: "/posts", label: "Posts", icon: Table2 },
+  { href: "/routines", label: "Routines", icon: Repeat },
 ];
 
 /** A tab is active on its own route and on any route below it. */

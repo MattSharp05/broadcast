@@ -34,13 +34,16 @@ video-editor session ── POST /api/content/uploads + /api/content (API key) �
 ## Project structure
 ```
 src/
-  app/                    routes: (app)/workflow, (app)/accounts, (app)/factory, login, dev, api/*
+  app/                    routes: (app)/workflow, (app)/accounts, (app)/factory, (app)/posts, (app)/routines, login, dev, api/*
   components/             shared UI (Button, Drawer, Modal, Table, Toast, Popover…)
   features/
     canvas/               Workflow canvas: engine (pan/zoom/minimap) + content (band, cards, arrows)
     accounts/             Accounts table, wizard
     content/              Add content modal, upload
     drawers/              post / account / slot detail drawers
+    factory/              Content Factory pages (studio, avatar studio, settings)
+    posts/                Posts table: filters, sort, stats at an age, summary row, bulk tags
+    routines/             Routines: list, form, templates, the plan and its slots (ADR 0009)
   lib/
     domain/               pure logic (queue planner, publish machine, stats schedule)
     providers/            SocialProvider + instagram + fake

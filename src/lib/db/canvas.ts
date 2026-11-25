@@ -59,10 +59,10 @@ function date(value: string | null): Date | null {
 }
 
 /** Sandbox sample stills (public files): shown as they are, never signed. */
-const SAMPLE_PREFIX = "/factory/fake/";
+export const SAMPLE_PREFIX = "/factory/fake/";
 
 /** Signed URLs for thumbnails; a thumbnail that can't be signed falls back to the placeholder. */
-async function signThumbnails(
+export async function signThumbnails(
   db: SupabaseClient<Database>,
   paths: readonly string[],
 ): Promise<Map<string, string>> {

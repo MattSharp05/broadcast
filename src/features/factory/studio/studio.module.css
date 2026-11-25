@@ -1090,3 +1090,11 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.manual {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-basis: 100%;
+  min-width: 0;
+}

@@ -29,6 +29,7 @@ export default async function FactoryPage() {
       .eq("workspace_id", workspace.id)
       .order("created_at"),
   ]);
+  if (accounts.error) throw new Error(`Reading the accounts failed: ${accounts.error.message}`);
   const inProduction = data.videos.filter((v) => ["running", "waiting"].includes(v.status)).length;
   const ready = data.videos.filter((v) => v.status === "ready").length;
   return (
@@ -58,7 +59,7 @@ export default async function FactoryPage() {
           </>
         }
       />
-      <FactoryList videos={cards} accounts={accounts.data ?? []} />
+      <FactoryList videos={cards} accounts={accounts.data} />
     </>
   );
 }

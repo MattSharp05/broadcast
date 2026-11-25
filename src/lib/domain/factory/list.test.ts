@@ -23,12 +23,18 @@ describe("studio list cards", () => {
     expect(cardLine({ ...base, status: "waiting", stepLabel: "Script" })).toBe(
       "Script waits for you",
     );
+    expect(cardLine({ ...base, newestVersion: 2, status: "failed", stepLabel: "Render" })).toBe(
+      "v2, render failed",
+    );
+    expect(cardLine({ ...base, post: { status: "published", when: "Yesterday, 14:00" } })).toBe(
+      "Posted yesterday, 14:00",
+    );
   });
 
   it("puts each video under the right filters", () => {
     const waiting = { ...base, status: "waiting" };
-    const answered = { ...base, newestVersion: 3, answersToRead: 2 };
-    const ready = { ...base, readyPack: true };
+    const answered = { ...base, status: "running", newestVersion: 3, answersToRead: 2 };
+    const ready = { ...base, status: "running", readyPack: true };
     const running = { ...base, status: "running" };
     const queued = {
       ...base,
@@ -41,6 +47,8 @@ describe("studio list cards", () => {
       inFilter("needs_me", f),
     );
     expect(needsMe).toEqual([true, true, true, false, false, false]);
+    expect(inFilter("needs_me", { ...base, status: "failed" })).toBe(true);
+    expect(inFilter("needs_me", { ...base, status: "ready" })).toBe(true);
     expect(inFilter("in_progress", running)).toBe(true);
     expect(inFilter("in_progress", { ...base, batchOpen: true })).toBe(true);
     expect(inFilter("scheduled", queued)).toBe(true);

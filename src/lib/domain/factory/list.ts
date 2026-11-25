@@ -36,11 +36,15 @@ const QUEUED = new Set(["queued", "publishing", "paused"]);
 
 /** One line under the title: "v3, 2 notes open", "ready to post", "scheduled for Tue 18:00"… */
 export function cardLine(f: ListFacts): string {
-  if (f.post?.status === "published") return `Posted ${f.post.when}`;
-  if (f.post && QUEUED.has(f.post.status)) return `Scheduled for ${f.post.when}`;
+  if (f.post?.status === "published") return `Posted ${midSentence(f.post.when)}`;
+  if (f.post && QUEUED.has(f.post.status)) return `Scheduled for ${midSentence(f.post.when)}`;
   if (f.readyPack) return "Ready to post";
   if (f.newestVersion !== null) {
     const v = `v${f.newestVersion}`;
+    // A step that needs Matthew (or failed) matters more than the notes.
+    if (f.status === "failed" && f.stepLabel) return `${v}, ${f.stepLabel.toLowerCase()} failed`;
+    if (f.status === "waiting" && f.stepLabel)
+      return `${v}, ${f.stepLabel.toLowerCase()} waits for you`;
     if (f.answersToRead) return `${v}, ${plural(f.answersToRead, "answer")} to read`;
     if (f.openNotes) return `${v}, ${plural(f.openNotes, "note")} open`;
     return v;
@@ -50,6 +54,11 @@ export function cardLine(f: ListFacts): string {
   if (f.status === "waiting")
     return f.stepLabel ? `${f.stepLabel} waits for you` : "Waiting for you";
   return f.stepLabel ? `${f.stepLabel} in progress` : "In progress";
+}
+
+/** "Today, 18:00" → "today, 18:00" after other words (sentence case); weekdays keep their capital. */
+function midSentence(when: string): string {
+  return when.replace(/^(Today|Tomorrow|Yesterday)\b/, (w) => w.toLowerCase());
 }
 
 function plural(n: number, word: string): string {
@@ -64,8 +73,16 @@ export function inFilter(filter: ListFilter, f: ListFacts): boolean {
     case "all":
       return true;
     case "needs_me":
-      // A step waits for approval, answers wait to be read, or a ready video isn't scheduled.
-      return !queued && !posted && (f.status === "waiting" || f.answersToRead > 0 || f.readyPack);
+      // A step waits or failed, answers wait to be read, or a finished video isn't scheduled.
+      return (
+        !queued &&
+        !posted &&
+        (f.status === "waiting" ||
+          f.status === "failed" ||
+          f.status === "ready" ||
+          f.answersToRead > 0 ||
+          f.readyPack)
+      );
     case "in_progress":
       return !queued && !posted && (f.status === "running" || f.batchOpen);
     case "scheduled":

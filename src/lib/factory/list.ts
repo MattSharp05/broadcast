@@ -120,7 +120,11 @@ export async function loadStudioList(): Promise<VideoCard[]> {
     (prods.data ?? []).map(async (p) => {
       const newest = (versions.data ?? []).find((v) => v.production_id === p.id) ?? null;
       const own = (notes.data ?? []).filter((n) => n.production_id === p.id);
-      const step = (steps.data ?? []).find((s) => s.production_id === p.id);
+      const ownSteps = (steps.data ?? []).filter((s) => s.production_id === p.id);
+      const step =
+        ownSteps.find((s) => s.status === "failed") ??
+        ownSteps.find((s) => s.status === "waiting") ??
+        ownSteps.find((s) => s.status === "running");
       const post = p.post_id ? postOf.get(p.post_id) : undefined;
       const postWhen = post?.published_at ?? post?.scheduled_at ?? null;
       const last = (events.data ?? []).find((e) => e.production_id === p.id);

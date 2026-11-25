@@ -7,6 +7,7 @@ import { startFromPrompt } from "@/app/(app)/factory/actions";
 import { Button } from "@/components/Button";
 import { Toast } from "@/components/Toast";
 import { STYLE_PACKS } from "@/lib/domain/factory/styles";
+import { PromptBox as PipelinePrompt } from "../PipelineSection";
 import styles from "./studio.module.css";
 
 /**
@@ -20,6 +21,7 @@ export function PromptBox({ accounts }: { accounts: { id: string; handle: string
   const [style, setStyle] = useState("");
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [manual, setManual] = useState<{ id: string; prompt: string; reason: string } | null>(null);
   return (
     <form
       className={styles.promptBox}
@@ -32,8 +34,18 @@ export function PromptBox({ accounts }: { accounts: { id: string; handle: string
             accountId: accountId || null,
             style: style || null,
           });
-          if (res.ok) router.push(`/factory/${res.value.id}`);
-          else setError(res.error);
+          if (!res.ok) {
+            setError(res.error);
+            return;
+          }
+          const o = res.value.outcome;
+          // No routine on Live: the prompt to paste is shown here, with the video's link.
+          if (o.kind === "manual") {
+            setManual({ id: res.value.id, prompt: o.prompt, reason: o.reason });
+            return;
+          }
+          if (o.kind === "error") setError(o.message);
+          router.push(`/factory/${res.value.id}`);
         });
       }}
     >
@@ -83,6 +95,17 @@ export function PromptBox({ accounts }: { accounts: { id: string; handle: string
         <Sparkles aria-hidden="true" />
         Start
       </Button>
+      {manual ? (
+        <div className={styles.manual}>
+          <PipelinePrompt
+            prompt={manual}
+            notify={(m) => {
+              setError(m);
+            }}
+          />
+          <a href={`/factory/${manual.id}`}>Open the video</a>
+        </div>
+      ) : null}
       <Toast
         message={error}
         tone="error"

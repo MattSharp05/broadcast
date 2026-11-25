@@ -130,17 +130,23 @@ export async function startFromPrompt(input: {
       ctx.db.from("factory_music").select("key").order("sort").limit(1).maybeSingle(),
     ]);
     const id = await createProduction(ctx, { idea, accountId });
-    await updateProduction(ctx.db, ctx.workspaceId, id, {
-      style:
-        (typeof input.style === "string" ? input.style : null) ??
-        last.data?.style ??
-        STYLE_PACKS[0]?.key ??
-        null,
-      voice_key: last.data?.voice_key ?? voice.data?.key ?? null,
-      music_key: last.data?.music_key ?? music.data?.key ?? null,
-    });
-    const outcome = await startProduction(ctx, id);
-    return { id, outcome };
+    try {
+      await updateProduction(ctx.db, ctx.workspaceId, id, {
+        style:
+          (typeof input.style === "string" ? input.style : null) ??
+          last.data?.style ??
+          STYLE_PACKS[0]?.key ??
+          null,
+        voice_key: last.data?.voice_key ?? voice.data?.key ?? null,
+        music_key: last.data?.music_key ?? music.data?.key ?? null,
+      });
+      const outcome = await startProduction(ctx, id);
+      return { id, outcome };
+    } catch (err) {
+      // Nothing started: no half-made draft is left behind for each retry.
+      await ctx.db.from("productions").delete().eq("workspace_id", ctx.workspaceId).eq("id", id);
+      throw err;
+    }
   });
 }
 

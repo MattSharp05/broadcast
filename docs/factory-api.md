@@ -172,6 +172,26 @@ full MP4 and the proxy through `/assets`, then posts the new version with one an
 - The notes get your verdict and reply ("in v3"), the batch is answered, and the activity feed
   shows your intent. Still never queued.
 
+## Import an existing project (BC-44)
+For a video-editor project made before the factory (`projects/<slug>/`), a session brings it into
+the studio as a video with v1. The call uses the **content API key** (`/dev/api-keys`, the same
+`Authorization: Bearer` key as `/api/content`), not a factory token; it never queues anything.
+
+```
+POST /api/factory/import
+  {"project_slug": "moon-tides-01", "title": "Moon tides", "idea": "<brief.md summary>", "style"?: "realistic-3d"}
+  -> 201 {"video_id", "token"}                   token: a factory token for this video (24 h)
+  -> 200 {"video_id", "token", "resumed": true}  imported before but v1 never arrived: a fresh token
+  -> 409 {"error":"already_imported","video_id"} the project is in the studio with its v1 already
+```
+
+The video has no account yet (Matthew picks one before scheduling) and every step is `skipped`
+except `render`, which waits for v1. Upload the render (and proxy) through `/assets` with the token,
+then post `POST /api/factory/{id}/versions` **without** `batch_id`:
+`{"upload", "proxy"?, "git_sha", "fps"?, "loudness_lufs"?, "true_peak_db"?, "imagery_credits"?, "intent"}`
+→ `201 {"version", "number": 1}` (`made_by: import`). The render then waits for Matthew like any
+render. A video made in the pipeline refuses a version without a batch (`422 bad_batch`).
+
 ## Generation proxy (avatar clips)
 Provider keys never leave Broadcast. `gen_face.py` with `FACE_VIA=broadcast` sends its paid calls
 here; the caps and the job log live here.

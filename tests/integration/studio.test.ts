@@ -7,6 +7,8 @@ import { GET as briefGet } from "@/app/api/factory/[id]/brief/route";
 import { POST as checkpointPost } from "@/app/api/factory/[id]/checkpoint/route";
 import { POST as progressPost } from "@/app/api/factory/[id]/progress/route";
 import { POST as versionsPost } from "@/app/api/factory/[id]/versions/route";
+import { POST as importRoute } from "@/app/api/factory/import/route";
+import { createApiKey } from "@/lib/db/api-keys";
 import { WORKSPACE_IDS } from "@/lib/db/workspaces";
 import { approveBoard, deleteCard, moveCard, redoCard, updateCard } from "@/lib/factory/board";
 import { createProduction, mintFactoryToken } from "@/lib/factory/engine";
@@ -576,3 +578,96 @@ describe("storyboard (Board tab)", () => {
     expect(p.data?.board_approved_at).not.toBeNull();
   });
 });
+
+describe("importing a video-editor project (BC-44)", () => {
+  it("creates an import production with a token; v1 comes in through /versions with no batch", async () => {
+    await load("factory-new");
+    const { key } = await createApiKey(admin, { kind: "sandbox", name: "BC-44 test" });
+    try {
+      const imported = await importPost(key, {
+        project_slug: "moon-tides-01",
+        title: "Moon tides",
+        idea: "Why there are two high tides a day.",
+        style: "realistic-3d",
+      });
+      expect(imported.status).toBe(201);
+      const { video_id, token } = (await imported.json()) as { video_id: string; token: string };
+      const p = await admin.from("productions").select("*").eq("id", video_id).single();
+      expect(p.data).toMatchObject({
+        project_slug: "moon-tides-01",
+        account_id: null,
+        style: "realistic-3d",
+        status: "running",
+      });
+      const steps = await admin
+        .from("production_steps")
+        .select("step, status")
+        .eq("production_id", video_id);
+      expect(steps.data?.filter((s) => s.status !== "skipped").map((s) => s.step)).toEqual([
+        "render",
+      ]);
+
+      // Before v1 arrives, importing again gives a fresh token (a lost or expired one).
+      const resumed = await importPost(key, {
+        project_slug: "moon-tides-01",
+        title: "x",
+        idea: "y",
+      });
+      expect(resumed.status).toBe(200);
+      expect(await resumed.json()).toMatchObject({ video_id, resumed: true });
+      expect(
+        (await importPost(key, { project_slug: "bad slug", title: "x", idea: "y" })).status,
+      ).toBe(422);
+      expect(
+        (await importPost(key, { project_slug: "x-01", title: "x", idea: "y", style: "nope" }))
+          .status,
+      ).toBe(422);
+
+      const file = await upload(video_id, token);
+      const v1 = await call(versionsPost, { id: video_id }, token, {
+        upload: file,
+        git_sha: "9a8b7c6",
+        intent: "Imported the current film as v1.",
+      });
+      expect(v1.status).toBe(201);
+      expect(await v1.json()).toMatchObject({ number: 1 });
+      const [version] = await versionsOf(video_id);
+      expect(version).toMatchObject({ made_by: "import", batch_id: null, git_sha: "9a8b7c6" });
+      const posts = await admin
+        .from("posts")
+        .select("id")
+        .eq("media_id", version?.media_id ?? "");
+      expect(posts.data).toEqual([]);
+
+      // v1 is in: another version without a batch is refused, and importing again is too.
+      const refused = await call(versionsPost, { id: video_id }, token, {
+        upload: file,
+        git_sha: "9a8b7c6",
+      });
+      expect(refused.status).toBe(422);
+      const again = await importPost(key, { project_slug: "moon-tides-01", title: "x", idea: "y" });
+      expect(again.status).toBe(409);
+    } finally {
+      await admin.from("api_keys").delete().eq("name", "BC-44 test");
+    }
+  });
+
+  it("refuses a version without a batch for a video made in the pipeline", async () => {
+    await load("factory-versions");
+    const pid = stableUuid("factory-versions", "production", "tides");
+    const token = await mintFactoryToken(ctx, pid);
+    const res = await call(versionsPost, { id: pid }, token, { git_sha: "x", upload: "x" });
+    expect(res.status).toBe(422);
+    expect(await res.json()).toMatchObject({ error: "bad_batch" });
+  });
+});
+
+function importPost(key: string, body: unknown) {
+  return importRoute(
+    new NextRequest("http://localhost/api/factory/import", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
+      body: JSON.stringify(body),
+    }),
+  );
+}

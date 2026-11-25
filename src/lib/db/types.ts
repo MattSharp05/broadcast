@@ -646,6 +646,7 @@ export type Database = {
         Row: {
           account_id: string;
           caption: string;
+          cover_url: string | null;
           created_at: string;
           id: string;
           media_id: string | null;
@@ -660,6 +661,7 @@ export type Database = {
         Insert: {
           account_id: string;
           caption?: string;
+          cover_url?: string | null;
           created_at?: string;
           id: string;
           media_id?: string | null;
@@ -673,6 +675,7 @@ export type Database = {
         Update: {
           account_id?: string;
           caption?: string;
+          cover_url?: string | null;
           created_at?: string;
           id?: string;
           media_id?: string | null;

@@ -143,6 +143,15 @@ render and revise sessions build from the approved board (Matthew's edits includ
 `{"step": "style", "message": "Remotion couldn't load the paper texture."}` → `204`. The page
 shows the message and a Redo button.
 
+## Scheduling (BC-43)
+Sessions never schedule. On the video's **Ready to post** tab Matthew marks a version ready, then
+**Assign and schedule** creates its one post: the video's account (another account offers "Remake
+for …"), at the next free slot (pinned), a pinned time, or the end of the queue. The post carries the
+pack's caption plus hashtags, the version's media and `is_ai_generated` for avatar videos; the
+version is then the video's chosen one and is never pruned. When the post goes out the scheduler
+hands Instagram the pack's cover as `cover_url` (a signed Storage URL); without a cover Instagram
+picks a frame.
+
 ## Versions and revise (BC-36, ADR 0008)
 Every render is kept as a numbered version (v1, v2, …) instead of replacing the last one. The
 video's current version is the newest, unless one is already posted or scheduled. Storage (ADR 0008):

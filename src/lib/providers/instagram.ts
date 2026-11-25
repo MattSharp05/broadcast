@@ -777,7 +777,7 @@ export function createInstagramProvider(deps: InstagramProviderDeps): SocialProv
       };
     },
 
-    async createReelContainer(account, { videoUrl, caption, isAiGenerated }) {
+    async createReelContainer(account, { videoUrl, caption, isAiGenerated, coverUrl }) {
       const res = await post(`/${IG_GRAPH_VERSION}/${userId(account)}/media`, {
         media_type: "REELS",
         video_url: videoUrl,
@@ -785,6 +785,8 @@ export function createInstagramProvider(deps: InstagramProviderDeps): SocialProv
         share_to_feed: "true",
         // Self-disclosure of AI (avatar videos). Only sent when true.
         ...(isAiGenerated ? { is_ai_generated: "true" } : {}),
+        // The studio's cover (BC-43); without one Instagram picks a frame.
+        ...(coverUrl ? { cover_url: coverUrl } : {}),
         access_token: account.accessToken,
       });
       const containerId = asString(res.id);

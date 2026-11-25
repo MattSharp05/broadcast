@@ -29,6 +29,8 @@ export interface StepInput {
   action: PublishAction;
   /** The URL the platform downloads the video from (signed, for Instagram). */
   videoUrl: () => Promise<string>;
+  /** The cover image's URL when the video has one (studio covers, BC-43). */
+  coverUrl?: () => Promise<string | null>;
   /** When to try again if the publishing quota is used up (the account's next slot). */
   quotaWait: () => QuotaWait;
 }
@@ -79,6 +81,7 @@ export async function advancePost(input: StepInput): Promise<PublishOutcome | nu
           videoUrl: await input.videoUrl(),
           caption: post.caption,
           isAiGenerated: post.isAiGenerated ?? false,
+          coverUrl: input.coverUrl ? await input.coverUrl() : null,
         });
         return { kind: "container_created", containerId };
       }

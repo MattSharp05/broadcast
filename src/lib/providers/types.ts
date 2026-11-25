@@ -106,7 +106,13 @@ export interface SocialProvider {
   getPublishingQuota(account: ProviderAccount): Promise<PublishingQuota>;
   createReelContainer(
     account: ProviderAccount,
-    input: { videoUrl: string; caption: string; isAiGenerated?: boolean },
+    input: {
+      videoUrl: string;
+      caption: string;
+      isAiGenerated?: boolean;
+      /** The Reel's cover image (a URL the platform fetches); the platform picks a frame when absent. */
+      coverUrl?: string | null;
+    },
   ): Promise<{ containerId: string }>;
   getContainerStatus(account: ProviderAccount, containerId: string): Promise<ContainerStatus>;
   /**

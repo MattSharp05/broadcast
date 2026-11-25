@@ -47,6 +47,8 @@ export interface FakeContainer {
   accountId: string;
   videoUrl: string;
   caption: string;
+  /** The cover URL the scheduler handed over (BC-43); null without one. */
+  coverUrl?: string | null;
   statusChecks: number;
   mediaId: string | null;
   permalink: string | null;
@@ -326,7 +328,7 @@ export function createFakeProvider({ store, now }: FakeProviderDeps): SocialProv
       return { used, limit: state.quotaLimit, windowHours: QUOTA_WINDOW_HOURS };
     },
 
-    async createReelContainer(ctx, { videoUrl, caption }) {
+    async createReelContainer(ctx, { videoUrl, caption, coverUrl }) {
       await guard(ctx);
       // Every call makes a new container, like Instagram. Ids are deterministic: the first free one
       // for (account, video, caption, now).
@@ -340,6 +342,7 @@ export function createFakeProvider({ store, now }: FakeProviderDeps): SocialProv
         accountId: ctx.accountId,
         videoUrl,
         caption,
+        coverUrl: coverUrl ?? null,
         statusChecks: 0,
         mediaId: null,
         permalink: null,

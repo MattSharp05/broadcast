@@ -6,9 +6,9 @@ import { nowFor } from "@/lib/clock";
 import { createAdminSupabase } from "@/lib/db/admin";
 import { isSignedInOwner } from "@/lib/db/auth";
 import { FactoryError, getProduction, updateProduction } from "@/lib/db/factory";
-import { ContentError, queueContent } from "@/lib/db/posts";
+import { ContentError } from "@/lib/db/posts";
 import { currentWorkspace } from "@/lib/db/workspace";
-import { addedMessage, localInputToUtc } from "@/lib/domain/content";
+import { localInputToUtc } from "@/lib/domain/content";
 import { CAPTION_MAX } from "@/lib/domain/factory/captions";
 import { faceModel, isSelectable } from "@/lib/domain/factory/models";
 import { isReworkTarget } from "@/lib/domain/factory/rework";
@@ -36,6 +36,7 @@ import {
   sendNotes as sendBatch,
 } from "@/lib/factory/studio";
 import type { NoteBox, NoteKind } from "@/lib/domain/factory/notes";
+import type { ScheduleTiming } from "@/lib/factory/schedule";
 
 /**
  * Content Factory actions. Server actions take whatever the browser sends: every input is checked.
@@ -607,26 +608,23 @@ export async function redoCard(id: unknown, cardId: unknown, note: unknown) {
   }, pid);
 }
 
-/** Queues the finished video on its one account: the next open slot or a pinned time. */
-export async function scheduleVideo(
+/**
+ * Assign and schedule a ready version (BC-43, the Ready to post tab). Creates the one post;
+ * the scheduler publishes it at its time.
+ */
+export async function scheduleVersion(
   id: unknown,
+  versionId: unknown,
   input: { accountId: unknown; timing: { kind: unknown; local?: unknown } },
 ) {
   const pid = checkId(id);
   return guard(async () => {
+    const vid = checkId(versionId);
+    const accountId = checkId(input.accountId);
     const ctx = await engine();
     const workspace = await currentWorkspace();
     const timezone = workspace.timezone ?? "UTC";
-    const p = await getProduction(ctx.db, ctx.workspaceId, pid);
-    if (p.post_id)
-      throw new FactoryError(
-        "posted",
-        "This video is already queued. Remake it for another account.",
-      );
-    if (!p.media_id || p.status !== "ready")
-      throw new FactoryError("not_ready", "Approve the render first.");
-    const accountId = checkId(input.accountId);
-    let timing: { kind: "queue" } | { kind: "pinned"; at: Date };
+    let timing: ScheduleTiming;
     if (input.timing.kind === "pinned") {
       const at =
         typeof input.timing.local === "string"
@@ -635,27 +633,19 @@ export async function scheduleVideo(
       if (!at)
         throw new FactoryError("pinned_invalid", "Choose a date and time to pin the post to.");
       timing = { kind: "pinned", at };
-    } else timing = { kind: "queue" };
-    const caption = p.caption ?? "";
-    const queued = await queueContent(ctx.db, {
-      workspaceId: ctx.workspaceId,
-      timezone,
-      now: ctx.now,
-      media: null,
-      existingMediaId: p.media_id,
-      isAiGenerated: p.use_avatar,
-      caption,
-      accountIds: [accountId],
+    } else if (input.timing.kind === "queue") timing = { kind: "queue" };
+    else if (input.timing.kind === "next") timing = { kind: "next" };
+    else throw new FactoryError("timing_invalid", "Choose when to post it.");
+    const { scheduleVersion: schedule } = await import("@/lib/factory/schedule");
+    const out = await schedule(ctx, {
+      productionId: pid,
+      versionId: vid,
+      accountId,
       timing,
-    });
-    const post = queued.posts[0];
-    await updateProduction(ctx.db, ctx.workspaceId, pid, {
-      account_id: accountId,
-      post_id: post?.id ?? null,
-      status: "scheduled",
+      timezone,
     });
     revalidatePath("/workflow");
-    return addedMessage(1, post?.scheduledAt ?? null, ctx.now, timezone);
+    return out.message;
   }, pid);
 }
 

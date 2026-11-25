@@ -1,4 +1,5 @@
 import type { Json } from "@/lib/db/types";
+import { postedCaption } from "@/lib/domain/factory/delivery";
 import { FAKE_INTENTS, fakeReply } from "@/lib/domain/factory/events";
 import { fakeOutput } from "@/lib/domain/factory/fake-outputs";
 import { frameAt, type NoteKind } from "@/lib/domain/factory/notes";
@@ -255,6 +256,74 @@ export const factoryReadyFailing: Scenario = {
   build: ({ now }) => readySeed("factory-ready-failing", now, true),
 };
 
+/** The cover the ready-pack scenarios picked (a public sample still). */
+export const PACK_COVER = "/factory/fake/still-2.svg";
+
+/**
+ * v3 is marked ready (cover, caption with its credits, hashtags): Assign and schedule is open.
+ * `scheduled`: it is already queued on @codingjourney, due a minute ago, so a tick uploads it
+ * with its cover (BC-43).
+ */
+export function packReadySeed(name: string, now: Date, scheduled: boolean): SandboxSeed {
+  const seed = readySeed(name, now, false);
+  const p = seed.factory.productions[0];
+  const v3 = seed.factory.versions.find((v) => v.number === 3);
+  if (!p?.id || !v3?.id) return seed;
+  const caption = p.caption ?? "";
+  const hashtags = ["tides", "moon"];
+  seed.factory.packs.push({
+    production_id: p.id,
+    version_id: v3.id,
+    cover_path: PACK_COVER,
+    cover_t_s: 2,
+    caption,
+    hashtags,
+    ready_at: new Date(now.getTime() - HOUR_MS).toISOString(),
+  });
+  const media = seed.media.find((m) => m.id === v3.media_id);
+  if (media) media.cover_path = PACK_COVER;
+  if (!scheduled || !v3.media_id) return seed;
+
+  const postId = stableUuid(name, "post", "v3");
+  const posted = postedCaption(caption, hashtags);
+  seed.posts.push({
+    id: postId,
+    account_id: p.account_id ?? "",
+    media_id: v3.media_id,
+    caption: posted,
+    timing: "pinned",
+    scheduled_at: new Date(now.getTime() - 60_000).toISOString(),
+    status: "queued",
+  });
+  p.post_id = postId;
+  p.media_id = v3.media_id;
+  p.caption = posted;
+  p.status = "scheduled";
+  seed.factory.events.push({
+    production_id: p.id,
+    actor: "matthew",
+    intent: "Scheduled v3 for @codingjourney, Today.",
+    created_at: new Date(now.getTime() - 30 * 60_000).toISOString(),
+  });
+  return seed;
+}
+
+export const factoryPackReady: Scenario = {
+  name: "factory-pack-ready",
+  page: studioPage("factory-pack-ready"),
+  description:
+    "v3 is marked ready (cover, caption, hashtags): assign it to @codingjourney and schedule it.",
+  build: ({ now }) => packReadySeed("factory-pack-ready", now, false),
+};
+
+export const factoryScheduledCover: Scenario = {
+  name: "factory-scheduled-cover",
+  page: "/workflow",
+  description:
+    "v3 with its cover is scheduled on @codingjourney and due now: Run tick now uploads it with the cover.",
+  build: ({ now }) => packReadySeed("factory-scheduled-cover", now, true),
+};
+
 /** A video at the visuals step, waiting, with the fake runner's five board cards. */
 export function boardSeed(name: string, now: Date): SandboxSeed {
   const { seed, id } = baseSeed(name, now);
@@ -485,4 +554,6 @@ export const STUDIO_SCENARIOS: readonly Scenario[] = [
   factoryBoard,
   factoryStudioList,
   factoryStyleCompare,
+  factoryPackReady,
+  factoryScheduledCover,
 ];

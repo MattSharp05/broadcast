@@ -1098,3 +1098,8 @@
   flex-basis: 100%;
   min-width: 0;
 }
+
+/* Assign and schedule (BC-43) spans the Ready to post grid. */
+.assign {
+  grid-column: 1 / -1;
+}

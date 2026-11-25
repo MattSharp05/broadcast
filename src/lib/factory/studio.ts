@@ -185,7 +185,7 @@ export async function addVersion(
   if (!inserted) throw new FactoryError("version_race", "Two versions arrived at once. Try again.");
 
   const p = await getProduction(ctx.db, ws, productionId);
-  if (v.mediaId && !p.post_id) {
+  if (v.mediaId && !(await hasActivePost(ctx.db, ws, p.post_id))) {
     // A render from before versions existed has no row to prune: it goes now, as it used to.
     if (first && p.media_id && p.media_id !== v.mediaId) {
       const old = await mediaPath(ctx.db, ws, p.media_id);
@@ -303,7 +303,7 @@ export async function openBatch(db: Db, ws: string, productionId: string) {
   return data;
 }
 
-async function getVersion(db: Db, ws: string, productionId: string, versionId: string) {
+export async function getVersion(db: Db, ws: string, productionId: string, versionId: string) {
   const { data, error } = await db
     .from("production_versions")
     .select("*")
@@ -864,10 +864,23 @@ async function upsertPack(
   if (error) fail("saving the pack", error);
 }
 
+/** The video's post still counts (queued, posting or posted): not removed from the queue. */
+export async function hasActivePost(db: Db, ws: string, postId: string | null): Promise<boolean> {
+  if (!postId) return false;
+  const { data, error } = await db
+    .from("posts")
+    .select("status")
+    .eq("workspace_id", ws)
+    .eq("id", postId)
+    .maybeSingle();
+  if (error) fail("reading the post", error);
+  return Boolean(data && data.status !== "removed");
+}
+
 /** A queued video's pack is what was queued: it can't change until the post is removed. */
 async function refuseWhenQueued(ctx: EngineContext, productionId: string) {
   const p = await getProduction(ctx.db, ctx.workspaceId, productionId);
-  if (p.post_id || p.status === "scheduled") {
+  if (await hasActivePost(ctx.db, ctx.workspaceId, p.post_id)) {
     throw new FactoryError(
       "scheduled",
       "This video is already queued. Remove the post first to change what goes out.",

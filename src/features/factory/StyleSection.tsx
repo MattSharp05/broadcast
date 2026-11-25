@@ -44,7 +44,7 @@ export function StyleSection({
 }) {
   const step = video.steps.find((s) => s.step === "style");
   const frames = comparedFrames(step?.output);
-  const comparing = video.compareStyles && step?.status === "waiting" && frames.length > 1;
+  const comparing = video.compareStyles && step?.status === "waiting" && frames.length > 0;
   const locked = !draft || pending;
   return (
     <section id="style" className={styles.section} aria-labelledby="style-h">
@@ -152,9 +152,13 @@ export function StyleSection({
 function comparedFrames(output: unknown): ComparedFrame[] {
   const frames = (output as { frames?: unknown } | null)?.frames;
   if (!Array.isArray(frames)) return [];
+  const seen = new Set<string>();
   return frames.flatMap((f: unknown) => {
     const o = (f ?? {}) as Record<string, unknown>;
-    return typeof o.url === "string" && typeof o.style === "string"
+    // One frame per style (two of the same style are one style shown twice).
+    if (typeof o.style !== "string" || seen.has(o.style)) return [];
+    seen.add(o.style);
+    return typeof o.url === "string"
       ? [
           {
             url: o.url,

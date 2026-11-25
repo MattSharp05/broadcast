@@ -376,11 +376,13 @@ export async function recordCheckpoint(
     remainingUsd = checkBudget(0, spend, capsFor(settings.caps, avatarCap(avatar))).remainingUsd;
   }
   const decision = decideCheckpoint({ step, mode, quoteUsd, remainingUsd });
-  if (decision.approve) {
+  // Compared styles wait for Matthew's pick even on autopilot: there is no style to go on with.
+  const unpicked = step === "style" && p.compare_styles && !p.style;
+  if (decision.approve && !unpicked) {
     await approveStep(ctx, id, step, { auto: true });
     return;
   }
-  if (decision.reason === "over_cap") {
+  if (!decision.approve && decision.reason === "over_cap") {
     await updateStep(ctx.db, ws, id, step, { message: decision.message });
   }
   await refreshStatus(ctx, id);

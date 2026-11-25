@@ -98,8 +98,11 @@ export async function pickStyle(id: unknown, style: unknown) {
     if (typeof style !== "string" || !stylePack(style))
       throw new FactoryError("bad_style", "Unknown style.");
     const ctx = await engine();
-    await chooseComparedStyle(ctx, pid, style);
-    const outcome = await approveStep(ctx, pid, "style");
+    const undo = await chooseComparedStyle(ctx, pid, style);
+    const outcome = await approveStep(ctx, pid, "style").catch(async (err: unknown) => {
+      await undo();
+      throw err;
+    });
     await logEvent(ctx, pid, {
       actor: "matthew",
       step: "style",
@@ -118,9 +121,14 @@ export async function pickStyleBut(id: unknown, style: unknown, note: unknown) {
     const text = typeof note === "string" ? note.trim().slice(0, 1000) : "";
     if (!text) throw new FactoryError("no_note", "Say what to change in this style.");
     const ctx = await engine();
-    await chooseComparedStyle(ctx, pid, style);
+    const undo = await chooseComparedStyle(ctx, pid, style);
     const label = stylePack(style)?.label ?? style;
-    const outcome = await redoFrom(ctx, pid, "style", `Use ${label}, but ${text}`);
+    const outcome = await redoFrom(ctx, pid, "style", `Use ${label}, but ${text}`).catch(
+      async (err: unknown) => {
+        await undo();
+        throw err;
+      },
+    );
     await logEvent(ctx, pid, {
       actor: "matthew",
       step: "style",
@@ -130,18 +138,30 @@ export async function pickStyleBut(id: unknown, style: unknown, note: unknown) {
   }, pid);
 }
 
-async function chooseComparedStyle(ctx: EngineContext, pid: string, style: string) {
+async function chooseComparedStyle(
+  ctx: EngineContext,
+  pid: string,
+  style: string,
+): Promise<() => Promise<void>> {
   const p = await getProduction(ctx.db, ctx.workspaceId, pid);
   const { data: row } = await ctx.db
     .from("production_steps")
-    .select("status")
+    .select("status, output")
     .eq("workspace_id", ctx.workspaceId)
     .eq("production_id", pid)
     .eq("step", "style")
     .maybeSingle();
   if (!p.compare_styles || row?.status !== "waiting")
     throw new FactoryError("not_comparing", "There are no style frames waiting to pick from.");
+  const shown = ((row.output as { frames?: { style?: unknown }[] } | null)?.frames ?? []).map(
+    (f) => f.style,
+  );
+  if (!shown.includes(style))
+    throw new FactoryError("not_shown", "Pick one of the styles the frames show.");
   await updateProduction(ctx.db, ctx.workspaceId, pid, { style, compare_styles: false });
+  // Puts the comparison back if what follows fails.
+  return () =>
+    updateProduction(ctx.db, ctx.workspaceId, pid, { style: p.style, compare_styles: true });
 }
 
 /**
@@ -190,6 +210,8 @@ export async function startFromPrompt(input: {
           last.data?.style ??
           STYLE_PACKS[0]?.key ??
           null,
+        // A style is set (picked or defaulted): nothing to compare.
+        compare_styles: false,
         voice_key: last.data?.voice_key ?? voice.data?.key ?? null,
         music_key: last.data?.music_key ?? music.data?.key ?? null,
       });

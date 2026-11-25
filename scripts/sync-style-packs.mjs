@@ -5,6 +5,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { parseStylesReadme } from "../src/lib/domain/factory/style-packs.ts";
 
 const repo = resolve(process.argv[2] ?? "../video-editor");
@@ -28,7 +29,8 @@ if (!styles.length) {
   console.error(`${readme} has no styles table; not writing the mirror.`);
   process.exit(1);
 }
-const out = "src/lib/factory/style-packs.json";
+// From the repo root whatever the working directory.
+const out = fileURLToPath(new URL("../src/lib/factory/style-packs.json", import.meta.url));
 writeFileSync(out, `${JSON.stringify(styles, null, 2)}\n`);
 execFileSync("pnpm", ["exec", "prettier", "--write", out], { stdio: "ignore" });
 console.log(

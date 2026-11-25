@@ -23,7 +23,16 @@ import {
   type EngineContext,
   type StartOutcome,
 } from "@/lib/factory/engine";
-import { logEvent, sendNotes as sendBatch } from "@/lib/factory/studio";
+import {
+  addNote as addDraftNote,
+  deleteNote as deleteDraftNote,
+  editNote as editDraftNote,
+  logEvent,
+  reopenNote as reopenAnsweredNote,
+  resolveNote as resolveAnsweredNote,
+  sendNotes as sendBatch,
+} from "@/lib/factory/studio";
+import type { NoteBox, NoteKind } from "@/lib/domain/factory/notes";
 
 /**
  * Content Factory actions. Server actions take whatever the browser sends: every input is checked.
@@ -273,6 +282,67 @@ export async function rework(
 export async function sendNotes(id: unknown, versionId: unknown) {
   const pid = checkId(id);
   return guard(async () => sendBatch(await engine(), pid, checkId(versionId)), pid);
+}
+
+const NOTE_KINDS: readonly NoteKind[] = ["moment", "region", "general"];
+
+function checkBox(box: unknown): NoteBox | null {
+  if (!box || typeof box !== "object") return null;
+  const b = box as Record<string, unknown>;
+  const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : NaN);
+  return { x: n(b.x), y: n(b.y), w: n(b.w), h: n(b.h) };
+}
+
+/** A draft note on a version (the Versions tab): a moment, a region or a general note. */
+export async function addNote(
+  id: unknown,
+  versionId: unknown,
+  input: { kind: unknown; tS?: unknown; box?: unknown; text: unknown; cropPath?: unknown },
+) {
+  const pid = checkId(id);
+  return guard(async () => {
+    const vid = checkId(versionId);
+    if (!NOTE_KINDS.includes(input.kind as NoteKind))
+      throw new FactoryError("bad_note", "Unknown kind of note.");
+    const tS = typeof input.tS === "number" && Number.isFinite(input.tS) ? input.tS : null;
+    return addDraftNote(await engine(), pid, vid, {
+      kind: input.kind as NoteKind,
+      tS,
+      box: checkBox(input.box),
+      text: typeof input.text === "string" ? input.text.slice(0, 2000) : "",
+      cropPath: typeof input.cropPath === "string" ? input.cropPath : null,
+    });
+  }, pid);
+}
+
+export async function editNote(id: unknown, noteId: unknown, text: unknown) {
+  const pid = checkId(id);
+  return guard(async () => {
+    const t = typeof text === "string" ? text.slice(0, 2000) : "";
+    await editDraftNote(await engine(), pid, checkId(noteId), t);
+    return null;
+  }, pid);
+}
+
+export async function deleteNote(id: unknown, noteId: unknown) {
+  const pid = checkId(id);
+  return guard(async () => {
+    await deleteDraftNote(await engine(), pid, checkId(noteId));
+    return null;
+  }, pid);
+}
+
+export async function resolveNote(id: unknown, noteId: unknown) {
+  const pid = checkId(id);
+  return guard(async () => {
+    await resolveAnsweredNote(await engine(), pid, checkId(noteId));
+    return null;
+  }, pid);
+}
+
+export async function reopenNote(id: unknown, noteId: unknown) {
+  const pid = checkId(id);
+  return guard(async () => reopenAnsweredNote(await engine(), pid, checkId(noteId)), pid);
 }
 
 /** Queues the finished video on its one account: the next open slot or a pinned time. */

@@ -14,6 +14,9 @@ import { PageHeader } from "@/components/PageHeader";
 import { StatusDot } from "@/components/StatusDot";
 import { Toast } from "@/components/Toast";
 import type { FactoryOptions, ProductionPage } from "@/lib/db/factory-page";
+import type { StudioData } from "@/lib/db/studio-page";
+import { STUDIO_TABS } from "./studio/tabs";
+import studio from "./studio/studio.module.css";
 import { usd } from "@/lib/domain/factory/budget";
 import { STYLE_PACKS } from "@/lib/domain/factory/styles";
 import { AudioPlayButton } from "./AudioPlayButton";
@@ -83,11 +86,25 @@ const SECTIONS = [
 export function ProductionView({
   video,
   options,
+  studio: studioData,
+  tab: firstTab,
 }: {
   video: ProductionPage;
   options: FactoryOptions;
+  studio: StudioData;
+  tab: string;
 }) {
   const { pending, run, notify, toastEl } = useFactoryAction();
+  const [tab, setTab] = useState(firstTab);
+  const current = STUDIO_TABS.find((t) => t.key === tab) ?? STUDIO_TABS[0];
+  const Panel = current?.Panel;
+  const pick = (key: string) => {
+    setTab(key);
+    // In the URL, so a reload or a shared link opens the same tab.
+    const url = new URL(window.location.href);
+    url.searchParams.set("tab", key);
+    window.history.replaceState(window.history.state, "", url);
+  };
   const draft = video.status === "draft";
   const save = (patch: VideoPatch) => {
     run(() => saveVideo(video.id, patch));
@@ -132,52 +149,90 @@ export function ProductionView({
         }
       />
       <div className={styles.page}>
-        <div className={styles.layout}>
-          <nav aria-label="Sections" className={styles.tocNav}>
-            <ul className={styles.toc}>
-              {SECTIONS.map(([id, label]) => (
-                <li key={id}>
-                  <a href={`#${id}`}>{label}</a>
-                </li>
-              ))}
-            </ul>
-          </nav>
-          <div className={styles.sections}>
-            <IdeaSection video={video} draft={draft} save={save} pending={pending} />
-            <StyleSection video={video} draft={draft} save={save} pending={pending} />
-            <AvatarSection
+        <div className={studio.tabs} role="tablist" aria-label="Video">
+          {STUDIO_TABS.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              role="tab"
+              id={`tab-${t.key}`}
+              aria-selected={t.key === current?.key}
+              aria-controls={`panel-${t.key}`}
+              className={studio.tab}
+              onClick={() => {
+                pick(t.key);
+              }}
+            >
+              {t.label}
+              {t.key === "versions" && studioData.versions.length ? (
+                <span className={studio.tabCount}>{studioData.versions.length}</span>
+              ) : null}
+            </button>
+          ))}
+        </div>
+        <div
+          role="tabpanel"
+          id={`panel-${current?.key ?? "make"}`}
+          aria-labelledby={`tab-${current?.key ?? "make"}`}
+        >
+          {Panel ? (
+            <Panel
               video={video}
               options={options}
-              draft={draft}
-              save={save}
-              pending={pending}
-            />
-            <VoiceSection
-              video={video}
-              options={options}
-              draft={draft}
-              save={save}
-              pending={pending}
-            />
-            <MusicSection
-              video={video}
-              options={options}
-              draft={draft}
-              save={save}
-              pending={pending}
-            />
-            <PipelineSection
-              video={video}
-              options={options}
+              studio={studioData}
               run={run}
               notify={notify}
               pending={pending}
             />
-            <HeroSection video={video} options={options} run={run} pending={pending} />
-            <ReworkSection video={video} run={run} pending={pending} />
-            <CaptionSection video={video} save={save} pending={pending} />
-            <ScheduleSection video={video} options={options} run={run} pending={pending} />
-          </div>
+          ) : (
+            <div className={styles.layout}>
+              <nav aria-label="Sections" className={styles.tocNav}>
+                <ul className={styles.toc}>
+                  {SECTIONS.map(([id, label]) => (
+                    <li key={id}>
+                      <a href={`#${id}`}>{label}</a>
+                    </li>
+                  ))}
+                </ul>
+              </nav>
+              <div className={styles.sections}>
+                <IdeaSection video={video} draft={draft} save={save} pending={pending} />
+                <StyleSection video={video} draft={draft} save={save} pending={pending} />
+                <AvatarSection
+                  video={video}
+                  options={options}
+                  draft={draft}
+                  save={save}
+                  pending={pending}
+                />
+                <VoiceSection
+                  video={video}
+                  options={options}
+                  draft={draft}
+                  save={save}
+                  pending={pending}
+                />
+                <MusicSection
+                  video={video}
+                  options={options}
+                  draft={draft}
+                  save={save}
+                  pending={pending}
+                />
+                <PipelineSection
+                  video={video}
+                  options={options}
+                  run={run}
+                  notify={notify}
+                  pending={pending}
+                />
+                <HeroSection video={video} options={options} run={run} pending={pending} />
+                <ReworkSection video={video} run={run} pending={pending} />
+                <CaptionSection video={video} save={save} pending={pending} />
+                <ScheduleSection video={video} options={options} run={run} pending={pending} />
+              </div>
+            </div>
+          )}
         </div>
       </div>
       {toastEl}

@@ -166,6 +166,9 @@ async function loadFactory(db: SupabaseClient<Database>, f: SandboxSeed["factory
     );
   }
   const tables = [
+    ["routine_templates", f.routineTemplates],
+    ["routines", f.routines],
+    ["routine_accounts", f.routineAccounts],
     ["avatars", f.avatars],
     ["avatar_versions", f.avatarVersions],
     ["productions", f.productions],
@@ -180,6 +183,12 @@ async function loadFactory(db: SupabaseClient<Database>, f: SandboxSeed["factory
     await run(table, db.from(table).insert(inSandbox(rows as never[]), { defaultToNull: false }));
   }
   await loadStudio(db, f);
+  if (f.routineSlots.length) {
+    await run(
+      "routine_slots",
+      db.from("routine_slots").insert(inSandbox(f.routineSlots), { defaultToNull: false }),
+    );
+  }
 }
 
 /**

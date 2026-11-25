@@ -666,7 +666,10 @@ export async function addNote(
   const box = draft.kind === "region" ? draft.box : null;
   const problem = noteError({ kind: draft.kind, text: draft.text, tS, box }, version.duration_s);
   if (problem) throw new FactoryError("bad_note", problem);
-  if (draft.cropPath && !parseRef(draft.cropPath, ws, productionId)) {
+  if (
+    draft.cropPath &&
+    !draft.cropPath.startsWith(`storage:factory/${ws}/${productionId}/notes/`)
+  ) {
     throw new FactoryError("bad_crop", "That frame image isn't this video's.");
   }
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -721,13 +724,16 @@ export async function editNote(
     box: note.box as NoteBox | null,
   });
   if (problem) throw new FactoryError("bad_note", problem);
-  const { error } = await ctx.db
+  const { data, error } = await ctx.db
     .from("review_notes")
     .update({ text: text.trim() })
     .eq("workspace_id", ctx.workspaceId)
     .eq("id", note.id)
-    .eq("status", "draft");
+    .eq("status", "draft")
+    .select("id");
   if (error) fail("saving the note", error);
+  if (!data.length)
+    throw new FactoryError("sent", "This note was just sent, so it can't be changed.");
 }
 
 export async function deleteNote(
@@ -736,13 +742,16 @@ export async function deleteNote(
   noteId: string,
 ): Promise<void> {
   const note = await draftNote(ctx, productionId, noteId);
-  const { error } = await ctx.db
+  const { data, error } = await ctx.db
     .from("review_notes")
     .delete()
     .eq("workspace_id", ctx.workspaceId)
     .eq("id", note.id)
-    .eq("status", "draft");
+    .eq("status", "draft")
+    .select("id");
   if (error) fail("deleting the note", error);
+  if (!data.length)
+    throw new FactoryError("sent", "This note was just sent, so it can't be deleted.");
   await removeFile(ctx.db, ctx.workspaceId, note.crop_path);
 }
 
@@ -771,9 +780,19 @@ export async function reopenNote(
   noteId: string,
 ): Promise<{ id: string; number: number }> {
   const note = await getNote(ctx.db, ctx.workspaceId, productionId, noteId);
-  if (!note.answered_in_version) {
-    throw new FactoryError("not_answered", "Only an answered note can be reopened.");
+  if ((note.status !== "answered" && note.status !== "not_changed") || !note.answered_in_version) {
+    throw new FactoryError("not_answered", "Only an answered note can be reopened, once.");
   }
+  // The original is settled (resolved) as its copy opens, so it can't be reopened twice.
+  const { data: settled, error: settleError } = await ctx.db
+    .from("review_notes")
+    .update({ status: "resolved" })
+    .eq("workspace_id", ctx.workspaceId)
+    .eq("id", note.id)
+    .in("status", ["answered", "not_changed"])
+    .select("id");
+  if (settleError) fail("reopening the note", settleError);
+  if (!settled.length) throw new FactoryError("not_answered", "That note was already reopened.");
   const target = await getVersion(ctx.db, ctx.workspaceId, productionId, note.answered_in_version);
   return addNote(ctx, productionId, target.id, {
     kind: note.kind as NoteKind,

@@ -42,7 +42,9 @@ export function Player({
   const [playing, setPlaying] = useState(false);
   const [drag, setDrag] = useState<{ start: Point; end: Point; rect: DOMRect } | null>(null);
   const fps = version.fps;
-  const duration = version.durationS ?? 0;
+  // The stored duration, else what the file says once loaded.
+  const [loadedDuration, setLoadedDuration] = useState(0);
+  const duration = version.durationS ?? loadedDuration;
 
   // The page's time drives the video when paused (frame steps, scrubbing, clicking a note).
   useEffect(() => {
@@ -125,13 +127,16 @@ export function Player({
           ref={videoRef}
           className={styles.video}
           src={version.url ?? undefined}
-          crossOrigin="anonymous"
+          // Same-origin and Storage links allow reading frames (note crops); others just play.
+          crossOrigin={sameOriginOrStorage(version.url) ? "anonymous" : undefined}
           playsInline
           preload="auto"
           onEnded={() => {
             setPlaying(false);
           }}
           onLoadedMetadata={(e) => {
+            if (Number.isFinite(e.currentTarget.duration))
+              setLoadedDuration(e.currentTarget.duration);
             if (time > 0) e.currentTarget.currentTime = time;
           }}
           aria-label={`Version ${version.number}`}
@@ -289,4 +294,9 @@ function boxStyle(b: NoteBox): React.CSSProperties {
     width: `${b.w * 100}%`,
     height: `${b.h * 100}%`,
   };
+}
+
+function sameOriginOrStorage(url: string | null): boolean {
+  if (!url) return false;
+  return url.startsWith("/") || url.includes("/storage/v1/object/");
 }

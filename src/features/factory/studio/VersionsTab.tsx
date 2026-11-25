@@ -40,6 +40,7 @@ export function VersionsTab({ video, studio, run, notify, pending }: StudioTabPr
   const [saving, setSaving] = useState(false);
   const [prompt, setPrompt] = useState<{ prompt: string; reason: string } | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const cropBlob = useRef<Blob | null>(null);
 
   const selected = versions.find((v) => v.id === selectedId) ?? newest;
   // A new version (the answer) arrives: show it.
@@ -80,6 +81,12 @@ export function VersionsTab({ video, studio, run, notify, pending }: StudioTabPr
   const open = studio.openBatch;
 
   const startNote = (g: Gesture | { kind: "general" }) => {
+    // Clicking the frame while writing keeps what was typed.
+    if (draft && text.trim()) return;
+    // The frame is captured now, at the note's time, before anything moves the player.
+    void captureFrame(videoRef.current, g.kind === "region" ? g.box : null).then((blob) => {
+      cropBlob.current = blob;
+    });
     setDraft(
       g.kind === "general"
         ? { kind: "general", tS: null, box: null }
@@ -91,13 +98,20 @@ export function VersionsTab({ video, studio, run, notify, pending }: StudioTabPr
   const saveNote = async () => {
     if (!draft) return;
     setSaving(true);
-    const cropPath = await uploadCrop(video.id, videoRef.current, draft);
-    const res = await addNote(video.id, selected.id, { ...draft, text, cropPath });
-    setSaving(false);
+    let res;
+    try {
+      const cropPath = await uploadCrop(video.id, cropBlob.current);
+      res = await addNote(video.id, selected.id, { ...draft, text, cropPath });
+    } catch {
+      res = { ok: false as const, error: "That didn't work. Check your connection and try again." };
+    } finally {
+      setSaving(false);
+    }
     if (!res.ok) {
       notify(res.error, "error");
       return;
     }
+    cropBlob.current = null;
     setDraft(null);
     setText("");
     router.refresh();
@@ -288,17 +302,13 @@ export function VersionsTab({ video, studio, run, notify, pending }: StudioTabPr
 
 /**
  * The frame the note points at, as seen in the player: the box (or the whole frame) as a JPEG of
- * at most 1280 px wide, uploaded through a signed URL. Best effort: a frame the browser can't read
- * (not loaded yet, or another origin without CORS) leaves the note without a crop.
+ * at most 1280 px wide. Best effort: a frame the browser can't read (not loaded yet, or another
+ * origin without CORS) gives no crop.
  */
-async function uploadCrop(
-  videoId: string,
-  v: HTMLVideoElement | null,
-  draft: Draft,
-): Promise<string | null> {
+async function captureFrame(v: HTMLVideoElement | null, box: NoteBox | null): Promise<Blob | null> {
   if (!v || v.readyState < 2 || !v.videoWidth || !v.videoHeight) return null;
   try {
-    const r = cropRect(draft.box, v.videoWidth, v.videoHeight);
+    const r = cropRect(box, v.videoWidth, v.videoHeight);
     const size = cropSize(r.sw, r.sh);
     const canvas = document.createElement("canvas");
     canvas.width = size.w;
@@ -306,10 +316,18 @@ async function uploadCrop(
     const g = canvas.getContext("2d");
     if (!g) return null;
     g.drawImage(v, r.sx, r.sy, r.sw, r.sh, 0, 0, size.w, size.h);
-    const blob = await new Promise<Blob | null>((resolve) => {
+    return await new Promise<Blob | null>((resolve) => {
       canvas.toBlob(resolve, "image/jpeg", 0.85);
     });
-    if (!blob) return null;
+  } catch {
+    return null;
+  }
+}
+
+/** Uploads a captured frame through a signed URL; its storage ref, or null. */
+async function uploadCrop(videoId: string, blob: Blob | null): Promise<string | null> {
+  if (!blob) return null;
+  try {
     const asked = await fetch(`/api/factory/${videoId}/notes/crop`, { method: "POST" });
     if (!asked.ok) return null;
     const { path, upload_url } = (await asked.json()) as { path: string; upload_url: string };

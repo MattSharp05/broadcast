@@ -230,6 +230,9 @@ export function ProductionView({
                 <ReworkSection video={video} run={run} pending={pending} />
                 <CaptionSection
                   video={video}
+                  hasVersions={studioData.versions.length > 0}
+                  save={save}
+                  pending={pending}
                   onOpenReady={() => {
                     pick("ready");
                   }}

@@ -1,5 +1,12 @@
 import "server-only";
-import { FactoryError, fail, getProduction, updateProduction, type Db } from "@/lib/db/factory";
+import {
+  FactoryError,
+  fail,
+  getProduction,
+  updateProduction,
+  type Db,
+  type ProductionRow,
+} from "@/lib/db/factory";
 import type { Database, Json } from "@/lib/db/types";
 import { VIDEOS_BUCKET } from "@/lib/db/videos";
 import { workspaceKindOf } from "@/lib/db/workspaces";
@@ -843,14 +850,30 @@ async function upsertPack(
     return;
   }
   const p = await getProduction(ctx.db, ws, productionId);
-  const { error } = await ctx.db.from("delivery_packs").insert({
-    workspace_id: ws,
-    production_id: productionId,
-    version_id: versionId,
-    caption: p.caption ?? "",
-    ...row,
-  });
+  // Two first saves at once (cover and caption): the unique version_id makes the later one update.
+  const { error } = await ctx.db.from("delivery_packs").upsert(
+    {
+      workspace_id: ws,
+      production_id: productionId,
+      version_id: versionId,
+      caption: p.caption ?? "",
+      ...row,
+    },
+    { onConflict: "version_id", ignoreDuplicates: false },
+  );
   if (error) fail("saving the pack", error);
+}
+
+/** A queued video's pack is what was queued: it can't change until the post is removed. */
+async function refuseWhenQueued(ctx: EngineContext, productionId: string) {
+  const p = await getProduction(ctx.db, ctx.workspaceId, productionId);
+  if (p.post_id || p.status === "scheduled") {
+    throw new FactoryError(
+      "scheduled",
+      "This video is already queued. Remove the post first to change what goes out.",
+    );
+  }
+  return p;
 }
 
 /** The cover frame Matthew picked (already uploaded to coverPathFor). */
@@ -861,6 +884,7 @@ export async function saveCover(
   tS: number,
 ): Promise<void> {
   const ws = ctx.workspaceId;
+  await refuseWhenQueued(ctx, productionId);
   const version = await getVersion(ctx.db, ws, productionId, versionId);
   const path = coverPathFor(ws, version.id);
   await upsertPack(ctx, productionId, version.id, {
@@ -883,6 +907,7 @@ export async function savePack(
   versionId: string,
   input: { caption: string; hashtags: string[] },
 ): Promise<void> {
+  const p = await refuseWhenQueued(ctx, productionId);
   const version = await getVersion(ctx.db, ctx.workspaceId, productionId, versionId);
   if (input.caption.length > CAPTION_MAX) {
     throw new FactoryError(
@@ -895,39 +920,42 @@ export async function savePack(
     throw new FactoryError("hashtags", `Instagram allows ${HASHTAGS_MAX} hashtags.`);
   }
   await upsertPack(ctx, productionId, version.id, { caption: input.caption, hashtags });
-  // The video's caption follows the pack (the Make tab and older flows read it).
-  await updateProduction(ctx.db, ctx.workspaceId, productionId, { caption: input.caption });
+  // Scheduling queues the video's media with its caption: for the version chosen for posting,
+  // that caption is the pack's, hashtags included (BC-43 schedules from the pack itself).
+  if (version.media_id && version.media_id === p.media_id) {
+    await updateProduction(ctx.db, ctx.workspaceId, productionId, {
+      caption: postedCaption(input.caption, hashtags),
+    });
+  }
 }
 
-/** Everything the checks need for one version, read on the server. */
-export async function packChecks(ctx: EngineContext, productionId: string, versionId: string) {
-  const ws = ctx.workspaceId;
-  const version = await getVersion(ctx.db, ws, productionId, versionId);
-  const p = await getProduction(ctx.db, ws, productionId);
-  const [pack, render, voice, music] = await Promise.all([
-    ctx.db
-      .from("delivery_packs")
-      .select("*")
-      .eq("workspace_id", ws)
-      .eq("version_id", version.id)
-      .maybeSingle(),
-    ctx.db
+/**
+ * Every credit line a video's caption must carry (music, voice, avatar, imagery the render
+ * reported). Shared by the page and Mark ready; a failed read throws rather than dropping a credit.
+ */
+export async function videoCredits(
+  db: Db,
+  ws: string,
+  p: Pick<ProductionRow, "id" | "use_avatar" | "voice_key" | "music_key">,
+): Promise<string[]> {
+  const [render, voice, music] = await Promise.all([
+    db
       .from("production_steps")
       .select("output")
       .eq("workspace_id", ws)
-      .eq("production_id", productionId)
+      .eq("production_id", p.id)
       .eq("step", "render")
       .maybeSingle(),
     p.voice_key
-      ? ctx.db.from("factory_voices").select("credit").eq("key", p.voice_key).maybeSingle()
-      : Promise.resolve({ data: null }),
+      ? db.from("factory_voices").select("credit").eq("key", p.voice_key).maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
     p.music_key
-      ? ctx.db.from("factory_music").select("credit, licence").eq("key", p.music_key).maybeSingle()
-      : Promise.resolve({ data: null }),
+      ? db.from("factory_music").select("credit, licence").eq("key", p.music_key).maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
   ]);
-  if (pack.error) fail("reading the pack", pack.error);
+  for (const r of [render, voice, music]) if (r.error) fail("reading the credits", r.error);
   const imagery = (render.data?.output as { imagery_credits?: unknown } | null)?.imagery_credits;
-  const credits = creditLines({
+  return creditLines({
     musicCredit: music.data?.credit ?? null,
     musicLicence: music.data?.licence ?? null,
     voiceCredit: voice.data?.credit ?? null,
@@ -936,6 +964,23 @@ export async function packChecks(ctx: EngineContext, productionId: string, versi
       ? imagery.filter((c): c is string => typeof c === "string")
       : [],
   });
+}
+
+/** Everything the checks need for one version, read on the server. */
+export async function packChecks(ctx: EngineContext, productionId: string, versionId: string) {
+  const ws = ctx.workspaceId;
+  const version = await getVersion(ctx.db, ws, productionId, versionId);
+  const p = await getProduction(ctx.db, ws, productionId);
+  const [pack, credits] = await Promise.all([
+    ctx.db
+      .from("delivery_packs")
+      .select("*")
+      .eq("workspace_id", ws)
+      .eq("version_id", version.id)
+      .maybeSingle(),
+    videoCredits(ctx.db, ws, p),
+  ]);
+  if (pack.error) fail("reading the pack", pack.error);
   const caption = pack.data?.caption ?? p.caption ?? "";
   const hashtags = pack.data?.hashtags ?? [];
   const checks = deliveryChecks({

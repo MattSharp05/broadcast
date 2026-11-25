@@ -42,7 +42,24 @@ export function CoverPicker({
   const takeFrame = async () => {
     setBusy(true);
     try {
-      const blob = await drawCover(videoRef.current);
+      // The frame and its time come from the video itself, once any seek has landed.
+      const v = videoRef.current;
+      if (v) {
+        v.pause();
+        if (v.seeking) {
+          await new Promise<void>((resolve) => {
+            v.addEventListener(
+              "seeked",
+              () => {
+                resolve();
+              },
+              { once: true },
+            );
+          });
+        }
+      }
+      const at = v ? v.currentTime : time;
+      const blob = await drawCover(v);
       if (!blob) {
         notify("This frame can't be read yet. Let the video load, then try again.", "error");
         return;
@@ -60,12 +77,12 @@ export function CoverPicker({
         body: blob,
       });
       if (!put.ok) throw new Error("upload failed");
-      const res = await saveCover(videoId, version.id, time);
+      const res = await saveCover(videoId, version.id, at);
       if (!res.ok) {
         notify(res.error, "error");
         return;
       }
-      notify(`Cover set to the frame at ${timecode(time, version.fps)}.`);
+      notify(`Cover set to the frame at ${timecode(at, version.fps)}.`);
       router.refresh();
     } catch {
       notify("That didn't work. Check your connection and try again.", "error");

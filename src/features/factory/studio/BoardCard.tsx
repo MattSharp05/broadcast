@@ -38,13 +38,20 @@ export function BoardCard({
 }: BoardCardProps) {
   const [text, setText] = useState(card.text);
   const [seconds, setSeconds] = useState(String(card.seconds));
+  // A saved value from the server (this card or a refresh) replaces the field's copy.
+  const [seen, setSeen] = useState({ text: card.text, seconds: card.seconds });
+  if (seen.text !== card.text || seen.seconds !== card.seconds) {
+    setSeen({ text: card.text, seconds: card.seconds });
+    if (seen.text !== card.text) setText(card.text);
+    if (seen.seconds !== card.seconds) setSeconds(String(card.seconds));
+  }
   const [redo, setRedo] = useState<string | null>(null);
   const n = index + 1;
   const locked = !editable || pending;
   const saveSeconds = () => {
-    const s = Number(seconds);
+    const s = Math.round(Number(seconds) * 100) / 100;
     if (s === card.seconds) return;
-    if (!(s > 0)) {
+    if (!(s >= 0.01 && s <= 600)) {
       setSeconds(String(card.seconds));
       return;
     }

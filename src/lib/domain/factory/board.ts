@@ -18,7 +18,24 @@ export interface BoardCardInput {
 }
 
 const words = (s: string) => s.trim().split(/\s+/).filter(Boolean).length;
-const half = (n: number) => Math.max(0.5, Math.round(n * 2) / 2);
+const half = (n: number) => Math.min(SECONDS_MAX, Math.max(0.5, Math.round(n * 2) / 2));
+
+/** A card's length as stored (numeric(6,2), > 0): rounded to 0.01 s, within 0.01–600. */
+export const SECONDS_MAX = 600;
+export function cardSeconds(raw: unknown): number | null {
+  if (typeof raw !== "number" || !Number.isFinite(raw)) return null;
+  const s = Math.round(raw * 100) / 100;
+  return s >= 0.01 && s <= SECONDS_MAX ? s : null;
+}
+
+/** An estimated card's text says so (within the 280 characters). */
+export function estimatedText(text: string): string {
+  const mark = " (estimated)";
+  const body = text.trim();
+  return body
+    ? `${body.slice(0, CARD_TEXT_MAX - mark.length)}${mark}`
+    : "Estimated from the stills";
+}
 
 /**
  * Cards from the visuals stills when the session sent none: text = the still's caption, seconds =
@@ -57,12 +74,12 @@ export function parseCards(raw: unknown): BoardCardInput[] | null {
   for (const c of raw) {
     if (!c || typeof c !== "object") continue;
     const o = c as Record<string, unknown>;
-    const seconds = typeof o.seconds === "number" && Number.isFinite(o.seconds) ? o.seconds : 0;
-    if (seconds <= 0) continue;
+    const seconds = cardSeconds(o.seconds);
+    if (seconds === null) continue;
     cards.push({
       scene: typeof o.scene === "string" ? o.scene.slice(0, 40) : null,
       text: typeof o.text === "string" ? o.text.slice(0, CARD_TEXT_MAX) : "",
-      seconds: Math.round(seconds * 100) / 100,
+      seconds,
       still: typeof o.still === "string" ? o.still : null,
     });
   }

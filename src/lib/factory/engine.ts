@@ -326,7 +326,10 @@ export async function recordCheckpoint(
   }
   if (step === "visuals") {
     const { replaceBoard } = await import("./board");
-    await replaceBoard(ctx, id, out, p.script);
+    // A scene rework reruns visuals with the note "Redo: scene s3: …": only that scene's cards change.
+    const row = (await getSteps(ctx.db, ws, id)).find((s) => s.step === "visuals");
+    const scene = /^Redo: scene (\S+?):/.exec(row?.message ?? "")?.[1] ?? null;
+    await replaceBoard(ctx, id, out, p.script, scene);
   }
   if (step === "script") {
     const s = out as unknown as ScriptOutput;
@@ -508,6 +511,10 @@ export async function approveStep(
     status: "approved",
     message: opts.auto ? "Approved on autopilot." : null,
   });
+  if (step === "visuals") {
+    const { markBoardApproved } = await import("./board");
+    await markBoardApproved(ctx, id);
+  }
   const next = nextStep(step, p.use_avatar);
   if (next) {
     const nextRow = steps.find((s) => s.step === next);

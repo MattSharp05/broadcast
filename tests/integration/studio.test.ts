@@ -8,7 +8,7 @@ import { POST as checkpointPost } from "@/app/api/factory/[id]/checkpoint/route"
 import { POST as progressPost } from "@/app/api/factory/[id]/progress/route";
 import { POST as versionsPost } from "@/app/api/factory/[id]/versions/route";
 import { WORKSPACE_IDS } from "@/lib/db/workspaces";
-import { approveBoard, deleteCard, moveCard, updateCard } from "@/lib/factory/board";
+import { approveBoard, deleteCard, moveCard, redoCard, updateCard } from "@/lib/factory/board";
 import { createProduction, mintFactoryToken } from "@/lib/factory/engine";
 import {
   addNote,
@@ -541,5 +541,38 @@ describe("storyboard (Board tab)", () => {
     await expect(updateCard(ctx, pid, card(2), { seconds: 3 })).rejects.toMatchObject({
       code: "not_waiting",
     });
+  });
+
+  it("redoing one card replaces only that scene's card and keeps the other edits", async () => {
+    await load("factory-board");
+    const card = (n: number) => stableUuid("factory-board", "card", String(n));
+    await updateCard(ctx, pid, card(1), { text: "My own opening line." });
+    await redoCard(ctx, pid, card(3), "Slower, so each label reads");
+    const rows = await admin
+      .from("board_cards")
+      .select("id, position, scene_id, text")
+      .eq("production_id", pid)
+      .order("position");
+    expect(rows.data?.map((r) => r.scene_id)).toEqual(["s1", "s2", "s3", "s4", "s5"]);
+    expect(rows.data?.[0]).toMatchObject({ id: card(1), text: "My own opening line." });
+    // s3 is a new card from the rerun; the others are the same rows.
+    expect(rows.data?.[2]?.id).not.toBe(card(3));
+    expect(rows.data?.[3]?.id).toBe(card(4));
+    const rework = await admin
+      .from("production_reworks")
+      .select("target, ref, note")
+      .eq("production_id", pid)
+      .single();
+    expect(rework.data).toEqual({
+      target: "scene",
+      ref: "s3",
+      note: "Slower, so each label reads",
+    });
+
+    await approveBoard(ctx, pid);
+    const approved = await admin.from("board_cards").select("status").eq("production_id", pid);
+    expect(approved.data?.every((c) => c.status === "approved")).toBe(true);
+    const p = await admin.from("productions").select("board_approved_at").eq("id", pid).single();
+    expect(p.data?.board_approved_at).not.toBeNull();
   });
 });

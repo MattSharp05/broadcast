@@ -318,5 +318,6 @@ async function loadBoard(
       .maybeSingle(),
   ]);
   if (cards.error) fail("reading the board", cards.error);
+  if (visuals.error) fail("reading the visuals step", visuals.error);
   return { cards: cards.data, visuals: visuals.data?.status ?? null };
 }

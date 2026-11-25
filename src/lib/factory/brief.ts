@@ -34,6 +34,8 @@ export async function buildBrief(ctx: EngineContext, id: string) {
       .eq("production_id", id)
       .order("position"),
   ]);
+  if (cards.error)
+    throw new Error(`Content Factory: reading the board failed: ${cards.error.message}`);
   const [steps, jobs, reworks, settings, spend, avatar, account, voice, music] = await Promise.all([
     getSteps(ctx.db, ws, id),
     jobsFor(ctx.db, ws, id),
@@ -182,7 +184,7 @@ export async function buildBrief(ctx: EngineContext, id: string) {
       rev: p.board_rev,
       approved_at: p.board_approved_at,
       cards: await Promise.all(
-        (cards.data ?? []).map(async (c) => ({
+        cards.data.map(async (c) => ({
           position: c.position,
           scene: c.scene_id,
           text: c.text,

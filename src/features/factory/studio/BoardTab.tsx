@@ -72,7 +72,7 @@ export function BoardTab({ video, studio, run, pending }: StudioTabProps) {
       <ol className={styles.board} data-testid="board">
         {board.cards.map((card, index) => (
           <BoardCard
-            key={`${card.id}:${board.rev}`}
+            key={card.id}
             videoId={video.id}
             card={card}
             index={index}

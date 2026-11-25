@@ -3,7 +3,9 @@ import { FactoryError, fail, getProduction, getSteps, updateProduction } from "@
 import type { Json } from "@/lib/db/types";
 import {
   CARD_TEXT_MAX,
+  cardSeconds,
   estimateCards,
+  estimatedText,
   parseCards,
   reorder,
   type BoardCardInput,
@@ -43,6 +45,8 @@ export async function replaceBoard(
   productionId: string,
   output: Record<string, unknown>,
   script: Json | null,
+  /** A scene rework: only that scene's cards are replaced; Matthew's other edits stay. */
+  onlyScene: string | null = null,
 ): Promise<void> {
   const ws = ctx.workspaceId;
   const stills = Array.isArray(output.stills)
@@ -62,28 +66,82 @@ export async function replaceBoard(
     typeof l.text === "string" ? [{ text: l.text }] : [],
   );
   const cards: BoardCardInput[] = parseCards(output.cards) ?? estimateCards(stills, lines);
-  const { error: delError } = await ctx.db
-    .from("board_cards")
-    .delete()
-    .eq("workspace_id", ws)
-    .eq("production_id", productionId);
-  if (delError) fail("clearing the board", delError);
-  if (cards.length) {
-    const { error } = await ctx.db.from("board_cards").insert(
-      cards.map((c, i) => ({
-        workspace_id: ws,
-        production_id: productionId,
-        position: i,
-        // An estimated card says so, so nobody mistakes it for the session's own timing.
-        text: (c.estimated ? `${c.text} (estimated)` : c.text).slice(0, CARD_TEXT_MAX),
-        seconds: c.seconds,
-        still_path: c.still,
-        scene_id: c.scene,
-      })),
+  const old = await listCards(ctx, productionId);
+  const row = (c: BoardCardInput, position: number) => ({
+    workspace_id: ws,
+    production_id: productionId,
+    position,
+    text: c.estimated ? estimatedText(c.text) : c.text.slice(0, CARD_TEXT_MAX),
+    seconds: c.seconds,
+    still_path: c.still,
+    scene_id: c.scene,
+  });
+
+  if (onlyScene && old.length) {
+    const fresh = cards.filter((c) => c.scene === onlyScene);
+    const mine = old.filter((c) => c.scene_id === onlyScene);
+    if (!fresh.length || !mine.length) {
+      await bumpRev(ctx, productionId);
+      return;
+    }
+    // The redone scene's cards take its first card's place; everything else stays as edited.
+    const at = Math.min(...mine.map((c) => c.position));
+    const keep = old.filter((c) => c.scene_id !== onlyScene);
+    const before = keep.filter((c) => c.position < at);
+    const after = keep.filter((c) => c.position > at);
+    const { error } = await ctx.db
+      .from("board_cards")
+      .insert(fresh.map((c, i) => row(c, before.length + i)));
+    if (error) fail("saving the board", error);
+    await removeCards(
+      ctx,
+      mine.map((c) => c.id),
     );
+    await renumber(ctx, [...before, ...after], (c) =>
+      c.position < at ? before.indexOf(c) : before.length + fresh.length + after.indexOf(c),
+    );
+    await bumpRev(ctx, productionId);
+    return;
+  }
+
+  // New cards go in before the old ones go, so a failed insert never leaves an empty board.
+  if (cards.length) {
+    const { error } = await ctx.db.from("board_cards").insert(cards.map((c, i) => row(c, i)));
     if (error) fail("saving the board", error);
   }
+  await removeCards(
+    ctx,
+    old.map((c) => c.id),
+  );
   await bumpRev(ctx, productionId);
+}
+
+async function removeCards(ctx: EngineContext, ids: string[]): Promise<void> {
+  if (!ids.length) return;
+  const { error } = await ctx.db
+    .from("board_cards")
+    .delete()
+    .eq("workspace_id", ctx.workspaceId)
+    .in("id", ids);
+  if (error) fail("clearing the old board", error);
+}
+
+/** Sets each card's position from `at` (only rows whose position changes are written). */
+async function renumber<T extends { id: string; position: number }>(
+  ctx: EngineContext,
+  cards: readonly T[],
+  at: (c: T) => number,
+): Promise<void> {
+  for (const c of cards) {
+    const position = at(c);
+    if (position === c.position) continue;
+    const { error } = await ctx.db
+      .from("board_cards")
+      .update({ position })
+      .eq("workspace_id", ctx.workspaceId)
+      .eq("id", c.id);
+    if (error) fail("moving the cards", error);
+  }
 }
 
 async function getCard(ctx: EngineContext, productionId: string, cardId: string) {
@@ -121,9 +179,10 @@ export async function updateCard(
   const update: { text?: string; seconds?: number } = {};
   if (patch.text !== undefined) update.text = patch.text.slice(0, CARD_TEXT_MAX);
   if (patch.seconds !== undefined) {
-    if (!(patch.seconds > 0) || patch.seconds > 600)
-      throw new FactoryError("bad_seconds", "Seconds must be more than 0 (and at most 600).");
-    update.seconds = Math.round(patch.seconds * 100) / 100;
+    const seconds = cardSeconds(patch.seconds);
+    if (seconds === null)
+      throw new FactoryError("bad_seconds", "Seconds must be between 0.01 and 600.");
+    update.seconds = seconds;
   }
   const { error } = await ctx.db
     .from("board_cards")
@@ -145,15 +204,8 @@ export async function moveCard(
   const cards = await listCards(ctx, productionId);
   const from = cards.findIndex((c) => c.id === cardId);
   if (from < 0) throw new FactoryError("not_found", "That card isn't on this board.");
-  for (const c of reorder(cards, from, to)) {
-    if (c.position === cards.find((x) => x.id === c.id)?.position) continue;
-    const { error } = await ctx.db
-      .from("board_cards")
-      .update({ position: c.position })
-      .eq("workspace_id", ctx.workspaceId)
-      .eq("id", c.id);
-    if (error) fail("moving the card", error);
-  }
+  const order = reorder(cards, from, to);
+  await renumber(ctx, cards, (c) => order.find((o) => o.id === c.id)?.position ?? c.position);
   await bumpRev(ctx, productionId);
 }
 
@@ -171,14 +223,7 @@ export async function deleteCard(
     .eq("id", card.id);
   if (error) fail("deleting the card", error);
   const rest = await listCards(ctx, productionId);
-  for (const [i, c] of rest.entries()) {
-    if (c.position === i) continue;
-    await ctx.db
-      .from("board_cards")
-      .update({ position: i })
-      .eq("workspace_id", ctx.workspaceId)
-      .eq("id", c.id);
-  }
+  await renumber(ctx, rest, (c) => rest.indexOf(c));
   await bumpRev(ctx, productionId);
 }
 
@@ -188,14 +233,16 @@ export async function addCard(
   input: { text: string; seconds: number },
 ): Promise<void> {
   await editable(ctx, productionId);
-  if (!(input.seconds > 0)) throw new FactoryError("bad_seconds", "Seconds must be more than 0.");
+  const seconds = cardSeconds(input.seconds);
+  if (seconds === null)
+    throw new FactoryError("bad_seconds", "Seconds must be between 0.01 and 600.");
   const cards = await listCards(ctx, productionId);
   const { error } = await ctx.db.from("board_cards").insert({
     workspace_id: ctx.workspaceId,
     production_id: productionId,
     position: cards.length,
     text: input.text.slice(0, CARD_TEXT_MAX),
-    seconds: Math.round(input.seconds * 100) / 100,
+    seconds,
   });
   if (error) fail("adding the card", error);
   await bumpRev(ctx, productionId);
@@ -207,16 +254,6 @@ export async function approveBoard(
   productionId: string,
 ): Promise<StartOutcome | null> {
   await editable(ctx, productionId);
-  const ws = ctx.workspaceId;
-  const { error } = await ctx.db
-    .from("board_cards")
-    .update({ status: "approved" })
-    .eq("workspace_id", ws)
-    .eq("production_id", productionId);
-  if (error) fail("approving the board", error);
-  await updateProduction(ctx.db, ws, productionId, {
-    board_approved_at: new Date().toISOString(),
-  });
   const outcome = await approveStep(ctx, productionId, "visuals");
   await logEvent(ctx, productionId, {
     actor: "matthew",
@@ -233,6 +270,7 @@ export async function redoCard(
   cardId: string,
   note: string,
 ): Promise<StartOutcome | null> {
+  await editable(ctx, productionId);
   const card = await getCard(ctx, productionId, cardId);
   if (!card.scene_id)
     throw new FactoryError("no_scene", "This card has no scene yet: edit its text instead.");
@@ -248,4 +286,17 @@ export async function redoCard(
     intent: `Asked to redo card ${card.position + 1} (${card.scene_id}): ${note.trim()}`,
   });
   return outcome;
+}
+
+/** Approving the visuals step (Board tab, Make tab or autopilot) approves its board. */
+export async function markBoardApproved(ctx: EngineContext, productionId: string): Promise<void> {
+  const { error } = await ctx.db
+    .from("board_cards")
+    .update({ status: "approved" })
+    .eq("workspace_id", ctx.workspaceId)
+    .eq("production_id", productionId);
+  if (error) fail("approving the board", error);
+  await updateProduction(ctx.db, ctx.workspaceId, productionId, {
+    board_approved_at: ctx.now.toISOString(),
+  });
 }

@@ -181,7 +181,8 @@ the studio as a video with v1. The call uses the **content API key** (`/dev/api-
 POST /api/factory/import
   {"project_slug": "moon-tides-01", "title": "Moon tides", "idea": "<brief.md summary>", "style"?: "realistic-3d"}
   -> 201 {"video_id", "token"}                   token: a factory token for this video (24 h)
-  -> 409 {"error":"already_imported","video_id"} the slug was imported before
+  -> 200 {"video_id", "token", "resumed": true}  imported before but v1 never arrived: a fresh token
+  -> 409 {"error":"already_imported","video_id"} the project is in the studio with its v1 already
 ```
 
 The video has no account yet (Matthew picks one before scheduling) and every step is `skipped`
